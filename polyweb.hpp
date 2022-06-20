@@ -574,12 +574,12 @@ namespace pw {
                     HTTPResponse resp;
                     switch (get_last_error()) {
                         case PW_ENET: {
-                            resp = HTTPResponse("500", status_code_to_reason_phrase("500"), {{"Content-Type", "text/plain"}});
+                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}});
                             break;
                         }
 
                         case PW_EWEB: {
-                            resp = HTTPResponse("400", status_code_to_reason_phrase("400"), {{"Content-Type", "text/plain"}});
+                            resp = HTTPResponse("400", "400 " + status_code_to_reason_phrase("400") + '\n', {{"Content-Type", "text/plain"}});
                             break;
                         }
                     }
@@ -618,7 +618,7 @@ namespace pw {
                     }
                 } else {
                     ssize_t result;
-                    if ((result = conn.send(HTTPResponse("404", status_code_to_reason_phrase("404"), {{"Content-Type", "text/plain"}}))) == 0) {
+                    if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}}))) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
