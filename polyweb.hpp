@@ -70,7 +70,7 @@ namespace pw {
     } // namespace detail
 
     inline void clean_up_target(std::string& target) {
-        if (!target.empty() && target.back() == '/') {
+        if (target.size() > 1 && target.back() == '/') {
             target.pop_back();
         }
     }
