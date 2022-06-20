@@ -84,7 +84,7 @@ namespace pw {
         HTTPHeaders headers;
         std::vector<char> body;
 
-        std::vector<char> build() {
+        std::vector<char> build(void) const {
             std::vector<char> ret;
 
             ret.insert(ret.end(), this->method.begin(), this->method.end());
@@ -223,7 +223,7 @@ namespace pw {
         HTTPHeaders headers;
         std::vector<char> body;
 
-        std::vector<char> build() {
+        std::vector<char> build(void) const {
             std::vector<char> ret;
 
             ret.insert(ret.end(), this->http_version.begin(), this->http_version.end());
@@ -354,7 +354,33 @@ namespace pw {
         }
     };
 
-    typedef std::function<void(pn::tcp::Connection&, const HTTPRequest&)> RouteCallback;
+    class Connection: public pn::tcp::Connection {
+    public:
+        Connection(void) = default;
+        Connection(const Connection&) = default;
+        Connection(Connection&& s) {
+            *this = std::move(s);
+        }
+        Connection(pn::sockfd_t fd) :
+            pn::tcp::Connection(fd) { }
+        Connection(struct sockaddr addr, socklen_t addrlen) :
+            pn::tcp::Connection(addr, addrlen) { }
+        Connection(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen) :
+            pn::tcp::Connection(fd, addr, addrlen) { }
+
+        Connection& operator=(const Connection&) = default;
+        inline Connection& operator=(Connection&& s) {
+            pn::tcp::Connection::operator=(std::move(s));
+            return *this;
+        }
+
+        ssize_t send(const HTTPResponse& resp) {
+            auto data = resp.build();
+            return pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL);
+        }
+    };
+
+    typedef std::function<void(pw::Connection&, const HTTPRequest&)> RouteCallback;
 
     class Server: public pn::tcp::Server {
     public:
@@ -412,7 +438,8 @@ namespace pw {
         int listen(int backlog) {
             if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
                     auto server = (Server*) data;
-                    std::thread(&pw::Server::handle_connection, server, std::move(conn)).detach();
+                    std::thread(&pw::Server::handle_connection, server, pw::Connection(conn.fd, conn.addr, conn.addrlen)).detach();
+                    conn.release();
                     return true;
                 },
                     backlog) == PN_ERROR) {
@@ -423,7 +450,7 @@ namespace pw {
         }
 
     protected:
-        int handle_connection(pn::tcp::Connection conn) {
+        int handle_connection(pw::Connection conn) {
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
