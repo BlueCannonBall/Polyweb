@@ -1,0 +1,3 @@
+[submodule "Polynet"]
+	path = Polynet
+	url = https://github.com/BlueCannonBall/Polynet.git
