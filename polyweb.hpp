@@ -376,7 +376,11 @@ namespace pw {
 
         ssize_t send(const HTTPResponse& resp) {
             auto data = resp.build();
-            return pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL);
+            ssize_t result;
+            if ((result = pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL)) == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+            }
+            return result;
         }
     };
 
@@ -438,8 +442,9 @@ namespace pw {
         int listen(int backlog) {
             if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
                     auto server = (Server*) data;
-                    std::thread(&pw::Server::handle_connection, server, pw::Connection(conn.fd, conn.addr, conn.addrlen)).detach();
+                    pw::Connection web_conn(conn.fd, conn.addr, conn.addrlen);
                     conn.release();
+                    std::thread(&pw::Server::handle_connection, server, std::move(web_conn)).detach();
                     return true;
                 },
                     backlog) == PN_ERROR) {
