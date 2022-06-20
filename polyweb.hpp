@@ -567,8 +567,11 @@ namespace pw {
 
                 clean_up_target(req.target);
                 if (routes.find(req.target) != routes.end()) {
+                    HTTPResponse resp = routes[req.target](conn, req);
+                    resp.headers["Server"] = "Polyweb/net Engine";
+
                     ssize_t result;
-                    if ((result = conn.send(routes[req.target](conn, req))) == 0) {
+                    if ((result = conn.send(resp)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
