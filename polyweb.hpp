@@ -492,8 +492,6 @@ namespace pw {
         std::unordered_map<std::string, RouteCallback> routes;
 
     public:
-        RouteCallback fallback_route;
-
         Server(void) = default;
         Server(const Server&) = default;
         Server(Server&& s) {
@@ -511,7 +509,6 @@ namespace pw {
             pn::tcp::Server::operator=(std::move(s));
             if (this != &s) {
                 this->routes = std::move(s.routes);
-                this->fallback_route = std::move(s.fallback_route);
             }
 
             return *this;
