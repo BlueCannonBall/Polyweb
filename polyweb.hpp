@@ -4,6 +4,7 @@
 #include "Polynet/polynet.hpp"
 #include "mimetypes.hpp"
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -487,8 +488,11 @@ namespace pw {
     typedef std::function<HTTPResponse(pw::Connection&, const HTTPRequest&)> RouteCallback;
 
     class Server: public pn::tcp::Server {
-    public:
+    protected:
         std::unordered_map<std::string, RouteCallback> routes;
+
+    public:
+        RouteCallback fallback_route;
 
         Server(void) = default;
         Server(const Server&) = default;
@@ -507,6 +511,7 @@ namespace pw {
             pn::tcp::Server::operator=(std::move(s));
             if (this != &s) {
                 this->routes = std::move(s.routes);
+                this->fallback_route = std::move(s.fallback_route);
             }
 
             return *this;
@@ -536,6 +541,12 @@ namespace pw {
         void route(std::string target, RouteCallback route_cb) {
             clean_up_target(target);
             routes[target] = route_cb;
+        }
+
+        void unroute(const std::string& target) {
+            if (routes.find(target) != routes.end()) {
+                routes.erase(target);
+            }
         }
 
         int listen(int backlog) {
@@ -583,8 +594,19 @@ namespace pw {
                 }
 
                 clean_up_target(req.target);
-                if (routes.find(req.target) != routes.end()) {
-                    HTTPResponse resp = routes[req.target](conn, req);
+
+                std::string route_target;
+                for (const auto& route : routes) {
+                    if (route.first == req.target) {
+                        route_target = route.first;
+                        break;
+                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(route.first, req.target) && route.first.size() > route_target.size()) {
+                        route_target = route.first;
+                    }
+                }
+
+                if (!route_target.empty()) {
+                    HTTPResponse resp = routes[route_target](conn, req);
                     resp.headers["Server"] = "Polyweb/net Engine";
 
                     ssize_t result;
