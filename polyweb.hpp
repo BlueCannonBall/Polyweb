@@ -2,6 +2,7 @@
 #include <boost/algorithm/string.hpp>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #define PW_ERROR PN_ERROR
 #define PW_OK    PN_OK
