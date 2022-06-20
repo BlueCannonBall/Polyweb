@@ -323,6 +323,7 @@ namespace pw {
             {"hvd", "application/vnd.yamaha.hv-dic"},
             {"hvp", "application/vnd.yamaha.hv-voice"},
             {"hvs", "application/vnd.yamaha.hv-script"},
+            {"hxx", "text/x-c"},
             {"i2g", "application/vnd.intergeo"},
             {"icc", "application/vnd.iccprofile"},
             {"ice", "x-conference/x-cooltalk"},
