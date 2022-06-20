@@ -594,20 +594,8 @@ namespace pw {
                         return PW_ERROR;
                     }
                 } else {
-                    HTTPResponse resp;
-                    switch (get_last_error()) {
-                        case PW_ENET: {
-                            resp = HTTPResponse("500", status_code_to_reason_phrase("500"), {{"Content-Type", "text/plain"}});
-                            break;
-                        }
-
-                        case PW_EWEB: {
-                            resp = HTTPResponse("400", status_code_to_reason_phrase("400"), {{"Content-Type", "text/plain"}});
-                            break;
-                        }
-                    }
                     ssize_t result;
-                    if ((result = conn.send(resp)) == 0) {
+                    if ((result = conn.send(HTTPResponse("404", status_code_to_reason_phrase("404"), {{"Content-Type", "text/plain"}}))) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
