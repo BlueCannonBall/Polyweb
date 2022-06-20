@@ -884,6 +884,7 @@ namespace pw {
             {"vxml", "application/voicexml+xml"},
             {"w3d", "application/x-director"},
             {"wad", "application/x-doom"},
+            {"wasm", "application/wasm"},
             {"wav", "audio/x-wav"},
             {"wax", "audio/x-ms-wax"},
             {"wbmp", "image/vnd.wap.wbmp"},
@@ -997,13 +998,17 @@ namespace pw {
             {"zir", "application/vnd.zul"},
             {"zirz", "application/vnd.zul"},
             {"zmm", "application/vnd.handheld-entertainment+xml"},
-            {"wasm", "application/wasm"},
-            {"", "application/octet-stream"},
         };
 
         std::vector<std::string> split_filename;
         boost::split(split_filename, filename, boost::is_any_of("."));
-        return mimetypes.at(split_filename.back());
+
+        decltype(mimetypes)::const_iterator pos;
+        if ((pos = mimetypes.find(split_filename.back())) != mimetypes.end()) {
+            return (*pos).second;
+        } else {
+            return "application/octet-stream";
+        }
     }
 } // namespace pw
 
