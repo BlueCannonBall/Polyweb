@@ -596,7 +596,7 @@ namespace pw {
                     if (route.first == req.target) {
                         route_target = route.first;
                         break;
-                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(req.target, route.first.substr(0, route.first.size() - 2)) && route.first.size() > route_target.size()) {
+                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(req.target, route.first.substr(0, route.first.size() - 1)) && route.first.size() > route_target.size()) {
                         route_target = route.first;
                     }
                 }
