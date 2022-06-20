@@ -102,8 +102,17 @@ namespace pw {
                 ret.insert(ret.end(), {'\r', '\n'});
             }
 
-            ret.insert(ret.end(), {'\r', '\n'});
-            ret.insert(ret.end(), this->body.begin(), this->body.end());
+            if (!this->body.empty()) {
+                if (headers.find("Content-Length") == headers.end()) {
+                    std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
+                    ret.insert(ret.end(), header.begin(), header.end());
+                }
+
+                ret.insert(ret.end(), {'\r', '\n'});
+                ret.insert(ret.end(), this->body.begin(), this->body.end());
+            } else {
+                ret.insert(ret.end(), {'\r', '\n'});
+            }
 
             return ret;
         }
@@ -241,8 +250,17 @@ namespace pw {
                 ret.insert(ret.end(), {'\r', '\n'});
             }
 
-            ret.insert(ret.end(), {'\r', '\n'});
-            ret.insert(ret.end(), this->body.begin(), this->body.end());
+            if (!this->body.empty()) {
+                if (headers.find("Content-Length") == headers.end()) {
+                    std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
+                    ret.insert(ret.end(), header.begin(), header.end());
+                }
+
+                ret.insert(ret.end(), {'\r', '\n'});
+                ret.insert(ret.end(), this->body.begin(), this->body.end());
+            } else {
+                ret.insert(ret.end(), {'\r', '\n'});
+            }
 
             return ret;
         }
@@ -375,7 +393,7 @@ namespace pw {
             return *this;
         }
 
-        ssize_t send(const HTTPResponse& resp) {
+        ssize_t send(HTTPResponse& resp) {
             auto data = resp.build();
             ssize_t result;
             if ((result = pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL)) == PN_ERROR) {
@@ -474,17 +492,6 @@ namespace pw {
                 clean_up_target(req.target);
                 if (routes.find(req.target) != routes.end()) {
                     HTTPResponse resp = routes[req.target](conn, req);
-                    if (keep_alive) {
-                        resp.headers["Connection"] = "Keep-Alive";
-                    }
-
-                    ssize_t result;
-                    if ((result = conn.send(resp)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
-                        return PW_ERROR;
-                    }
                 }
             } while (conn.is_valid() && keep_alive);
             return PW_OK;
