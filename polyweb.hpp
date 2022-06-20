@@ -385,7 +385,7 @@ namespace pw {
         }
     };
 
-    typedef std::function<void(pw::Connection&, const HTTPRequest&)> RouteCallback;
+    typedef std::function<HTTPResponse(pw::Connection&, const HTTPRequest&)> RouteCallback;
 
     class Server: public pn::tcp::Server {
     public:
@@ -458,24 +458,35 @@ namespace pw {
 
     protected:
         int handle_connection(pw::Connection conn) {
+            bool keep_alive;
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
                     return PW_ERROR;
                 }
-                clean_up_target(req.target);
-                if (routes.find(req.target) != routes.end()) {
-                    routes[req.target](conn, req);
-                }
 
                 if (req.headers.find("Connection") != req.headers.end()) {
-                    if (boost::to_lower_copy(req.headers["Connection"]) != "keep-alive") {
-                        break;
-                    }
+                    keep_alive = boost::to_lower_copy(req.headers["Connection"]) == "keep-alive";
                 } else {
-                    break;
+                    keep_alive = false;
                 }
-            } while (conn.is_valid());
+
+                clean_up_target(req.target);
+                if (routes.find(req.target) != routes.end()) {
+                    HTTPResponse resp = routes[req.target](conn, req);
+                    if (keep_alive) {
+                        resp.headers["Connection"] = "Keep-Alive";
+                    }
+
+                    ssize_t result;
+                    if ((result = conn.send(resp)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        return PW_ERROR;
+                    }
+                }
+            } while (conn.is_valid() && keep_alive);
             return PW_OK;
         }
     };
