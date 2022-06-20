@@ -393,7 +393,7 @@ namespace pw {
             return *this;
         }
 
-        ssize_t send(HTTPResponse& resp) {
+        ssize_t send(const HTTPResponse& resp) {
             auto data = resp.build();
             ssize_t result;
             if ((result = pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL)) == PN_ERROR) {
@@ -491,7 +491,13 @@ namespace pw {
 
                 clean_up_target(req.target);
                 if (routes.find(req.target) != routes.end()) {
-                    HTTPResponse resp = routes[req.target](conn, req);
+                    ssize_t result;
+                    if ((result = conn.send(routes[req.target](conn, req))) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        return PW_ERROR;
+                    }
                 }
             } while (conn.is_valid() && keep_alive);
             return PW_OK;
