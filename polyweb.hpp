@@ -501,8 +501,7 @@ namespace pw {
         inline Server& operator=(Server&& s) {
             pn::tcp::Server::operator=(std::move(s));
             if (this != &s) {
-                this->backlog = s.backlog;
-                s.backlog = -1;
+                this->routes = std::move(s.routes);
             }
 
             return *this;
