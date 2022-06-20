@@ -538,7 +538,8 @@ namespace pw {
             routes[target] = route_cb;
         }
 
-        void unroute(const std::string& target) {
+        void unroute(std::string target) {
+            clean_up_target(target);
             if (routes.find(target) != routes.end()) {
                 routes.erase(target);
             }

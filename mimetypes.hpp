@@ -998,6 +998,7 @@ namespace pw {
             {"zirz", "application/vnd.zul"},
             {"zmm", "application/vnd.handheld-entertainment+xml"},
             {"wasm", "application/wasm"},
+            {"", "application/octet-stream"},
         };
 
         std::vector<std::string> split_filename;
