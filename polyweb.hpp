@@ -488,9 +488,6 @@ namespace pw {
     typedef std::function<HTTPResponse(pw::Connection&, const HTTPRequest&)> RouteCallback;
 
     class Server: public pn::tcp::Server {
-    protected:
-        std::unordered_map<std::string, RouteCallback> routes;
-
     public:
         Server(void) = default;
         Server(const Server&) = default;
@@ -563,6 +560,8 @@ namespace pw {
         }
 
     protected:
+        std::unordered_map<std::string, RouteCallback> routes;
+
         int handle_connection(pw::Connection conn) {
             bool keep_alive;
             do {
@@ -597,7 +596,7 @@ namespace pw {
                     if (route.first == req.target) {
                         route_target = route.first;
                         break;
-                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(route.first, req.target) && route.first.size() > route_target.size()) {
+                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(req.target, route.first) && route.first.size() > route_target.size()) {
                         route_target = route.first;
                     }
                 }
