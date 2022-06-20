@@ -1,3 +1,6 @@
+#ifndef _POLYWEB_HPP
+#define _POLYWEB_HPP
+
 #include "Polynet/polynet.hpp"
 #include <boost/algorithm/string.hpp>
 #include <thread>
@@ -577,3 +580,5 @@ namespace pw {
         }
     };
 } // namespace pw
+
+#endif
