@@ -448,7 +448,8 @@ namespace pw {
                     std::thread(&pw::Server::handle_connection, server, std::move(web_conn)).detach();
                     return true;
                 },
-                    backlog) == PN_ERROR) {
+                    backlog,
+                    this) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
