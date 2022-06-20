@@ -17,7 +17,7 @@
 
 namespace pw {
     namespace detail {
-        thread_local int last_error; // NOLINT
+        thread_local int last_error = PW_ESUCCESS; // NOLINT
 
         inline void set_last_error(int error) {
             last_error = error;
@@ -71,6 +71,10 @@ namespace pw {
             }
         };
     } // namespace detail
+
+    inline int get_last_error(void) {
+        return detail::last_error;
+    }
 
     inline void clean_up_target(std::string& target) {
         if (target.size() > 1 && target.back() == '/') {
@@ -555,6 +559,19 @@ namespace pw {
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
+                    HTTPResponse resp;
+                    switch (get_last_error()) {
+                        case PW_ENET: {
+                            resp = HTTPResponse("500", status_code_to_reason_phrase("500"), {{"Content-Type", "text/plain"}});
+                            break;
+                        }
+
+                        case PW_EWEB: {
+                            resp = HTTPResponse("400", status_code_to_reason_phrase("400"), {{"Content-Type", "text/plain"}});
+                            break;
+                        }
+                    }
+                    conn.send(resp);
                     return PW_ERROR;
                 }
 
@@ -569,6 +586,26 @@ namespace pw {
                     HTTPResponse resp = routes[req.target](conn, req);
                     resp.headers["Server"] = "Polyweb/net Engine";
 
+                    ssize_t result;
+                    if ((result = conn.send(resp)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        return PW_ERROR;
+                    }
+                } else {
+                    HTTPResponse resp;
+                    switch (get_last_error()) {
+                        case PW_ENET: {
+                            resp = HTTPResponse("500", status_code_to_reason_phrase("500"), {{"Content-Type", "text/plain"}});
+                            break;
+                        }
+
+                        case PW_EWEB: {
+                            resp = HTTPResponse("400", status_code_to_reason_phrase("400"), {{"Content-Type", "text/plain"}});
+                            break;
+                        }
+                    }
                     ssize_t result;
                     if ((result = conn.send(resp)) == 0) {
                         detail::set_last_error(PW_EWEB);
