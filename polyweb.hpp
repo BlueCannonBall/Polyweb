@@ -2,6 +2,7 @@
 #define _POLYWEB_HPP
 
 #include "Polynet/polynet.hpp"
+#include "mimetypes.hpp"
 #include <boost/algorithm/string.hpp>
 #include <thread>
 #include <unordered_map>
