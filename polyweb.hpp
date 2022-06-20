@@ -5,6 +5,7 @@
 #include "mimetypes.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <map>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -85,7 +86,7 @@ namespace pw {
     }
 
     std::string status_code_to_reason_phrase(const std::string& status_code) { // NOLINT
-        const static std::unordered_map<std::string, std::string> conversion_mapping = {
+        const static std::map<std::string, std::string> conversion_mapping = {
             {"100", "Continue"},
             {"101", "Switching Protocols"},
             {"200", "OK"},
