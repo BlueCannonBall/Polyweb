@@ -316,6 +316,7 @@ namespace pw {
             {"hps", "application/vnd.hp-hps"},
             {"hqx", "application/mac-binhex40"},
             {"h", "text/x-c"},
+            {"hpp", "text/x-c"},
             {"htke", "application/vnd.kenameaapp"},
             {"html", "text/html"},
             {"htm", "text/html"},
