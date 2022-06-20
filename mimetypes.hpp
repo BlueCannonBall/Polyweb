@@ -4,6 +4,7 @@
 #include <boost/algorithm/string.hpp>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace pw {
     std::string filename_to_mimetype(const std::string& filename) { // NOLINT
