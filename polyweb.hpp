@@ -186,6 +186,11 @@ namespace pw {
             return ret;
         }
 
+        inline std::string build_str(void) const {
+            std::vector<char> ret = build();
+            return std::string(ret.begin(), ret.end());
+        }
+
         int parse(pn::tcp::Connection& conn) {
             std::vector<char> method;
             if (detail::read_until(conn, std::back_inserter(method), " ") == PW_ERROR) {
@@ -346,6 +351,11 @@ namespace pw {
             }
 
             return ret;
+        }
+
+        inline std::string build_str(void) const {
+            std::vector<char> ret = build();
+            return std::string(ret.begin(), ret.end());
         }
 
         int parse(pn::tcp::Connection& conn) {
