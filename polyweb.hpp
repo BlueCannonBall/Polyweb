@@ -606,6 +606,9 @@ namespace pw {
                 if (!route_target.empty()) {
                     HTTPResponse resp = routes[route_target](conn, req);
                     resp.headers["Server"] = "Polyweb/net Engine";
+                    if (keep_alive) {
+                        resp.headers["Connection"] = "Keep-Alive";
+                    }
 
                     ssize_t result;
                     if ((result = conn.send(resp)) == 0) {
