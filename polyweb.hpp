@@ -632,7 +632,7 @@ namespace pw {
                 }
 
                 if (req.headers.find("Connection") != req.headers.end()) {
-                    keep_alive = boost::contains(boost::to_lower_copy(req.headers["Connection"]), "keep-alive");
+                    keep_alive = !boost::contains(boost::to_lower_copy(req.headers["Connection"]), "close");
                 } else {
                     keep_alive = true;
                 }
