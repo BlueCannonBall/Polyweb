@@ -79,7 +79,7 @@ namespace pw {
         return detail::last_error;
     }
 
-    const char* strerror(int error) { // NOLINT
+    const char* strerror(int error = get_last_error()) { // NOLINT
         static const char* error_strings[] = {
             "Success",       // PW_ESUCCESS
             "Network error", // PW_ENET
