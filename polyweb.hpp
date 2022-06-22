@@ -99,7 +99,7 @@ namespace pw {
 
         switch (error) {
             case PW_ENET: {
-                specific_error = pn::universal_strerror(pn::get_last_error());
+                specific_error = pn::universal_strerror();
                 break;
             }
 
