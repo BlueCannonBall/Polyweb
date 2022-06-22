@@ -591,10 +591,9 @@ namespace pw {
         int listen(int backlog) {
             if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
                     auto server = (Server*) data;
-                    pw::Connection web_conn(conn.fd, conn.addr, conn.addrlen);
-                    conn.release();
-                    detail::pool.schedule([web_conn](void* data) {
+                    detail::pool.schedule([conn = std::move(conn)](void* data) {
                         auto server = (Server*) data;
+                        pw::Connection web_conn(conn.fd, conn.addr, conn.addrlen);
                         server->handle_connection(std::move(web_conn));
                     },
                         server);
