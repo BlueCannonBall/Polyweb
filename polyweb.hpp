@@ -79,6 +79,38 @@ namespace pw {
         return detail::last_error;
     }
 
+    const char* strerror(int error) { // NOLINT
+        static const char* error_strings[] = {
+            "Success",       // PW_ESUCCESS
+            "Network error", // PW_ENET
+            "Web error",     // PW_EWEB
+        };
+
+        if (error >= 0 && error < 3) {
+            return error_strings[error];
+        } else {
+            return "Unknown error";
+        }
+    }
+
+    std::string universal_strerror(int error = get_last_error()) { // NOLINT
+        std::string base_error = strerror(error);
+        std::string specific_error;
+
+        switch (error) {
+            case PW_ENET: {
+                specific_error = pn::universal_strerror(pn::get_last_error());
+                break;
+            }
+
+            default: {
+                return base_error;
+            }
+        }
+
+        return base_error + ": " + specific_error;
+    }
+
     inline void clean_up_target(std::string& target) {
         if (target.size() > 1 && target.back() == '/') {
             target.pop_back();
