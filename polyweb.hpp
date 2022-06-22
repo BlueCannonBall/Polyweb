@@ -3,10 +3,10 @@
 
 #include "Polynet/polynet.hpp"
 #include "mimetypes.hpp"
+#include "threadpool.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <map>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -20,6 +20,7 @@
 
 namespace pw {
     namespace detail {
+        tp::ThreadPool pool;                       // NOLINT
         thread_local int last_error = PW_ESUCCESS; // NOLINT
 
         inline void set_last_error(int error) {
@@ -592,7 +593,11 @@ namespace pw {
                     auto server = (Server*) data;
                     pw::Connection web_conn(conn.fd, conn.addr, conn.addrlen);
                     conn.release();
-                    std::thread(&pw::Server::handle_connection, server, std::move(web_conn)).detach();
+                    detail::pool.schedule([web_conn](void* data) {
+                        auto server = (Server*) data;
+                        server->handle_connection(std::move(web_conn));
+                    },
+                        server);
                     return true;
                 },
                     backlog,
