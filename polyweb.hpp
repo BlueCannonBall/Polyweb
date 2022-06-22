@@ -611,7 +611,7 @@ namespace pw {
         std::unordered_map<std::string, RouteCallback> routes;
 
         int handle_connection(pw::Connection conn) {
-            bool keep_alive;
+            bool keep_alive = true;
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
@@ -632,9 +632,9 @@ namespace pw {
                 }
 
                 if (req.headers.find("Connection") != req.headers.end()) {
-                    keep_alive = boost::to_lower_copy(req.headers["Connection"]) == "keep-alive";
+                    keep_alive = boost::contains(boost::to_lower_copy(req.headers["Connection"]), "keep-alive");
                 } else {
-                    keep_alive = false;
+                    keep_alive = true;
                 }
 
                 clean_up_target(req.target);
