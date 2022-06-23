@@ -79,15 +79,15 @@ namespace pw {
             };
 
             void runner(CommandQueue* commands) {
-                for (;;) {
+                for (;; commands->working = false) {
                     std::unique_lock<std::mutex> lock(commands->mutex);
                     while (commands->queue.empty()) {
                         commands->condition.wait(lock);
                     }
                     std::shared_ptr<Command> command = std::move(commands->queue.front());
                     commands->queue.pop();
-                    commands->working = true;
                     lock.unlock();
+                    commands->working = true;
 
                     switch (command->type) {
                         default: {
@@ -117,8 +117,6 @@ namespace pw {
                             return;
                         }
                     }
-
-                    commands->working = false;
                 }
             }
 
@@ -155,17 +153,17 @@ namespace pw {
                 unsigned int i = sched_counter;
                 do {
                     CommandQueue* commands = threads[i].second;
-                    if (commands->working) {
+
+                    std::unique_lock<std::mutex> lock(commands->mutex);
+                    if (commands->working || !commands->queue.empty()) {
                         i = (i + 1) % threads.size();
                         continue;
                     }
 
                     auto cmd = std::make_shared<CommandExecute>(std::move(func), arg, data);
+                    commands->queue.push(cmd);
 
-                    {
-                        std::unique_lock<std::mutex> lock(commands->mutex);
-                        commands->queue.push(cmd);
-                    }
+                    lock.unlock();
 
                     commands->condition.notify_one();
                     sched_counter = (i + 1) % threads.size();
