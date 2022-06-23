@@ -169,22 +169,22 @@ namespace pw {
     public:
         std::string method;
         std::string target;
-        std::string http_version = "HTTP/1.1";
         HTTPHeaders headers;
         std::vector<char> body;
+        std::string http_version = "HTTP/1.1";
 
         HTTPRequest(void) = default;
-        HTTPRequest(const std::string& method, const std::string& target, const std::vector<char>& body = {}, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}, const std::vector<char>& body = {}, const std::string& http_version = "HTTP/1.1") :
             method(method),
             target(target),
+            headers(headers),
             body(body),
-            headers(headers),
             http_version(http_version) { }
-        HTTPRequest(const std::string& method, const std::string& target, const std::string& body = std::string(), const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}, const std::string& body = std::string(), const std::string& http_version = "HTTP/1.1") :
             method(method),
             target(target),
-            body(body.begin(), body.end()),
             headers(headers),
+            body(body.begin(), body.end()),
             http_version(http_version) { }
 
         std::vector<char> build(void) const {
@@ -334,11 +334,11 @@ namespace pw {
 
     class HTTPResponse {
     public:
-        std::string http_version = "HTTP/1.1";
         std::string status_code;
         std::string reason_phrase;
-        HTTPHeaders headers;
         std::vector<char> body;
+        HTTPHeaders headers;
+        std::string http_version = "HTTP/1.1";
 
         HTTPResponse(void) = default;
         HTTPResponse(const std::string& status_code, const std::vector<char>& body = {}, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
