@@ -60,11 +60,9 @@ namespace pw {
             void* arg = nullptr;
 
             CommandExecute(std::function<void(void*)> func, void* arg = nullptr, void* data = nullptr) :
+                Command(CommandType::Execute, data),
                 func(std::move(func)),
-                arg(arg) {
-                type = CommandType::Execute;
-                this->data = data;
-            }
+                arg(arg) { }
         };
 
         using Task = CommandExecute;
@@ -135,7 +133,6 @@ namespace pw {
             ~ThreadPool(void) {
                 for (auto& thread : threads) {
                     auto cmd = std::make_shared<Command>(CommandType::Quit);
-
                     {
                         std::unique_lock<std::mutex> lock(thread.second->mutex);
                         thread.second->queue.push(std::move(cmd));
@@ -198,7 +195,6 @@ namespace pw {
                 if (new_pool_size < threads.size()) {
                     for (unsigned int i = 0; i < new_pool_size; i++, sched_counter = (sched_counter + 1) % threads.size()) {
                         auto cmd = std::make_shared<Command>(CommandType::Quit);
-
                         {
                             std::unique_lock<std::mutex> lock(threads[sched_counter].second->mutex);
                             threads[sched_counter].second->queue.push(std::move(cmd));

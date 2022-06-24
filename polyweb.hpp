@@ -611,7 +611,7 @@ namespace pw {
         std::unordered_map<std::string, RouteCallback> routes;
 
         int handle_connection(pw::Connection conn) {
-            bool keep_alive = true;
+            bool keep_alive;
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
@@ -632,9 +632,13 @@ namespace pw {
                 }
 
                 if (req.headers.find("Connection") != req.headers.end()) {
-                    keep_alive = !boost::contains(boost::to_lower_copy(req.headers["Connection"]), "close");
+                    if (req.http_version == "HTTP/1.1") {
+                        keep_alive = boost::to_lower_copy(req.headers["Connection"]) != "close";
+                    } else {
+                        keep_alive = boost::to_lower_copy(req.headers["Connection"]) == "keep-alive";
+                    }
                 } else {
-                    keep_alive = true;
+                    keep_alive = req.http_version == "HTTP/1.1";
                 }
 
                 clean_up_target(req.target);
@@ -653,7 +657,7 @@ namespace pw {
                     HTTPResponse resp = routes[route_target](conn, req);
                     resp.headers["Server"] = "Polyweb/net Engine";
                     if (keep_alive) {
-                        resp.headers["Connection"] = "Keep-Alive";
+                        resp.headers["Connection"] = "keep-alive";
                     }
 
                     ssize_t result;
