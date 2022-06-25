@@ -654,7 +654,15 @@ namespace pw {
                 }
 
                 if (!route_target.empty()) {
-                    HTTPResponse resp = routes[route_target](conn, req);
+                    HTTPResponse resp;
+                    try {
+                        resp = routes[route_target](conn, req);
+                    } catch (const pw::HTTPResponse& error_resp) {
+                        resp = error_resp;
+                    } catch (...) {
+                        resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}});
+                    }
+                    
                     resp.headers["Server"] = "Polyweb/net Engine";
                     if (keep_alive) {
                         resp.headers["Connection"] = "keep-alive";
