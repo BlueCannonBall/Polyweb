@@ -5,10 +5,17 @@
 #include "mimetypes.hpp"
 #include "threadpool.hpp"
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/binary_from_base64.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
+#include <cstdint>
+#include <emmintrin.h>
+#include <immintrin.h>
 #include <map>
+#include <openssl/sha.h>
 #include <unordered_map>
 #include <vector>
+#include <x86intrin.h>
 
 #define PW_ERROR PN_ERROR
 #define PW_OK    PN_OK
@@ -18,10 +25,46 @@
 #define PW_ENET     1
 #define PW_EWEB     2
 
+#define UNION_CAST(x, new_type) \
+    (((union {__typeof__(x) a; new_type b; }) x).b)
+
+// Websocket macros
+#define PW_GET_WS_FRAME_FIN(frame)            (frame[0] & 0b10000000)
+#define PW_GET_WS_FRAME_RSV1(frame)           (frame[0] & 0b01000000)
+#define PW_GET_WS_FRAME_RSV2(frame)           (frame[0] & 0b00100000)
+#define PW_GET_WS_FRAME_RSV3(frame)           (frame[0] & 0b00010000)
+#define PW_GET_WS_FRAME_OPCODE(frame)         (frame[0] & 0b00001111)
+#define PW_GET_WS_FRAME_MASKED(frame)         (frame[1] & 0b10000000)
+#define PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame) (frame[1] & 0b01111111)
+
+#define PW_SET_WS_FRAME_FIN(frame)                    (frame[0] |= 0b10000000)
+#define PW_SET_WS_FRAME_RSV1(frame)                   (frame[0] |= 0b01000000)
+#define PW_SET_WS_FRAME_RSV2(frame)                   (frame[0] |= 0b00100000)
+#define PW_SET_WS_FRAME_RSV3(frame)                   (frame[0] |= 0b00010000)
+#define PW_SET_WS_FRAME_OPCODE(frame, opcode)         (frame[0] = (frame[0] & ~0x0f) | (opcode & ~0xf0))
+#define PW_SET_WS_FRAME_MASKED(frame)                 (frame[1] |= 0b10000000)
+#define PW_SET_WS_FRAME_PAYLOAD_LENGTH(frame, length) (frame[1] = (frame[1] & ~0x7f) | (length & ~0x80))
+
+#define PW_CLEAR_WS_FRAME_FIN(frame)            (frame[0] &= ~0b10000000)
+#define PW_CLEAR_WS_FRAME_RSV1(frame)           (frame[0] &= ~0b01000000)
+#define PW_CLEAR_WS_FRAME_RSV2(frame)           (frame[0] &= ~0b00100000)
+#define PW_CLEAR_WS_FRAME_RSV3(frame)           (frame[0] &= ~0b00010000)
+#define PW_CLEAR_WS_FRAME_OPCODE(frame)         (frame[0] &= ~0x0f)
+#define PW_CLEAR_WS_FRAME_MASKED(frame)         (frame[1] &= ~0b10000000)
+#define PW_CLEAR_WS_FRAME_PAYLOAD_LENGTH(frame) (frame[1] &= ~0x7f)
+
+#define PW_TOGGLE_WS_FRAME_FIN(frame)            (frame[0] ^= 0b10000000)
+#define PW_TOGGLE_WS_FRAME_RSV1(frame)           (frame[0] ^= 0b01000000)
+#define PW_TOGGLE_WS_FRAME_RSV2(frame)           (frame[0] ^= 0b00100000)
+#define PW_TOGGLE_WS_FRAME_RSV3(frame)           (frame[0] ^= 0b00010000)
+#define PW_TOGGLE_WS_FRAME_OPCODE(frame)         (frame[0] ^= 0x0f)
+#define PW_TOGGLE_WS_FRAME_MASKED(frame)         (frame[1] ^= 0b10000000)
+#define PW_TOGGLE_WS_FRAME_PAYLOAD_LENGTH(frame) (frame[1] ^= 0x7f)
+
 namespace pw {
     namespace detail {
-        tp::ThreadPool pool;                       // NOLINT
-        thread_local int last_error = PW_ESUCCESS; // NOLINT
+        tp::ThreadPool pool(std::thread::hardware_concurrency() * 3); // NOLINT
+        thread_local int last_error = PW_ESUCCESS;                    // NOLINT
 
         inline void set_last_error(int error) {
             last_error = error;
@@ -74,6 +117,24 @@ namespace pw {
                 return std::hash<std::string>()(key_copy);
             }
         };
+
+        void reverse_memcpy(char* dest, char* src, size_t len) { // NOLINT
+            __builtin_prefetch(src, 0, 1);
+            size_t i = 0;
+            for (; i + 32 <= len; i += 32) {
+                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - i - 1));
+                __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31));
+                _mm256_storeu_si256(((__m256i_u*) dest) + i, reversed_vec);
+            }
+            for (; i + 16 <= len; i += 16) {
+                __m128i src_vec = _mm_loadu_si128((__m128i_u*) (src + len - i - 1));
+                __m128i reversed_vec = _mm_shuffle_epi8(src_vec, _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+                _mm_storeu_si128(((__m128i_u*) dest) + i, reversed_vec);
+            }
+            for (; i < len; i++) {
+                dest[i] = src[len - i - 1];
+            }
+        }
     } // namespace detail
 
     inline int get_last_error(void) {
@@ -154,6 +215,7 @@ namespace pw {
             {"415", "Unsupported Media Type"},
             {"416", "Requested range not satisfiable"},
             {"417", "Expectation Failed"},
+            {"426", "Upgrade Required"},
             {"500", "Internal Server Error"},
             {"501", "Not Implemented"},
             {"502", "Bad Gateway"},
@@ -161,6 +223,21 @@ namespace pw {
             {"504", "Gateway Time-out"},
             {"505", "HTTP Version not supported"}};
         return conversion_mapping.at(status_code);
+    }
+
+    std::vector<char> b64_decode(const std::string& str) { // NOLINT
+        using namespace boost::archive::iterators;
+        using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
+        return boost::algorithm::trim_right_copy_if(std::vector<char>(It(std::begin(str)), It(std::end(str))), [](char c) {
+            return c == '\0';
+        });
+    }
+
+    std::string b64_encode(const std::vector<char>& data) { // NOLINT
+        using namespace boost::archive::iterators;
+        using It = base64_from_binary<transform_width<std::vector<char>::const_iterator, 6, 8>>;
+        auto ret = std::string(It(std::begin(data)), It(std::end(data)));
+        return ret.append((3 - data.size() % 3) % 3, '=');
     }
 
     typedef std::unordered_map<std::string, std::string, detail::case_insensitive_hasher, detail::case_insensitive_comparer> HTTPHeaders;
@@ -174,13 +251,17 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPRequest(void) = default;
-        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}, const std::vector<char>& body = {}, const std::string& http_version = "HTTP/1.1") :
+        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}) :
+            method(method),
+            target(target),
+            headers(headers) { }
+        HTTPRequest(const std::string& method, const std::string& target, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             method(method),
             target(target),
             headers(headers),
             body(body),
             http_version(http_version) { }
-        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}, const std::string& body = std::string(), const std::string& http_version = "HTTP/1.1") :
+        HTTPRequest(const std::string& method, const std::string& target, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             method(method),
             target(target),
             headers(headers),
@@ -225,7 +306,6 @@ namespace pw {
         }
 
         int parse(pn::tcp::Connection& conn) {
-            std::vector<char> method;
             if (detail::read_until(conn, std::back_inserter(method), " ") == PW_ERROR) {
                 return PW_ERROR;
             }
@@ -233,9 +313,7 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
-            this->method = std::string(method.begin(), method.end());
 
-            std::vector<char> target;
             if (detail::read_until(conn, std::back_inserter(target), " ") == PW_ERROR) {
                 return PW_ERROR;
             }
@@ -243,9 +321,7 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
-            this->target = std::string(target.begin(), target.end());
 
-            std::vector<char> http_version;
             if (detail::read_until(conn, std::back_inserter(http_version), "\r\n") == PW_ERROR) {
                 return PW_ERROR;
             }
@@ -253,10 +329,9 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
-            this->http_version = std::string(http_version.begin(), http_version.end());
 
             for (;;) {
-                std::vector<char> header_name;
+                std::string header_name;
                 if (detail::read_until(conn, std::back_inserter(header_name), ": ") == PW_ERROR) {
                     return PW_ERROR;
                 }
@@ -265,7 +340,7 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                std::vector<char> header_value;
+                std::string header_value;
                 if (detail::read_until(conn, std::back_inserter(header_value), "\r\n") == PW_ERROR) {
                     return PW_ERROR;
                 }
@@ -275,11 +350,7 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                {
-                    std::string string_header_name = std::string(header_name.begin(), header_name.end());
-                    std::string string_header_value = std::string(header_value.begin(), header_value.end());
-                    this->headers[std::move(string_header_name)] = std::move(string_header_value);
-                }
+                this->headers[std::move(header_name)] = std::move(header_value);
 
                 char end_check_buf[2];
                 ssize_t read_result;
@@ -341,13 +412,16 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPResponse(void) = default;
-        HTTPResponse(const std::string& status_code, const std::vector<char>& body = {}, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+        HTTPResponse(const std::string& status_code) :
+            status_code(status_code),
+            reason_phrase(status_code_to_reason_phrase(status_code)) { }
+        HTTPResponse(const std::string& status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body),
             headers(headers),
             http_version(http_version) { }
-        HTTPResponse(const std::string& status_code, const std::string& body = std::string(), const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+        HTTPResponse(const std::string& status_code, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body.begin(), body.end()),
@@ -392,7 +466,6 @@ namespace pw {
         }
 
         int parse(pn::tcp::Connection& conn) {
-            std::vector<char> http_version;
             if (detail::read_until(conn, std::back_inserter(http_version), " ") == PW_ERROR) {
                 return PW_ERROR;
             }
@@ -400,9 +473,7 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
-            this->http_version = std::string(http_version.begin(), http_version.end());
 
-            std::vector<char> status_code;
             if (detail::read_until(conn, std::back_inserter(status_code), " ") == PW_ERROR) {
                 return PW_ERROR;
             }
@@ -410,9 +481,7 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
-            this->status_code = std::string(status_code.begin(), status_code.end());
 
-            std::vector<char> reason_phrase;
             if (detail::read_until(conn, std::back_inserter(reason_phrase), "\r\n") == PW_ERROR) {
                 return PW_ERROR;
             }
@@ -420,10 +489,9 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
-            this->reason_phrase = std::string(reason_phrase.begin(), reason_phrase.end());
 
             for (;;) {
-                std::vector<char> header_name;
+                std::string header_name;
                 if (detail::read_until(conn, std::back_inserter(header_name), ": ") == PW_ERROR) {
                     return PW_ERROR;
                 }
@@ -432,7 +500,7 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                std::vector<char> header_value;
+                std::string header_value;
                 if (detail::read_until(conn, std::back_inserter(header_value), "\r\n") == PW_ERROR) {
                     return PW_ERROR;
                 }
@@ -442,11 +510,7 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                {
-                    std::string string_header_name = std::string(header_name.begin(), header_name.end());
-                    std::string string_header_value = std::string(header_value.begin(), header_value.end());
-                    this->headers[std::move(string_header_name)] = std::move(string_header_value);
-                }
+                this->headers[std::move(header_name)] = std::move(header_value);
 
                 char end_check_buf[2];
                 ssize_t read_result;
@@ -499,8 +563,85 @@ namespace pw {
         }
     };
 
+    class WSMessage {
+    public:
+        std::vector<char> data;
+        uint8_t opcode;
+
+        WSMessage(void) = default;
+        WSMessage(const std::vector<char>& data, uint8_t opcode) :
+            data(data),
+            opcode(opcode) { }
+
+        std::vector<char> build(bool masked, char* masking_key = NULL) const {
+            std::vector<char> ret(2);
+
+            PW_SET_WS_FRAME_FIN(ret);
+            PW_CLEAR_WS_FRAME_RSV1(ret);
+            PW_CLEAR_WS_FRAME_RSV2(ret);
+            PW_CLEAR_WS_FRAME_RSV3(ret);
+            PW_SET_WS_FRAME_OPCODE(ret, this->opcode);
+
+            if (data.size() < 126) {
+                PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, data.size());
+            } else if (data.size() <= UINT16_MAX) {
+                PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 126);
+                ret.resize(4);
+                union {
+                    char bytes[2];
+                    uint16_t integer;
+                } size;
+                size.integer = data.size();
+                detail::reverse_memcpy(ret.data() + 2, size.bytes, 2);
+            } else {
+                PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 127);
+                ret.resize(10);
+                union {
+                    char bytes[8];
+                    uint64_t integer;
+                } size;
+                size.integer = data.size();
+                detail::reverse_memcpy(ret.data() + 2, size.bytes, 8);
+            }
+
+            if (masked) {
+                PW_SET_WS_FRAME_MASKED(ret);
+                size_t old_end = ret.size() - 1;
+                ret.resize(old_end + 4 + data.size());
+
+                union {
+                    char bytes[4];
+                    int integer;
+                } masking_key_union;
+                memcpy(masking_key_union.bytes, masking_key, 4);
+
+                size_t i = 0;
+                for (__m256i mask_vec = _mm256_set1_epi32(masking_key_union.integer); i + 32 <= data.size(); i += 32) {
+                    __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
+                    __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
+                    _mm256_storeu_si256((__m256i_u*) &ret[old_end + i], masked_vec);
+                }
+                for (__m128i mask_vec = _mm_set1_epi32(masking_key_union.integer); i + 16 <= data.size(); i += 16) {
+                    __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[i]);
+                    __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
+                    _mm_storeu_si128((__m128i_u*) &ret[old_end + i], masked_vec);
+                }
+                for (; i < data.size(); i++) {
+                    ret[old_end + i] ^= masking_key_union.bytes[i % 4];
+                }
+            } else {
+                PW_CLEAR_WS_FRAME_MASKED(ret);
+                ret.insert(ret.end(), data.begin(), data.end());
+            }
+
+            return ret;
+        }
+    };
+
     class Connection: public pn::tcp::Connection {
     public:
+        void* data = NULL; // User data
+
         Connection(void) = default;
         Connection(const Connection&) = default;
         Connection(Connection&& s) {
@@ -516,6 +657,11 @@ namespace pw {
         Connection& operator=(const Connection&) = default;
         inline Connection& operator=(Connection&& s) {
             pn::tcp::Connection::operator=(std::move(s));
+            if (this != &s) {
+                this->data = s.data;
+                s.data = NULL;
+            }
+
             return *this;
         }
 
@@ -527,9 +673,23 @@ namespace pw {
             }
             return result;
         }
+
+        ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = NULL) {
+            auto data = message.build(false);
+            ssize_t result;
+            if ((result = pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL)) == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+            }
+            return result;
+        }
     };
 
-    typedef std::function<HTTPResponse(pw::Connection&, const HTTPRequest&)> RouteCallback;
+    typedef std::function<HTTPResponse(const pw::Connection&, const HTTPRequest&)> RouteCallback;
+
+    struct WSRoute {
+        std::function<HTTPResponse(pw::Connection&, const HTTPRequest&)> on_connect;
+        std::function<void(pw::Connection&, const WSMessage&)> on_message;
+    };
 
     class Server: public pn::tcp::Server {
     public:
@@ -588,6 +748,18 @@ namespace pw {
             }
         }
 
+        void route_ws(std::string target, const WSRoute& route) {
+            clean_up_target(target);
+            ws_routes[target] = route;
+        }
+
+        void unroute_ws(std::string target) {
+            clean_up_target(target);
+            if (ws_routes.find(target) != ws_routes.end()) {
+                ws_routes.erase(target);
+            }
+        }
+
         int listen(int backlog) {
             if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
                     auto server = (Server*) data;
@@ -609,9 +781,128 @@ namespace pw {
 
     protected:
         std::unordered_map<std::string, RouteCallback> routes;
+        std::unordered_map<std::string, WSRoute> ws_routes;
 
-        int handle_connection(pw::Connection conn) {
-            bool keep_alive;
+        int handle_ws_connection(pw::Connection conn, WSRoute& route) {
+            bool fin = true;
+            WSMessage message;
+            for (;;) {
+                std::vector<char> frame_header(2);
+                std::vector<char> frame_payload;
+
+                {
+                    ssize_t result;
+                    if ((result = conn.recv(frame_header.data(), 2, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+                }
+
+                fin = PW_GET_WS_FRAME_FIN(frame_header);
+                if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) message.opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
+                bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
+
+                union {
+                    uint8_t uc;
+                    uint16_t us;
+                    uint64_t ull;
+                } payload_length;
+                payload_length.uc = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
+                if (payload_length.uc == 126) {
+                    frame_header.resize(4);
+                    ssize_t result;
+                    if ((result = conn.recv(frame_header.data() + 2, 2, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+
+                    detail::reverse_memcpy((char*) &payload_length.us, frame_header.data() + 2, 2);
+                } else if (payload_length.uc == 127) {
+                    frame_header.resize(10);
+                    ssize_t result;
+                    if ((result = conn.recv(frame_header.data() + 2, 8, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+
+                    detail::reverse_memcpy((char*) &payload_length.ull, frame_header.data() + 2, 8);
+                }
+
+                union {
+                    char bytes[4];
+                    int integer;
+                } masking_key;
+                if (masked) {
+                    ssize_t result;
+                    if ((result = conn.recv(masking_key.bytes, 4, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+                }
+
+                frame_payload.resize(payload_length.ull);
+                {
+                    ssize_t result;
+                    if ((result = conn.recv(frame_payload.data(), payload_length.ull, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+                }
+
+                if (masked) {
+                    size_t i = 0;
+                    for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length.ull; i += 32) {
+                        __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &frame_payload[i]);
+                        __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
+                        _mm256_storeu_si256((__m256i_u*) &frame_payload[i], masked_vec);
+                    }
+                    for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length.ull; i += 16) {
+                        __m128i src_vec = _mm_loadu_si128((__m128i_u*) &frame_payload[i]);
+                        __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
+                        _mm_storeu_si128((__m128i_u*) &frame_payload[i], masked_vec);
+                    }
+                    for (; i < payload_length.ull; i++) {
+                        frame_payload[i] ^= masking_key.bytes[i % 4];
+                    }
+                }
+
+                message.data.insert(message.data.end(), frame_payload.begin(), frame_payload.end());
+
+                if (fin) {
+                    switch (message.opcode) {
+                        case 0x1:
+                        case 0x2:
+                        case 0x8:
+                            route.on_message(conn, message);
+                            break;
+
+                        case 0x9:
+                            conn.send(WSMessage(std::move(message.data), 0xA));
+                            break;
+                    }
+                }
+            }
+
+            return PW_OK;
+        }
+
+        int handle_connection(Connection conn) {
+            bool keep_alive, websocket = false;
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
@@ -631,9 +922,28 @@ namespace pw {
                     return PW_ERROR;
                 }
 
+                clean_up_target(req.target);
+
                 if (req.headers.find("Connection") != req.headers.end()) {
                     if (req.http_version == "HTTP/1.1") {
-                        keep_alive = boost::to_lower_copy(req.headers["Connection"]) != "close";
+                        boost::to_lower(req.headers["Connection"]);
+                        if (req.headers["Connection"] == "upgrade" && req.headers.find("Upgrade") != req.headers.end()) {
+                            if (boost::to_lower_copy(req.headers["Upgrade"]) == "websocket") {
+                                websocket = true;
+                                keep_alive = true;
+                            } else {
+                                ssize_t result;
+                                if ((result = conn.send(HTTPResponse("501", "501 " + status_code_to_reason_phrase("501") + '\n', {{"Content-Type", "text/plain"}}, req.http_version))) == 0) {
+                                    detail::set_last_error(PW_EWEB);
+                                    return PW_ERROR;
+                                } else if (result == PW_ERROR) {
+                                    return PW_ERROR;
+                                }
+                                continue;
+                            }
+                        } else if (req.headers["Connection"] != "close") {
+                            keep_alive = true;
+                        }
                     } else {
                         keep_alive = boost::to_lower_copy(req.headers["Connection"]) == "keep-alive";
                     }
@@ -641,47 +951,108 @@ namespace pw {
                     keep_alive = req.http_version == "HTTP/1.1";
                 }
 
-                clean_up_target(req.target);
-
-                std::string route_target;
-                for (const auto& route : routes) {
+                std::string ws_route_target;
+                for (const auto& route : ws_routes) {
                     if (route.first == req.target) {
-                        route_target = route.first;
+                        ws_route_target = route.first;
                         break;
-                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(req.target, route.first.substr(0, route.first.size() - 1)) && route.first.size() > route_target.size()) {
-                        route_target = route.first;
+                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(req.target, route.first.substr(0, route.first.size() - 1)) && route.first.size() > ws_route_target.size()) {
+                        ws_route_target = route.first;
                     }
                 }
 
-                if (!route_target.empty()) {
-                    HTTPResponse resp;
-                    try {
-                        resp = routes[route_target](conn, req);
-                    } catch (const pw::HTTPResponse& error_resp) {
-                        resp = error_resp;
-                    } catch (...) {
-                        resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}});
+                std::string http_route_target;
+                for (const auto& route : routes) {
+                    if (route.first == req.target) {
+                        http_route_target = route.first;
+                        break;
+                    } else if (boost::ends_with(route.first, "/*") && boost::starts_with(req.target, route.first.substr(0, route.first.size() - 1)) && route.first.size() > http_route_target.size()) {
+                        http_route_target = route.first;
                     }
-                    
-                    resp.headers["Server"] = "Polyweb/net Engine";
-                    if (keep_alive) {
-                        resp.headers["Connection"] = "keep-alive";
+                }
+
+                if (websocket) {
+                    if (!ws_route_target.empty()) {
+                        HTTPResponse resp;
+                        try {
+                            resp = ws_routes[ws_route_target].on_connect(conn, req);
+                        } catch (const pw::HTTPResponse& error_resp) {
+                            resp = error_resp;
+                        } catch (...) {
+                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}}, req.http_version);
+                        }
+
+                        if (resp.status_code == "101") {
+                            resp.headers["Connection"] = "Upgrade";
+                            resp.headers["Upgrade"] = "websocket";
+
+                            if (req.headers.find("Sec-WebSocket-Key") != req.headers.end() && resp.headers.find("Sec-WebSocket-Accept") != resp.headers.end()) {
+                                std::string websocket_key = req.headers["Sec-WebSocket-Key"];
+                                boost::trim_right(websocket_key);
+
+                                websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+                                std::vector<char> hashed(20);
+                                SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) hashed.data());
+
+                                resp.headers["Sec-WebSocket-Accept"] = b64_encode(hashed);
+                            }
+                        }
+
+                        ssize_t result;
+                        if ((result = conn.send(resp)) == 0) {
+                            detail::set_last_error(PW_EWEB);
+                            return PW_ERROR;
+                        } else if (result == PW_ERROR) {
+                            return PW_ERROR;
+                        }
+
+                    } else {
+                        ssize_t result;
+                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}}, req.http_version))) == 0) {
+                            detail::set_last_error(PW_EWEB);
+                            return PW_ERROR;
+                        } else if (result == PW_ERROR) {
+                            return PW_ERROR;
+                        }
                     }
 
+                    return handle_ws_connection(std::move(conn), ws_routes[ws_route_target]);
+                } else if (!ws_route_target.empty() && http_route_target.empty()) {
                     ssize_t result;
-                    if ((result = conn.send(resp)) == 0) {
+                    if ((result = conn.send(HTTPResponse("426", "426 " + status_code_to_reason_phrase("426") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "Upgrade"}, {"Upgrade", "websocket"}}, req.http_version))) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
                         return PW_ERROR;
                     }
+                    continue;
                 } else {
-                    ssize_t result;
-                    if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}}))) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
-                        return PW_ERROR;
+                    if (!http_route_target.empty()) {
+                        HTTPResponse resp;
+                        try {
+                            resp = routes[http_route_target](conn, req);
+                        } catch (const pw::HTTPResponse& error_resp) {
+                            resp = error_resp;
+                        } catch (...) {
+                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}}, req.http_version);
+                        }
+
+                        ssize_t result;
+                        if ((result = conn.send(resp)) == 0) {
+                            detail::set_last_error(PW_EWEB);
+                            return PW_ERROR;
+                        } else if (result == PW_ERROR) {
+                            return PW_ERROR;
+                        }
+                    } else {
+                        ssize_t result;
+                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}}, req.http_version))) == 0) {
+                            detail::set_last_error(PW_EWEB);
+                            return PW_ERROR;
+                        } else if (result == PW_ERROR) {
+                            return PW_ERROR;
+                        }
                     }
                 }
             } while (conn.is_valid() && keep_alive);
