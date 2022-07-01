@@ -1066,11 +1066,6 @@ namespace pw {
                     }
                 }
 
-                std::cout << "WSr: " << ws_route_target << std::endl;
-                std::cout << "HTTPr: " << http_route_target << std::endl;
-                std::cout << "WS: " << websocket << std::endl;
-                std::cout << req.build_str() << std::endl;
-
                 if (websocket) {
                     if (!ws_route_target.empty()) {
                         HTTPResponse resp;
@@ -1108,7 +1103,6 @@ namespace pw {
                         }
 
                         if (resp.status_code == "101") {
-                            std::cout << resp.build_str() << std::endl;
                             return handle_ws_connection(std::move(conn), ws_routes[ws_route_target]);
                         }
                     } else {
