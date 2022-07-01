@@ -9,8 +9,6 @@
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <cstdint>
-#include <emmintrin.h>
-#include <immintrin.h>
 #include <map>
 #include <openssl/sha.h>
 #include <unordered_map>
