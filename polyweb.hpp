@@ -743,7 +743,7 @@ namespace pw {
     typedef std::function<HTTPResponse(const pw::Connection&, const HTTPRequest&)> RouteCallback;
 
     struct WSRoute {
-        std::function<HTTPResponse(pw::Connection&, const HTTPRequest&)> on_connect;
+        RouteCallback on_connect;
         std::function<void(pw::Connection&, const WSMessage&)> on_message;
         std::function<void(pw::Connection&, uint16_t status_code, const std::string& reason)> on_close;
     };
