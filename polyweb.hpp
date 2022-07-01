@@ -625,29 +625,29 @@ namespace pw {
 
             if (masked) {
                 PW_SET_WS_FRAME_MASKED(ret);
-                size_t old_end = ret.size() - 1;
-                ret.resize(ret.size() + 4 + data.size());
+                size_t end = ret.size();
+                ret.resize(end + 4 + data.size());
 
                 union {
                     char bytes[4];
                     int integer;
                 } masking_key_union;
                 memcpy(masking_key_union.bytes, masking_key, 4);
-                memcpy(&ret[old_end], masking_key, 4);
+                memcpy(&ret[end], masking_key, 4);
 
                 size_t i = 0;
                 for (__m256i mask_vec = _mm256_set1_epi32(masking_key_union.integer); i + 32 <= data.size(); i += 32) {
                     __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
                     __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
-                    _mm256_storeu_si256((__m256i_u*) &ret[old_end + 4 + i], masked_vec);
+                    _mm256_storeu_si256((__m256i_u*) &ret[end + 4 + i], masked_vec);
                 }
                 for (__m128i mask_vec = _mm_set1_epi32(masking_key_union.integer); i + 16 <= data.size(); i += 16) {
                     __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[i]);
                     __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
-                    _mm_storeu_si128((__m128i_u*) &ret[old_end + 4 + i], masked_vec);
+                    _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
                 }
                 for (; i < data.size(); i++) {
-                    ret[old_end + 4 + i] ^= masking_key_union.bytes[i % 4];
+                    ret[end + 4 + i] ^= masking_key_union.bytes[i % 4];
                 }
             } else {
                 PW_CLEAR_WS_FRAME_MASKED(ret);
@@ -839,11 +839,14 @@ namespace pw {
         std::unordered_map<std::string, WSRoute> ws_routes;
 
         int handle_ws_connection(pw::Connection conn, WSRoute& route) {
-            bool fin;
+            bool fin = false;
             WSMessage message;
             while (conn.is_valid()) {
-                char frame_header[2];
+                if (fin) {
+                    message.data.clear();
+                }
 
+                char frame_header[2];
                 {
                     ssize_t result;
                     if ((result = conn.recv(frame_header, 2, MSG_WAITALL)) == 0) {
@@ -865,12 +868,9 @@ namespace pw {
                 } payload_length;
                 uint8_t payload_length_7 = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
                 if (payload_length_7 == 126) {
-                    union {
-                        char bytes[2];
-                        uint16_t integer;
-                    } payload_length_16;
+                    char payload_length_16[2];
                     ssize_t result;
-                    if ((result = conn.recv(payload_length_16.bytes, 2, MSG_WAITALL)) == 0) {
+                    if ((result = conn.recv(payload_length_16, 2, MSG_WAITALL)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PN_ERROR) {
@@ -878,14 +878,11 @@ namespace pw {
                         return PW_ERROR;
                     }
 
-                    detail::reverse_memcpy(payload_length.bytes, payload_length_16.bytes, 2);
+                    detail::reverse_memcpy(payload_length.bytes, payload_length_16, 2);
                 } else if (payload_length_7 == 127) {
-                    union {
-                        char bytes[8];
-                        uint64_t integer;
-                    } payload_length_64;
+                    char payload_length_64[8];
                     ssize_t result;
-                    if ((result = conn.recv(payload_length_64.bytes, 8, MSG_WAITALL)) == 0) {
+                    if ((result = conn.recv(payload_length_64, 8, MSG_WAITALL)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PN_ERROR) {
@@ -893,7 +890,7 @@ namespace pw {
                         return PW_ERROR;
                     }
 
-                    detail::reverse_memcpy((char*) &payload_length.bytes, payload_length_64.bytes, 8);
+                    detail::reverse_memcpy((char*) &payload_length.bytes, payload_length_64, 8);
                 } else {
                     payload_length.integer = payload_length_7;
                 }
@@ -913,11 +910,11 @@ namespace pw {
                     }
                 }
 
-                size_t old_end = message.data.size() - 1;
-                message.data.resize(message.data.size() + payload_length.integer);
+                size_t end = message.data.size();
+                message.data.resize(end + payload_length.integer);
                 {
                     ssize_t result;
-                    if ((result = conn.recv(&message.data[old_end], payload_length.integer, MSG_WAITALL)) == 0) {
+                    if ((result = conn.recv(&message.data[end], payload_length.integer, MSG_WAITALL)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PN_ERROR) {
@@ -929,17 +926,17 @@ namespace pw {
                 if (masked) {
                     size_t i = 0;
                     for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length.integer; i += 32) {
-                        __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &message.data[old_end + i]);
+                        __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &message.data[end + i]);
                         __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
-                        _mm256_storeu_si256((__m256i_u*) &message.data[old_end + i], masked_vec);
+                        _mm256_storeu_si256((__m256i_u*) &message.data[end + i], masked_vec);
                     }
                     for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length.integer; i += 16) {
-                        __m128i src_vec = _mm_loadu_si128((__m128i_u*) &message.data[old_end + i]);
+                        __m128i src_vec = _mm_loadu_si128((__m128i_u*) &message.data[end + i]);
                         __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
-                        _mm_storeu_si128((__m128i_u*) &message.data[old_end + i], masked_vec);
+                        _mm_storeu_si128((__m128i_u*) &message.data[end + i], masked_vec);
                     }
                     for (; i < payload_length.integer; i++) {
-                        message.data[old_end + i] ^= masking_key.bytes[i % 4];
+                        message.data[end + i] ^= masking_key.bytes[i % 4];
                     }
                 }
 
