@@ -1004,12 +1004,12 @@ namespace pw {
                     HTTPResponse resp;
                     switch (get_last_error()) {
                         case PW_ENET: {
-                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}});
+                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "close"}});
                             break;
                         }
 
                         case PW_EWEB: {
-                            resp = HTTPResponse("400", "400 " + status_code_to_reason_phrase("400") + '\n', {{"Content-Type", "text/plain"}});
+                            resp = HTTPResponse("400", "400 " + status_code_to_reason_phrase("400") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "close"}});
                             break;
                         }
                     }
@@ -1025,10 +1025,10 @@ namespace pw {
                         if (req.headers["Connection"] == "upgrade" && req.headers.find("Upgrade") != req.headers.end()) {
                             if (boost::to_lower_copy(req.headers["Upgrade"]) == "websocket") {
                                 websocket = true;
-                                keep_alive = true;
                             } else {
+                                keep_alive = true;
                                 ssize_t result;
-                                if ((result = conn.send(HTTPResponse("501", "501 " + status_code_to_reason_phrase("501") + '\n', {{"Content-Type", "text/plain"}}, req.http_version))) == 0) {
+                                if ((result = conn.send(HTTPResponse("501", "501 " + status_code_to_reason_phrase("501") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "keep-alive"}}, req.http_version))) == 0) {
                                     detail::set_last_error(PW_EWEB);
                                     return PW_ERROR;
                                 } else if (result == PW_ERROR) {
@@ -1074,7 +1074,7 @@ namespace pw {
                         } catch (const pw::HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
-                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}}, req.http_version);
+                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version);
                         }
 
                         if (resp.status_code == "101") {
@@ -1092,6 +1092,8 @@ namespace pw {
 
                                 resp.headers["Sec-WebSocket-Accept"] = b64_encode(hashed);
                             }
+                        } else {
+                            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
                         }
 
                         ssize_t result;
@@ -1107,7 +1109,7 @@ namespace pw {
                         }
                     } else {
                         ssize_t result;
-                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}}, req.http_version))) == 0) {
+                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version))) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
@@ -1116,7 +1118,7 @@ namespace pw {
                     }
                 } else if (!ws_route_target.empty() && http_route_target.empty()) {
                     ssize_t result;
-                    if ((result = conn.send(HTTPResponse("426", "426 " + status_code_to_reason_phrase("426") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "Upgrade"}, {"Upgrade", "websocket"}}, req.http_version))) == 0) {
+                    if ((result = conn.send(HTTPResponse("426", "426 " + status_code_to_reason_phrase("426") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive, upgrade" : "close"}, {"Upgrade", "websocket"}}, req.http_version))) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
@@ -1131,8 +1133,10 @@ namespace pw {
                         } catch (const pw::HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
-                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}}, req.http_version);
+                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version);
                         }
+
+                        resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
 
                         ssize_t result;
                         if ((result = conn.send(resp)) == 0) {
@@ -1143,7 +1147,7 @@ namespace pw {
                         }
                     } else {
                         ssize_t result;
-                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}}, req.http_version))) == 0) {
+                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version))) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
