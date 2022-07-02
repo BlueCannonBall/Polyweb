@@ -571,6 +571,17 @@ namespace pw {
 
             return PW_OK;
         }
+
+    protected:
+        friend class Server;
+
+        static HTTPResponse create_basic_error(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
+            pw::HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
+            resp.headers["Content-Type"] = "text/plain";
+            resp.headers["Server"] = "Polyweb/net Engine";
+            return resp;
+        }
     };
 
     class WSMessage {
@@ -735,6 +746,17 @@ namespace pw {
 
             this->ws_closed = true;
             return PW_OK;
+        }
+
+    protected:
+        friend class Server;
+
+        auto send_basic_error(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
+            pw::HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
+            resp.headers["Content-Type"] = "text/plain";
+            resp.headers["Server"] = "Polyweb/net Engine";
+            return send(resp);
         }
     };
 
@@ -1001,19 +1023,19 @@ namespace pw {
             do {
                 HTTPRequest req;
                 if (req.parse(conn) == PW_ERROR) {
-                    HTTPResponse resp;
+                    std::string resp_status_code;
                     switch (get_last_error()) {
                         case PW_ENET: {
-                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "close"}});
+                            resp_status_code = "500";
                             break;
                         }
 
                         case PW_EWEB: {
-                            resp = HTTPResponse("400", "400 " + status_code_to_reason_phrase("400") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "close"}});
+                            resp_status_code = "400";
                             break;
                         }
                     }
-                    conn.send(resp);
+                    conn.send_basic_error(resp_status_code, false);
                     return PW_ERROR;
                 }
 
@@ -1028,7 +1050,7 @@ namespace pw {
                             } else {
                                 keep_alive = true;
                                 ssize_t result;
-                                if ((result = conn.send(HTTPResponse("501", "501 " + status_code_to_reason_phrase("501") + '\n', {{"Content-Type", "text/plain"}, {"Connection", "keep-alive"}}, req.http_version))) == 0) {
+                                if ((result = conn.send_basic_error("501", keep_alive, req.http_version)) == 0) {
                                     detail::set_last_error(PW_EWEB);
                                     return PW_ERROR;
                                 } else if (result == PW_ERROR) {
@@ -1074,8 +1096,10 @@ namespace pw {
                         } catch (const pw::HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
-                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version);
+                            resp = HTTPResponse::create_basic_error("500", keep_alive, req.http_version);
                         }
+
+                        resp.headers["Server"] = "Polyweb/net Engine";
 
                         if (resp.status_code == "101") {
                             resp.headers["Connection"] = "Upgrade";
@@ -1109,7 +1133,7 @@ namespace pw {
                         }
                     } else {
                         ssize_t result;
-                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version))) == 0) {
+                        if ((result = conn.send_basic_error("404", keep_alive, req.http_version)) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
@@ -1118,7 +1142,7 @@ namespace pw {
                     }
                 } else if (!ws_route_target.empty() && http_route_target.empty()) {
                     ssize_t result;
-                    if ((result = conn.send(HTTPResponse("426", "426 " + status_code_to_reason_phrase("426") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive, upgrade" : "close"}, {"Upgrade", "websocket"}}, req.http_version))) == 0) {
+                    if ((result = conn.send_basic_error("426", keep_alive, req.http_version, {{"Upgrade", "websocket"}})) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
@@ -1133,10 +1157,11 @@ namespace pw {
                         } catch (const pw::HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
-                            resp = HTTPResponse("500", "500 " + status_code_to_reason_phrase("500") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version);
+                            resp = HTTPResponse::create_basic_error("500", keep_alive, req.http_version);
                         }
 
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
+                        resp.headers["Server"] = "Polyweb/net Engine";
 
                         ssize_t result;
                         if ((result = conn.send(resp)) == 0) {
@@ -1147,7 +1172,7 @@ namespace pw {
                         }
                     } else {
                         ssize_t result;
-                        if ((result = conn.send(HTTPResponse("404", "404 " + status_code_to_reason_phrase("404") + '\n', {{"Content-Type", "text/plain"}, {"Connection", keep_alive ? "keep-alive" : "close"}}, req.http_version))) == 0) {
+                        if ((result = conn.send_basic_error("404", keep_alive, req.http_version)) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
