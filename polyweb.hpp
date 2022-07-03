@@ -572,11 +572,8 @@ namespace pw {
             return PW_OK;
         }
 
-    protected:
-        friend class Server;
-
-        static HTTPResponse create_basic_error(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            pw::HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+        static HTTPResponse create_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
+            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
             resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
             resp.headers["Content-Type"] = "text/plain";
             resp.headers["Server"] = "Polyweb/net Engine";
@@ -752,20 +749,16 @@ namespace pw {
         friend class Server;
 
         auto send_basic_error(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            pw::HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
-            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-            resp.headers["Content-Type"] = "text/plain";
-            resp.headers["Server"] = "Polyweb/net Engine";
-            return send(resp);
+            return send(HTTPResponse::create_basic(status_code, keep_alive, http_version, headers));
         }
     };
 
-    typedef std::function<HTTPResponse(const pw::Connection&, const HTTPRequest&)> RouteCallback;
+    typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> RouteCallback;
 
     struct WSRoute {
         RouteCallback on_connect;
-        std::function<void(pw::Connection&, const WSMessage&)> on_message;
-        std::function<void(pw::Connection&, uint16_t status_code, const std::string& reason)> on_close;
+        std::function<void(Connection&, const WSMessage&)> on_message;
+        std::function<void(Connection&, uint16_t status_code, const std::string& reason)> on_close;
     };
 
     class Server: public pn::tcp::Server {
@@ -842,7 +835,7 @@ namespace pw {
                     auto server = (Server*) data;
                     detail::pool.schedule([conn = std::move(conn)](void* data) {
                         auto server = (Server*) data;
-                        pw::Connection web_conn(conn.fd, conn.addr, conn.addrlen);
+                        Connection web_conn(conn.fd, conn.addr, conn.addrlen);
                         server->handle_connection(std::move(web_conn));
                     },
                         server);
@@ -860,7 +853,7 @@ namespace pw {
         std::unordered_map<std::string, RouteCallback> routes;
         std::unordered_map<std::string, WSRoute> ws_routes;
 
-        int handle_ws_connection(pw::Connection conn, WSRoute& route) {
+        int handle_ws_connection(Connection conn, WSRoute& route) {
             bool fin = false;
             WSMessage message;
             while (conn.is_valid()) {
@@ -1093,10 +1086,10 @@ namespace pw {
                         HTTPResponse resp;
                         try {
                             resp = ws_routes[ws_route_target].on_connect(conn, req);
-                        } catch (const pw::HTTPResponse& error_resp) {
+                        } catch (const HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
-                            resp = HTTPResponse::create_basic_error("500", keep_alive, req.http_version);
+                            resp = HTTPResponse::create_basic("500", keep_alive, req.http_version);
                         }
 
                         resp.headers["Server"] = "Polyweb/net Engine";
@@ -1154,10 +1147,10 @@ namespace pw {
                         HTTPResponse resp;
                         try {
                             resp = routes[http_route_target](conn, req);
-                        } catch (const pw::HTTPResponse& error_resp) {
+                        } catch (const HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
-                            resp = HTTPResponse::create_basic_error("500", keep_alive, req.http_version);
+                            resp = HTTPResponse::create_basic("500", keep_alive, req.http_version);
                         }
 
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
