@@ -119,7 +119,7 @@ namespace pw {
             }
 
             std::vector<std::pair<std::thread, CommandQueue*>> threads;
-            unsigned int sched_counter = 0;
+            std::atomic<unsigned int> sched_counter {0};
 
         public:
             ThreadPool(unsigned int pool_size = std::thread::hardware_concurrency()) {
