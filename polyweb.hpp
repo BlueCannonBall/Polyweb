@@ -432,6 +432,14 @@ namespace pw {
             headers(headers),
             http_version(http_version) { }
 
+        static HTTPResponse create_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
+            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
+            resp.headers["Content-Type"] = "text/plain";
+            resp.headers["Server"] = "Polyweb/net Engine";
+            return resp;
+        }
+
         std::vector<char> build(void) const {
             std::vector<char> ret;
 
@@ -571,14 +579,6 @@ namespace pw {
 
             return PW_OK;
         }
-
-        static HTTPResponse create_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
-            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-            resp.headers["Content-Type"] = "text/plain";
-            resp.headers["Server"] = "Polyweb/net Engine";
-            return resp;
-        }
     };
 
     class WSMessage {
@@ -706,6 +706,10 @@ namespace pw {
             return result;
         }
 
+        inline auto send_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
+            return send(HTTPResponse::create_basic(status_code, keep_alive, http_version, headers));
+        }
+
         ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = NULL) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
@@ -743,13 +747,6 @@ namespace pw {
 
             this->ws_closed = true;
             return PW_OK;
-        }
-
-    protected:
-        friend class Server;
-
-        auto send_basic_error(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            return send(HTTPResponse::create_basic(status_code, keep_alive, http_version, headers));
         }
     };
 
@@ -1028,7 +1025,7 @@ namespace pw {
                             break;
                         }
                     }
-                    conn.send_basic_error(resp_status_code, false);
+                    conn.send_basic(resp_status_code, false);
                     return PW_ERROR;
                 }
 
@@ -1043,7 +1040,7 @@ namespace pw {
                             } else {
                                 keep_alive = true;
                                 ssize_t result;
-                                if ((result = conn.send_basic_error("501", keep_alive, req.http_version)) == 0) {
+                                if ((result = conn.send_basic("501", keep_alive, req.http_version)) == 0) {
                                     detail::set_last_error(PW_EWEB);
                                     return PW_ERROR;
                                 } else if (result == PW_ERROR) {
@@ -1126,7 +1123,7 @@ namespace pw {
                         }
                     } else {
                         ssize_t result;
-                        if ((result = conn.send_basic_error("404", keep_alive, req.http_version)) == 0) {
+                        if ((result = conn.send_basic("404", keep_alive, req.http_version)) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
@@ -1135,7 +1132,7 @@ namespace pw {
                     }
                 } else if (!ws_route_target.empty() && http_route_target.empty()) {
                     ssize_t result;
-                    if ((result = conn.send_basic_error("426", keep_alive, req.http_version, {{"Upgrade", "websocket"}})) == 0) {
+                    if ((result = conn.send_basic("426", keep_alive, req.http_version, {{"Upgrade", "websocket"}})) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
@@ -1165,7 +1162,7 @@ namespace pw {
                         }
                     } else {
                         ssize_t result;
-                        if ((result = conn.send_basic_error("404", keep_alive, req.http_version)) == 0) {
+                        if ((result = conn.send_basic("404", keep_alive, req.http_version)) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
