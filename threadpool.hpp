@@ -146,6 +146,7 @@ namespace pw {
                 }
             };
 
+            // Thread-safe
             std::shared_ptr<Task> schedule(std::function<void(void*)> func, void* arg = nullptr, void* data = nullptr) {
                 unsigned int i = sched_counter;
                 do {
@@ -187,6 +188,7 @@ namespace pw {
                 return cmd;
             };
 
+            // Resizing is NOT THREAD-SAFE
             void resize(unsigned int new_pool_size) {
                 if (new_pool_size == threads.size()) {
                     return;
