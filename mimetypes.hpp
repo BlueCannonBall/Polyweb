@@ -1004,9 +1004,9 @@ namespace pw {
         std::vector<std::string> split_filename;
         boost::split(split_filename, filename, boost::is_any_of("."));
 
-        decltype(mimetypes)::const_iterator pos;
-        if ((pos = mimetypes.find(split_filename.back())) != mimetypes.end()) {
-            return (*pos).second;
+        decltype(mimetypes)::const_iterator ret_it;
+        if ((ret_it = mimetypes.find(split_filename.back())) != mimetypes.end()) {
+            return ret_it->second;
         } else {
             return "application/octet-stream";
         }
