@@ -136,10 +136,10 @@ namespace pw {
         }
 
         inline std::string remove_special_target_syntax(const std::string& target) {
-            if (target.back() == '*' || target.back() == '?') {
-                return target.substr(0, target.size() - 1);
-            } else if (boost::ends_with(target, "*?")) {
+            if (boost::ends_with(target, "*?")) {
                 return target.substr(0, target.size() - 2);
+            } else if (target.back() == '*' || target.back() == '?') {
+                return target.substr(0, target.size() - 1);
             } else {
                 return target;
             }
@@ -525,8 +525,8 @@ namespace pw {
                     }
                 }
                 target.resize(query_string_begin);
-                target = percent_decode(target);
             }
+            target = percent_decode(target);
 
             return PW_OK;
         }
@@ -579,12 +579,9 @@ namespace pw {
                     std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
                     ret.insert(ret.end(), header.begin(), header.end());
                 }
-
-                ret.insert(ret.end(), {'\r', '\n'});
-                ret.insert(ret.end(), this->body.begin(), this->body.end());
-            } else {
-                ret.insert(ret.end(), {'\r', '\n'});
             }
+            ret.insert(ret.end(), {'\r', '\n'});
+            ret.insert(ret.end(), this->body.begin(), this->body.end());
 
             return ret;
         }
@@ -1207,7 +1204,7 @@ namespace pw {
                     if (current_target == req.target) {
                         ws_route_target = route.first;
                         break;
-                    } else if (is_wildcard_target(route.first) && boost::starts_with(req.target, current_target) && current_target.size() > ws_route_target.size()) {
+                    } else if (is_wildcard_target(route.first) && boost::starts_with(req.target, current_target) && route.first.size() > ws_route_target.size()) {
                         ws_route_target = route.first;
                     }
                 }
@@ -1222,7 +1219,7 @@ namespace pw {
                     if (current_target == req.target) {
                         http_route_target = route.first;
                         break;
-                    } else if (is_wildcard_target(route.first) && boost::starts_with(req.target, current_target) && current_target.size() > http_route_target.size()) {
+                    } else if (is_wildcard_target(route.first) && boost::starts_with(req.target, current_target) && route.first.size() > http_route_target.size()) {
                         http_route_target = route.first;
                     }
                 }
