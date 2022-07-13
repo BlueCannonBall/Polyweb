@@ -134,16 +134,6 @@ namespace pw {
                 dest[i] = src[len - i - 1];
             }
         }
-
-        inline std::string remove_special_target_syntax(const std::string& target) {
-            if (boost::ends_with(target, "*?")) {
-                return target.substr(0, target.size() - 2);
-            } else if (target.back() == '*' || target.back() == '?') {
-                return target.substr(0, target.size() - 1);
-            } else {
-                return target;
-            }
-        }
     } // namespace detail
 
     inline int get_last_error(void) {
@@ -308,10 +298,6 @@ namespace pw {
         }
 
         return ret;
-    }
-
-    inline bool is_wildcard_target(const std::string& target) {
-        return target.back() == '*' || boost::ends_with(target, "*?");
     }
 
     typedef std::unordered_map<std::string, std::string, detail::case_insensitive_hasher, detail::case_insensitive_comparer> HTTPHeaders;
@@ -981,10 +967,22 @@ namespace pw {
         }
     };
 
-    typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> HTTPRouteCallback;
+    typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> RouteCallback;
 
-    struct WSRoute {
-        HTTPRouteCallback on_connect;
+    class Route {
+    public:
+        bool wildcard = false;
+        bool query = false;
+    };
+
+    class HTTPRoute: public Route {
+    public:
+        RouteCallback cb;
+    };
+
+    class WSRoute: public Route {
+    public:
+        RouteCallback on_connect;
         std::function<void(Connection&, const WSMessage&)> on_message;
         std::function<void(Connection&, uint16_t status_code, const std::string& reason)> on_close;
     };
@@ -1034,7 +1032,7 @@ namespace pw {
             return PW_OK;
         }
 
-        void route(std::string target, HTTPRouteCallback route_cb) {
+        void route(std::string target, HTTPRoute route_cb) {
             clean_up_target(target);
             routes[target] = route_cb;
         }
@@ -1080,7 +1078,7 @@ namespace pw {
         }
 
     protected:
-        std::unordered_map<std::string, HTTPRouteCallback> routes;
+        std::unordered_map<std::string, HTTPRoute> routes;
         std::unordered_map<std::string, WSRoute> ws_routes;
 
         int handle_ws_connection(Connection conn, WSRoute& route) {
@@ -1196,30 +1194,28 @@ namespace pw {
 
                 std::string ws_route_target;
                 for (const auto& route : ws_routes) {
-                    if ((!req.query_parameters.empty()) != (route.first.back() == '?')) {
+                    if ((!req.query_parameters.empty()) != route.second.query) {
                         continue;
                     }
 
-                    std::string current_target = detail::remove_special_target_syntax(route.first);
-                    if (current_target == req.target) {
+                    if (route.first == req.target) {
                         ws_route_target = route.first;
                         break;
-                    } else if (is_wildcard_target(route.first) && boost::starts_with(req.target, current_target) && route.first.size() > ws_route_target.size()) {
+                    } else if (route.second.wildcard && boost::starts_with(req.target, route.first) && route.first.size() > ws_route_target.size()) {
                         ws_route_target = route.first;
                     }
                 }
 
                 std::string http_route_target;
                 for (const auto& route : routes) {
-                    if ((!req.query_parameters.empty()) != (route.first.back() == '?')) {
+                    if ((!req.query_parameters.empty()) != route.second.query) {
                         continue;
                     }
 
-                    std::string current_target = detail::remove_special_target_syntax(route.first);
-                    if (current_target == req.target) {
+                    if (route.first == req.target) {
                         http_route_target = route.first;
                         break;
-                    } else if (is_wildcard_target(route.first) && boost::starts_with(req.target, current_target) && route.first.size() > http_route_target.size()) {
+                    } else if (route.second.wildcard && boost::starts_with(req.target, route.first) && route.first.size() > http_route_target.size()) {
                         http_route_target = route.first;
                     }
                 }
@@ -1285,7 +1281,7 @@ namespace pw {
                     if (!http_route_target.empty()) {
                         HTTPResponse resp;
                         try {
-                            resp = routes[http_route_target](conn, req);
+                            resp = routes[http_route_target].cb(conn, req);
                         } catch (const HTTPResponse& error_resp) {
                             resp = error_resp;
                         } catch (...) {
