@@ -2,6 +2,7 @@
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
+#include <cmath>
 #include <openssl/sha.h>
 #include <sstream>
 #include <string.h>
@@ -819,12 +820,37 @@ namespace pw {
                         resp.headers["Upgrade"] = "websocket";
 
                         HTTPHeaders::const_iterator websocket_key_it;
-                        if ((websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end() && !resp.headers.count("Sec-WebSocket-Accept")) {
+                        if ((!resp.headers.count("Sec-WebSocket-Accept")) && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = boost::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                             std::vector<char> hashed(20);
                             SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) hashed.data());
                             resp.headers["Sec-WebSocket-Accept"] = b64_encode(hashed);
+                        }
+
+                        HTTPHeaders::const_iterator websocket_version_it;
+                        if ((websocket_version_it = req.headers.find("Sec-WebSocket-Version")) != req.headers.end()) {
+                            std::vector<std::string> split_websocket_version;
+                            boost::split(split_websocket_version, websocket_version_it->second, boost::is_any_of(","));
+
+                            int closest_version_num = 13;
+                            unsigned int closest_version_dist = UINT_MAX;
+                            for (const auto& version : split_websocket_version) {
+                                boost::trim(version);
+
+                                int version_num;
+                                unsigned int version_dist;
+                                if ((version_dist = std::abs((version_num = stoi(version)) - 13)) < closest_version_dist) {
+                                    closest_version_num = version_num;
+                                    closest_version_dist = version_dist;
+
+                                    if (version_dist == 0) {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            resp.headers["Sec-WebSocket-Version"] = std::to_string(closest_version_num);
                         }
                     } else {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
