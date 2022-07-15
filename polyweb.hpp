@@ -466,7 +466,7 @@ namespace pw {
             }
         }
 
-        int listen(int backlog);
+        int listen(int backlog = 128);
 
     protected:
         std::unordered_map<std::string, HTTPRoute> routes;
