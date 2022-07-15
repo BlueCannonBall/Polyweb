@@ -360,10 +360,7 @@ namespace pw {
         bool wildcard = false;
         bool query = false;
 
-        Route() = delete;
-
-    protected:
-        Route(bool wildcard, bool query) :
+        Route(bool wildcard = false, bool query = false) :
             wildcard(wildcard),
             query(query) { }
     };
@@ -372,6 +369,7 @@ namespace pw {
     public:
         RouteCallback cb;
 
+        HTTPRoute() = default;
         HTTPRoute(RouteCallback cb, bool wildcard = false, bool query = false) :
             Route(wildcard, query),
             cb(cb) { }
@@ -383,6 +381,7 @@ namespace pw {
         std::function<void(Connection&, const WSMessage&)> on_message;
         std::function<void(Connection&, uint16_t status_code, const std::string& reason)> on_close;
 
+        WSRoute() = default;
         WSRoute(RouteCallback on_connect, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool query = false) :
             Route(wildcard, query),
             on_connect(on_connect),
