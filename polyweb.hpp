@@ -4,16 +4,11 @@
 #include "Polynet/polynet.hpp"
 #include "threadpool.hpp"
 #include <boost/algorithm/string.hpp>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
-#include <boost/archive/iterators/transform_width.hpp>
 #include <cstdint>
 #include <map>
-#include <openssl/sha.h>
-#include <sstream>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <x86intrin.h>
 
 #define PW_ERROR PN_ERROR
 #define PW_OK    PN_OK
