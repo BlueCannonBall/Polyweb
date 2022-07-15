@@ -835,7 +835,7 @@ namespace pw {
 
                             int closest_version_num = 13;
                             unsigned int closest_version_dist = UINT_MAX;
-                            for (const auto& version : split_websocket_version) {
+                            for (auto& version : split_websocket_version) {
                                 boost::trim(version);
 
                                 int version_num;
