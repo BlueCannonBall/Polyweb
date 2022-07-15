@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace pw {
-    std::string filename_to_mimetype(const std::string& filename) { // NOLINT
+    inline std::string filename_to_mimetype(const std::string& filename) {
         const static std::map<std::string, std::string> mimetypes = {
             {"123", "application/vnd.lotus-1-2-3"},
             {"3dml", "text/vnd.in3d.3dml"},
