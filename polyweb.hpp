@@ -233,9 +233,11 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPResponse(void) = default;
-        HTTPResponse(const std::string& status_code) :
+        HTTPResponse(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             status_code(status_code),
-            reason_phrase(status_code_to_reason_phrase(status_code)) { }
+            reason_phrase(status_code_to_reason_phrase(status_code)),
+            headers(headers),
+            http_version(http_version) { }
         HTTPResponse(const std::string& status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
