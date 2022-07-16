@@ -854,7 +854,7 @@ namespace pw {
                         }
 
                         HTTPHeaders::const_iterator websocket_protocol_it;
-                        if ((websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
+                        if ((websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end() && !resp.headers.count("Sec-WebSocket-Protocol")) {
                             std::vector<std::string> split_websocket_protocol;
                             boost::split(split_websocket_protocol, websocket_protocol_it->second, boost::is_any_of(","));
                             resp.headers["Sec-WebSocket-Protocol"] = boost::trim_copy(split_websocket_protocol.back());
