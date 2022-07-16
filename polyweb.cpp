@@ -852,6 +852,13 @@ namespace pw {
 
                             resp.headers["Sec-WebSocket-Version"] = std::to_string(closest_version_num);
                         }
+
+                        HTTPHeaders::const_iterator websocket_protocol_it;
+                        if ((websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
+                            std::vector<std::string> split_websocket_protocol;
+                            boost::split(split_websocket_protocol, websocket_protocol_it->second, boost::is_any_of(","));
+                            resp.headers["Sec-WebSocket-Protocol"] = boost::trim_copy(split_websocket_protocol.back());
+                        }
                     } else {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
                     }
