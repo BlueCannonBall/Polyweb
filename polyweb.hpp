@@ -251,6 +251,12 @@ namespace pw {
             headers(headers),
             http_version(http_version) { }
 
+        static inline HTTPResponse create_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
+            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+            resp.headers["Content-Type"] = "text/plain";
+            return resp;
+        }
+
         std::vector<char> build(void) const;
 
         inline std::string build_str(void) const {
@@ -265,9 +271,8 @@ namespace pw {
         friend class Server;
 
         static inline HTTPResponse create_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+            HTTPResponse resp = create_basic(status_code, headers, http_version);
             resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-            resp.headers["Content-Type"] = "text/plain";
             resp.headers["Server"] = "Polyweb/net Engine";
             return resp;
         }
