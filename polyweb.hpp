@@ -266,7 +266,7 @@ namespace pw {
 
         int parse(pn::tcp::Connection& conn);
 
-    private:
+    protected:
         friend class Connection;
         friend class Server;
 
@@ -349,10 +349,14 @@ namespace pw {
             return result;
         }
 
+        inline auto send_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
+            return send(HTTPResponse::create_basic(status_code, headers, http_version));
+        }
+
         int recv(WSMessage& message);
         int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, char* masking_key = NULL, bool validity_check = true);
 
-    private:
+    protected:
         friend class Server;
 
         inline auto send_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
