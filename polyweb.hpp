@@ -389,13 +389,15 @@ namespace pw {
     class WSRoute: public Route {
     public:
         RouteCallback on_connect;
+        std::function<void(Connection&)> on_open;
         std::function<void(Connection&, const WSMessage&)> on_message;
         std::function<void(Connection&, uint16_t status_code, const std::string& reason)> on_close;
 
         WSRoute() = default;
-        WSRoute(RouteCallback on_connect, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool query = false) :
+        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool query = false) :
             Route(wildcard, query),
             on_connect(on_connect),
+            on_open(on_open),
             on_message(on_message),
             on_close(on_close) { }
     };

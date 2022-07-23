@@ -664,6 +664,8 @@ namespace pw {
     }
 
     int Server::handle_ws_connection(Connection conn, WSRoute& route) {
+        route.on_open(conn);
+
         while (conn.is_valid()) {
             WSMessage message;
             if (conn.recv(message) == PW_ERROR) {
