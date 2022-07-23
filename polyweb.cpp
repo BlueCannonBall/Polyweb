@@ -816,6 +816,7 @@ namespace pw {
                     resp.headers["Server"] = "Polyweb/net Engine";
 
                     if (resp.status_code == "101") {
+                        resp.body.clear();
                         resp.headers["Connection"] = "Upgrade";
                         resp.headers["Upgrade"] = "websocket";
 
