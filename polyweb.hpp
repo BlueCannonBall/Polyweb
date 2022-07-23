@@ -281,7 +281,7 @@ namespace pw {
     class WSMessage {
     public:
         std::vector<char> data;
-        uint8_t opcode;
+        uint8_t opcode = 2;
 
         WSMessage(void) = default;
         WSMessage(const std::string& str, uint8_t opcode = 1) :
