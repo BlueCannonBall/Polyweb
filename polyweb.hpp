@@ -391,7 +391,7 @@ namespace pw {
         RouteCallback on_connect;
         std::function<void(Connection&)> on_open;
         std::function<void(Connection&, const WSMessage&)> on_message;
-        std::function<void(Connection&, uint16_t, const std::string&)> on_close;
+        std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;
         WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool query = false) :

@@ -669,6 +669,7 @@ namespace pw {
         while (conn.is_valid()) {
             WSMessage message;
             if (conn.recv(message) == PW_ERROR) {
+                route.on_close(conn, 0, {}, false);
                 return PW_ERROR;
             }
 
@@ -698,7 +699,7 @@ namespace pw {
                             reason.assign(message.data.begin() + 2, message.data.end());
                         }
 
-                        route.on_close(conn, status_code_union.integer, reason);
+                        route.on_close(conn, status_code_union.integer, reason, true);
 
                         ssize_t result;
                         if ((result = conn.send(WSMessage(std::move(message.data), 0x8))) == 0) {
