@@ -119,13 +119,6 @@ namespace pw {
 
     std::string universal_strerror(int error = get_last_error());
 
-    // Remove trailing slash in target
-    inline void clean_up_target(std::string& target) {
-        if (target.size() > 1 && target.back() == '/') {
-            target.pop_back();
-        }
-    }
-
     inline std::string status_code_to_reason_phrase(const std::string& status_code) {
         const static std::map<std::string, std::string> conversion_mapping = {
             {"100", "Continue"},
@@ -448,12 +441,10 @@ namespace pw {
         }
 
         inline void route(std::string target, HTTPRoute route_cb) {
-            clean_up_target(target);
             routes[target] = route_cb;
         }
 
         inline void unroute(std::string target) {
-            clean_up_target(target);
             decltype(routes)::const_iterator route_it;
             if ((route_it = routes.find(target)) != routes.end()) {
                 routes.erase(route_it);
@@ -461,12 +452,10 @@ namespace pw {
         }
 
         inline void route_ws(std::string target, const WSRoute& route) {
-            clean_up_target(target);
             ws_routes[target] = route;
         }
 
         inline void unroute_ws(std::string target) {
-            clean_up_target(target);
             decltype(ws_routes)::const_iterator route_it;
             if ((route_it = ws_routes.find(target)) != ws_routes.end()) {
                 ws_routes.erase(route_it);

@@ -145,9 +145,7 @@ namespace pw {
         ret.insert(ret.end(), this->method.begin(), this->method.end());
         ret.push_back(' ');
 
-        std::string clean_target(this->target);
-        clean_up_target(clean_target);
-        std::string encoded_target = percent_encode(clean_target);
+        std::string encoded_target = percent_encode(this->target);
         ret.insert(ret.end(), encoded_target.begin(), encoded_target.end());
         if (!query_parameters.empty()) {
             ret.push_back('?');
@@ -289,8 +287,6 @@ namespace pw {
                 return PW_ERROR;
             }
         }
-
-        clean_up_target(target); // Remove trailing slash in target
 
         size_t query_string_begin;
         if ((query_string_begin = target.find('?')) != std::string::npos) {
