@@ -328,11 +328,9 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!this->body.empty()) {
-            if (!headers.count("Content-Length")) {
-                std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
-                ret.insert(ret.end(), header.begin(), header.end());
-            }
+        if (!headers.count("Content-Length")) {
+            std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
+            ret.insert(ret.end(), header.begin(), header.end());
         }
         ret.insert(ret.end(), {'\r', '\n'});
         ret.insert(ret.end(), this->body.begin(), this->body.end());
