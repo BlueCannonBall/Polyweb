@@ -13,27 +13,15 @@ namespace pw {
         tp::ThreadPool pool(std::thread::hardware_concurrency() * 3);
         thread_local int last_error = PW_ESUCCESS;
 
-        void reverse_memcpy(char* dest, char* src, size_t len) {
-            __builtin_prefetch(src, 0, 1);
-            size_t i = 0;
-            for (; i + 32 <= len; i += 32) {
-                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - i - 1));
-                __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31));
-                _mm256_storeu_si256(((__m256i_u*) dest) + i, reversed_vec);
-            }
-            for (; i + 16 <= len; i += 16) {
-                __m128i src_vec = _mm_loadu_si128((__m128i_u*) (src + len - i - 1));
-                __m128i reversed_vec = _mm_shuffle_epi8(src_vec, _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
-                _mm_storeu_si128(((__m128i_u*) dest) + i, reversed_vec);
-            }
-            for (; i < len; i++) {
+        void reverse_memcpy(char* dest, const char* src, size_t len) {
+            for (size_t i = 0; i < len; i++) {
                 dest[i] = src[len - i - 1];
             }
         }
     } // namespace detail
 
-    const char* strerror(int error) {
-        static const char* error_strings[] = {
+    std::string strerror(int error) {
+        static const std::string error_strings[] = {
             "Success",       // PW_ESUCCESS
             "Network error", // PW_ENET
             "Web error",     // PW_EWEB

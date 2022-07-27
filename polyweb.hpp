@@ -108,14 +108,14 @@ namespace pw {
             }
         };
 
-        void reverse_memcpy(char* dest, char* src, size_t len);
+        void reverse_memcpy(char* dest, const char* src, size_t len);
     } // namespace detail
 
     inline int get_last_error(void) {
         return detail::last_error;
     }
 
-    const char* strerror(int error = get_last_error());
+    std::string strerror(int error = get_last_error());
 
     std::string universal_strerror(int error = get_last_error());
 
@@ -440,22 +440,22 @@ namespace pw {
             return PW_OK;
         }
 
-        inline void route(std::string target, HTTPRoute route_cb) {
-            routes[target] = route_cb;
+        inline void route(const std::string& target, HTTPRoute route) {
+            routes[target] = route;
         }
 
-        inline void unroute(std::string target) {
+        inline void unroute(const std::string& target) {
             decltype(routes)::const_iterator route_it;
             if ((route_it = routes.find(target)) != routes.end()) {
                 routes.erase(route_it);
             }
         }
 
-        inline void route_ws(std::string target, const WSRoute& route) {
+        inline void route_ws(const std::string& target, const WSRoute& route) {
             ws_routes[target] = route;
         }
 
-        inline void unroute_ws(std::string target) {
+        inline void unroute_ws(const std::string& target) {
             decltype(ws_routes)::const_iterator route_it;
             if ((route_it = ws_routes.find(target)) != ws_routes.end()) {
                 ws_routes.erase(route_it);
