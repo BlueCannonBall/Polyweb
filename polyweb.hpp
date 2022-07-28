@@ -108,8 +108,9 @@ namespace pw {
             }
         };
 
-        void reverse_memcpy(char* dest, const char* src, size_t len);
     } // namespace detail
+
+    void reverse_memcpy(char* dest, const char* src, size_t len);
 
     inline int get_last_error(void) {
         return detail::last_error;

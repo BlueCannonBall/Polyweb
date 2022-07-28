@@ -12,13 +12,27 @@ namespace pw {
     namespace detail {
         tp::ThreadPool pool(std::thread::hardware_concurrency() * 3);
         thread_local int last_error = PW_ESUCCESS;
-
-        void reverse_memcpy(char* dest, const char* src, size_t len) {
-            for (size_t i = 0; i < len; i++) {
-                dest[i] = src[len - i - 1];
-            }
-        }
     } // namespace detail
+
+    void reverse_memcpy(char* dest, const char* src, size_t len) {
+        size_t i = 0;
+        for (; i + 32 <= len; i += 32) {
+            __builtin_prefetch(src + len - 1 - i - 32, 0, 0);
+            __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - 1 - i));
+            __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31));
+            _mm256_storeu_si256(((__m256i_u*) dest) + i, reversed_vec);
+        }
+        for (; i + 16 <= len; i += 16) {
+            __builtin_prefetch(src + len - 1 - i - 16, 0, 0);
+            __m128i src_vec = _mm_loadu_si128((__m128i_u*) (src + len - 1 - i));
+            __m128i reversed_vec = _mm_shuffle_epi8(src_vec, _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+            _mm_storeu_si128(((__m128i_u*) dest) + i, reversed_vec);
+        }
+        for (; i < len; i++) {
+            __builtin_prefetch(src + len - 1 - i - 1, 0, 0);
+            dest[i] = src[len - 1 - i];
+        }
+    }
 
     std::string strerror(int error) {
         static const std::string error_strings[] = {
@@ -160,17 +174,12 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!this->body.empty()) {
-            if (!headers.count("Content-Length")) {
-                std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
-                ret.insert(ret.end(), header.begin(), header.end());
-            }
-
-            ret.insert(ret.end(), {'\r', '\n'});
-            ret.insert(ret.end(), this->body.begin(), this->body.end());
-        } else {
-            ret.insert(ret.end(), {'\r', '\n'});
+        if (!headers.count("Content-Length") && ((!body.empty()) || headers.count("Content-Type"))) {
+            std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
+            ret.insert(ret.end(), header.begin(), header.end());
         }
+        ret.insert(ret.end(), {'\r', '\n'});
+        ret.insert(ret.end(), this->body.begin(), this->body.end());
 
         return ret;
     }
@@ -316,7 +325,7 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!headers.count("Content-Length")) {
+        if (!headers.count("Content-Length") && ((!body.empty()) || headers.count("Content-Type"))) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
@@ -449,7 +458,7 @@ namespace pw {
                 uint16_t integer;
             } size;
             size.integer = data.size();
-            detail::reverse_memcpy(ret.data() + 2, size.bytes, 2);
+            reverse_memcpy(ret.data() + 2, size.bytes, 2);
         } else {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 127);
             ret.resize(10);
@@ -458,7 +467,7 @@ namespace pw {
                 uint64_t integer;
             } size;
             size.integer = data.size();
-            detail::reverse_memcpy(ret.data() + 2, size.bytes, 8);
+            reverse_memcpy(ret.data() + 2, size.bytes, 8);
         }
 
         if (masked) {
@@ -530,7 +539,7 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                detail::reverse_memcpy(payload_length.bytes, payload_length_16, 2);
+                reverse_memcpy(payload_length.bytes, payload_length_16, 2);
             } else if (payload_length_7 == 127) {
                 char payload_length_64[8];
                 ssize_t result;
@@ -542,7 +551,7 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                detail::reverse_memcpy((char*) &payload_length.bytes, payload_length_64, 8);
+                reverse_memcpy((char*) &payload_length.bytes, payload_length_64, 8);
             } else {
                 payload_length.integer = payload_length_7;
             }
@@ -611,7 +620,7 @@ namespace pw {
         } status_code_union;
         status_code_union.integer = status_code;
 
-        detail::reverse_memcpy(message.data.data(), status_code_union.bytes, 2);
+        reverse_memcpy(message.data.data(), status_code_union.bytes, 2);
         memcpy(message.data.data() + 2, reason.data(), reason.size());
 
         ssize_t result;
@@ -675,7 +684,7 @@ namespace pw {
                         std::string reason;
 
                         if (message.data.size() >= 2) {
-                            detail::reverse_memcpy(status_code_union.bytes, message.data.data(), 2);
+                            reverse_memcpy(status_code_union.bytes, message.data.data(), 2);
                         }
                         if (message.data.size() > 2) {
                             reason.assign(message.data.begin() + 2, message.data.end());
