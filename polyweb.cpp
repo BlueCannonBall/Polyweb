@@ -3,6 +3,7 @@
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <cmath>
+#include <ctime>
 #include <openssl/sha.h>
 #include <sstream>
 #include <string.h>
@@ -325,6 +326,17 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
+        if (!headers.count("Date")) {
+            time_t t = time(NULL);
+            struct tm* tm = gmtime(&t);
+
+            char date[256] = {0};
+            strftime(date, sizeof(date), "%a, %d %b %Y %T GMT", tm);
+
+            std::string header = "Date: " + std::string(date) + "\r\n";
+            ret.insert(ret.end(), header.begin(), header.end());
+        }
+
         if (!headers.count("Content-Length") && ((!body.empty()) || headers.count("Content-Type"))) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
@@ -458,7 +470,11 @@ namespace pw {
                 uint16_t integer;
             } size;
             size.integer = data.size();
+#if __BYTE_ORDER == __BIG_ENDIAN
+            memcpy(ret.data() + 2, size.bytes, 2);
+#else
             reverse_memcpy(ret.data() + 2, size.bytes, 2);
+#endif
         } else {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 127);
             ret.resize(10);
@@ -467,7 +483,11 @@ namespace pw {
                 uint64_t integer;
             } size;
             size.integer = data.size();
+#if __BYTE_ORDER == __BIG_ENDIAN
+            memcpy(ret.data() + 2, size.bytes, 8);
+#else
             reverse_memcpy(ret.data() + 2, size.bytes, 8);
+#endif
         }
 
         if (masked) {
@@ -524,8 +544,8 @@ namespace pw {
             bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
 
             union {
-                char bytes[sizeof(size_t)];
-                size_t integer = 0;
+                char bytes[sizeof(unsigned long long)];
+                unsigned long long integer = 0ull;
             } payload_length;
             uint8_t payload_length_7 = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
             if (payload_length_7 == 126) {
@@ -539,7 +559,11 @@ namespace pw {
                     return PW_ERROR;
                 }
 
+#if __BYTE_ORDER == __BIG_ENDIAN
+                memcpy(payload_length.bytes + sizeof(payload_length) - 2, payload_length_16, 2);
+#else
                 reverse_memcpy(payload_length.bytes, payload_length_16, 2);
+#endif
             } else if (payload_length_7 == 127) {
                 char payload_length_64[8];
                 ssize_t result;
@@ -551,7 +575,11 @@ namespace pw {
                     return PW_ERROR;
                 }
 
-                reverse_memcpy((char*) &payload_length.bytes, payload_length_64, 8);
+#if __BYTE_ORDER == __BIG_ENDIAN
+                memcpy(payload_length.bytes + sizeof(payload_length) - 8, payload_length_64, 8);
+#else
+                reverse_memcpy(payload_length.bytes, payload_length_64, 8);
+#endif
             } else {
                 payload_length.integer = payload_length_7;
             }
@@ -620,7 +648,11 @@ namespace pw {
         } status_code_union;
         status_code_union.integer = status_code;
 
+#if __BYTE_ORDER == __BIG_ENDIAN
+        memcpy(message.data.data(), status_code_union.bytes, 2);
+#else
         reverse_memcpy(message.data.data(), status_code_union.bytes, 2);
+#endif
         memcpy(message.data.data() + 2, reason.data(), reason.size());
 
         ssize_t result;
@@ -684,7 +716,11 @@ namespace pw {
                         std::string reason;
 
                         if (message.data.size() >= 2) {
+#if __BYTE_ORDER__ == __BIG_ENDIAN
+                            memcpy(status_code_union.bytes, message.data.data(), 2);
+#else
                             reverse_memcpy(status_code_union.bytes, message.data.data(), 2);
+#endif
                         }
                         if (message.data.size() > 2) {
                             reason.assign(message.data.begin() + 2, message.data.end());
@@ -869,6 +905,14 @@ namespace pw {
                     if (resp.status_code == "101") {
                         return handle_ws_connection(std::move(conn), ws_routes[ws_route_target]);
                     }
+                } else if (!http_route_target.empty()) {
+                    ssize_t result;
+                    if ((result = conn.send_basic("400", keep_alive, req.http_version)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        return PW_ERROR;
+                    }
                 } else {
                     ssize_t result;
                     if ((result = conn.send_basic("404", keep_alive, req.http_version)) == 0) {
@@ -877,14 +921,6 @@ namespace pw {
                     } else if (result == PW_ERROR) {
                         return PW_ERROR;
                     }
-                }
-            } else if (!ws_route_target.empty() && http_route_target.empty()) {
-                ssize_t result;
-                if ((result = conn.send_basic("426", keep_alive, req.http_version, {{"Upgrade", "websocket"}})) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                } else if (result == PW_ERROR) {
-                    return PW_ERROR;
                 }
             } else {
                 if (!http_route_target.empty()) {
@@ -902,6 +938,14 @@ namespace pw {
 
                     ssize_t result;
                     if ((result = conn.send(resp)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        return PW_ERROR;
+                    }
+                } else if (!ws_route_target.empty()) {
+                    ssize_t result;
+                    if ((result = conn.send_basic("426", keep_alive, req.http_version, {{"Upgrade", "websocket"}})) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
