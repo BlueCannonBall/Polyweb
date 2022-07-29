@@ -778,7 +778,7 @@ namespace pw {
             HTTPHeaders::const_iterator connection_it;
             if ((connection_it = req.headers.find("Connection")) != req.headers.end()) {
                 std::vector<std::string> connection;
-                boost::split(connection, boost::to_lower_copy(connection_it->second), ",");
+                boost::split(connection, boost::to_lower_copy(connection_it->second), boost::is_any_of(","));
                 for (auto& header : connection) {
                     boost::trim(header);
                 }
