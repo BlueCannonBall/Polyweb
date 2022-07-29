@@ -777,17 +777,17 @@ namespace pw {
 
             HTTPHeaders::const_iterator connection_it;
             if ((connection_it = req.headers.find("Connection")) != req.headers.end()) {
-                std::vector<std::string> connection;
-                boost::split(connection, boost::to_lower_copy(connection_it->second), boost::is_any_of(","));
-                for (auto& header : connection) {
+                std::vector<std::string> split_connection;
+                boost::split(split_connection, boost::to_lower_copy(connection_it->second), boost::is_any_of(","));
+                for (auto& header : split_connection) {
                     boost::trim(header);
                 }
 
                 if (req.http_version == "HTTP/1.1") {
-                    keep_alive = std::find(connection.begin(), connection.end(), "close") == connection.end();
+                    keep_alive = std::find(split_connection.begin(), split_connection.end(), "close") == split_connection.end();
 
                     HTTPHeaders::const_iterator upgrade_it;
-                    if (std::find(connection.begin(), connection.end(), "upgrade") != connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
+                    if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         if (boost::to_lower_copy(upgrade_it->second) == "websocket") {
                             websocket = true;
                         } else {
@@ -802,7 +802,7 @@ namespace pw {
                         }
                     }
                 } else {
-                    keep_alive = std::find(connection.begin(), connection.end(), "keep-alive") != connection.end();
+                    keep_alive = std::find(split_connection.begin(), split_connection.end(), "keep-alive") != split_connection.end();
                 }
             } else {
                 keep_alive = req.http_version == "HTTP/1.1";
@@ -851,7 +851,7 @@ namespace pw {
 
                     if (resp.status_code == "101") {
                         resp.body.clear();
-                        resp.headers["Connection"] = "Upgrade";
+                        resp.headers["Connection"] = "upgrade";
                         resp.headers["Upgrade"] = "websocket";
 
                         HTTPHeaders::const_iterator websocket_key_it;
@@ -949,7 +949,7 @@ namespace pw {
                     }
                 } else if (!ws_route_target.empty()) {
                     ssize_t result;
-                    if ((result = conn.send_basic("426", keep_alive, req.http_version, {{"Upgrade", "websocket"}})) == 0) {
+                    if ((result = conn.send_basic("426", {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
