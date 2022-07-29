@@ -3,10 +3,10 @@
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <cmath>
+#include <cstring>
 #include <ctime>
 #include <openssl/sha.h>
 #include <sstream>
-#include <string.h>
 #include <x86intrin.h>
 
 namespace pw {
@@ -175,7 +175,7 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!headers.count("Content-Length") && ((!body.empty()) || headers.count("Content-Type"))) {
+        if (((!body.empty()) || headers.count("Content-Type")) && !headers.count("Content-Length")) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
@@ -215,7 +215,7 @@ namespace pw {
 
         for (;;) {
             std::string header_name;
-            if (detail::read_until(conn, std::back_inserter(header_name), ": ") == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_name), ":") == PW_ERROR) {
                 return PW_ERROR;
             }
             if (header_name.empty()) {
@@ -227,7 +227,7 @@ namespace pw {
             if (detail::read_until(conn, std::back_inserter(header_value), "\r\n") == PW_ERROR) {
                 return PW_ERROR;
             }
-            boost::trim_left(header_value);
+            boost::trim(header_value);
             if (header_value.empty()) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
@@ -337,7 +337,7 @@ namespace pw {
             ret.insert(ret.end(), header.begin(), header.end());
         }
 
-        if (!headers.count("Content-Length") && ((!body.empty()) || headers.count("Content-Type"))) {
+        if (((!body.empty()) || headers.count("Content-Type")) && !headers.count("Content-Length")) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
@@ -377,7 +377,7 @@ namespace pw {
 
         for (;;) {
             std::string header_name;
-            if (detail::read_until(conn, std::back_inserter(header_name), ": ") == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_name), ":") == PW_ERROR) {
                 return PW_ERROR;
             }
             if (header_name.empty()) {
@@ -389,7 +389,7 @@ namespace pw {
             if (detail::read_until(conn, std::back_inserter(header_value), "\r\n") == PW_ERROR) {
                 return PW_ERROR;
             }
-            boost::trim_left(header_value);
+            boost::trim(header_value);
             if (header_value.empty()) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
@@ -524,13 +524,13 @@ namespace pw {
         return ret;
     }
 
-    int Connection::recv(WSMessage& message) {
+    int WSMessage::parse(pn::tcp::Connection& conn) {
         bool fin = false;
         while (!fin) {
             char frame_header[2];
             {
                 ssize_t result;
-                if ((result = pn::tcp::Connection::recv(frame_header, 2, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(frame_header, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (result == PN_ERROR) {
@@ -540,7 +540,7 @@ namespace pw {
             }
 
             fin = PW_GET_WS_FRAME_FIN(frame_header);
-            if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) message.opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
+            if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) this->opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
             bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
 
             union {
@@ -551,7 +551,7 @@ namespace pw {
             if (payload_length_7 == 126) {
                 char payload_length_16[2];
                 ssize_t result;
-                if ((result = pn::tcp::Connection::recv(payload_length_16, 2, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(payload_length_16, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (result == PN_ERROR) {
@@ -567,7 +567,7 @@ namespace pw {
             } else if (payload_length_7 == 127) {
                 char payload_length_64[8];
                 ssize_t result;
-                if ((result = pn::tcp::Connection::recv(payload_length_64, 8, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(payload_length_64, 8, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (result == PN_ERROR) {
@@ -590,7 +590,7 @@ namespace pw {
             } masking_key;
             if (masked) {
                 ssize_t result;
-                if ((result = pn::tcp::Connection::recv(masking_key.bytes, 4, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(masking_key.bytes, 4, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (result == PN_ERROR) {
@@ -599,11 +599,11 @@ namespace pw {
                 }
             }
 
-            size_t end = message.data.size();
-            message.data.resize(end + payload_length.integer);
+            size_t end = this->data.size();
+            this->data.resize(end + payload_length.integer);
             {
                 ssize_t result;
-                if ((result = pn::tcp::Connection::recv(&message.data[end], payload_length.integer, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (result == PN_ERROR) {
@@ -615,17 +615,17 @@ namespace pw {
             if (masked) {
                 size_t i = 0;
                 for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length.integer; i += 32) {
-                    __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &message.data[end + i]);
+                    __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &this->data[end + i]);
                     __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
-                    _mm256_storeu_si256((__m256i_u*) &message.data[end + i], masked_vec);
+                    _mm256_storeu_si256((__m256i_u*) &this->data[end + i], masked_vec);
                 }
                 for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length.integer; i += 16) {
-                    __m128i src_vec = _mm_loadu_si128((__m128i_u*) &message.data[end + i]);
+                    __m128i src_vec = _mm_loadu_si128((__m128i_u*) &this->data[end + i]);
                     __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
-                    _mm_storeu_si128((__m128i_u*) &message.data[end + i], masked_vec);
+                    _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
                 }
                 for (; i < payload_length.integer; i++) {
-                    message.data[end + i] ^= masking_key.bytes[i % 4];
+                    this->data[end + i] ^= masking_key.bytes[i % 4];
                 }
             }
         }
@@ -691,7 +691,7 @@ namespace pw {
 
         while (conn.is_valid()) {
             WSMessage message;
-            if (conn.recv(message) == PW_ERROR) {
+            if (message.parse(conn) == PW_ERROR) {
                 route.on_close(conn, 0, {}, false);
                 return PW_ERROR;
             }
@@ -777,14 +777,20 @@ namespace pw {
 
             HTTPHeaders::const_iterator connection_it;
             if ((connection_it = req.headers.find("Connection")) != req.headers.end()) {
-                std::string connection = boost::to_lower_copy(connection_it->second);
+                std::vector<std::string> connection;
+                boost::split(connection, boost::to_lower_copy(connection_it->second), ",");
+                for (auto& header : connection) {
+                    boost::trim(header);
+                }
+
                 if (req.http_version == "HTTP/1.1") {
+                    keep_alive = std::find(connection.begin(), connection.end(), "close") == connection.end();
+
                     HTTPHeaders::const_iterator upgrade_it;
-                    if (connection == "upgrade" && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
+                    if (std::find(connection.begin(), connection.end(), "upgrade") != connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         if (boost::to_lower_copy(upgrade_it->second) == "websocket") {
                             websocket = true;
                         } else {
-                            keep_alive = true;
                             ssize_t result;
                             if ((result = conn.send_basic("501", keep_alive, req.http_version)) == 0) {
                                 detail::set_last_error(PW_EWEB);
@@ -794,11 +800,9 @@ namespace pw {
                             }
                             continue;
                         }
-                    } else if (connection != "close") {
-                        keep_alive = true;
                     }
                 } else {
-                    keep_alive = connection == "keep-alive";
+                    keep_alive = std::find(connection.begin(), connection.end(), "keep-alive") != connection.end();
                 }
             } else {
                 keep_alive = req.http_version == "HTTP/1.1";
@@ -843,7 +847,7 @@ namespace pw {
                         resp = HTTPResponse::create_basic("500", keep_alive, req.http_version);
                     }
 
-                    resp.headers["Server"] = "Polyweb/net Engine";
+                    resp.headers["Server"] = PW_SERVER_NAME;
 
                     if (resp.status_code == "101") {
                         resp.body.clear();
@@ -864,14 +868,14 @@ namespace pw {
                             std::vector<std::string> split_websocket_version;
                             boost::split(split_websocket_version, websocket_version_it->second, boost::is_any_of(","));
 
-                            int closest_version_num = 13;
+                            int closest_version_num = PW_WS_VERSION;
                             unsigned int closest_version_dist = UINT_MAX;
                             for (auto& version : split_websocket_version) {
                                 boost::trim(version);
 
                                 int version_num;
                                 unsigned int version_dist;
-                                if ((version_dist = std::abs((version_num = stoi(version)) - 13)) < closest_version_dist) {
+                                if ((version_dist = std::abs((version_num = stoi(version)) - PW_WS_VERSION)) < closest_version_dist) {
                                     closest_version_num = version_num;
                                     closest_version_dist = version_dist;
 
@@ -934,7 +938,7 @@ namespace pw {
                     }
 
                     resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-                    resp.headers["Server"] = "Polyweb/net Engine";
+                    resp.headers["Server"] = PW_SERVER_NAME;
 
                     ssize_t result;
                     if ((result = conn.send(resp)) == 0) {

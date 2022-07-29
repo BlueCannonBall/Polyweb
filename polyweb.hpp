@@ -8,10 +8,12 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-#define PW_ERROR PN_ERROR
-#define PW_OK    PN_OK
+#define PW_ERROR       PN_ERROR
+#define PW_OK          PN_OK
+#define PW_SERVER_NAME "Polyweb/net Engine"
 
 // Errors
 #define PW_ESUCCESS 0
@@ -19,6 +21,8 @@
 #define PW_EWEB     2
 
 // WebSocket macros
+#define PW_WS_VERSION 13
+
 #define PW_GET_WS_FRAME_FIN(frame_header)            (frame_header[0] & 0b10000000)
 #define PW_GET_WS_FRAME_RSV1(frame_header)           (frame_header[0] & 0b01000000)
 #define PW_GET_WS_FRAME_RSV2(frame_header)           (frame_header[0] & 0b00100000)
@@ -267,7 +271,7 @@ namespace pw {
         static inline HTTPResponse create_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
             HTTPResponse resp = create_basic(status_code, headers, http_version);
             resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-            resp.headers["Server"] = "Polyweb/net Engine";
+            resp.headers["Server"] = PW_SERVER_NAME;
             return resp;
         }
     };
@@ -292,6 +296,7 @@ namespace pw {
         }
 
         std::vector<char> build(bool masked, char* masking_key = NULL) const;
+        int parse(pn::tcp::Connection& conn);
     };
 
     class Connection: public pn::tcp::Connection {
@@ -347,7 +352,6 @@ namespace pw {
             return send(HTTPResponse::create_basic(status_code, headers, http_version));
         }
 
-        int recv(WSMessage& message);
         int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, char* masking_key = NULL, bool validity_check = true);
 
     protected:
