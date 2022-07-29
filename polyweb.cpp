@@ -331,7 +331,7 @@ namespace pw {
             struct tm* tm = gmtime(&t);
 
             char date[256] = {0};
-            strftime(date, sizeof(date), "%a, %d %b %Y %T GMT", tm);
+            strftime(date, sizeof(date), "%a, %d %b %Y %T %Z", tm);
 
             std::string header = "Date: " + std::string(date) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
