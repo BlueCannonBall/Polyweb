@@ -67,6 +67,14 @@ namespace pw {
         return base_error + ": " + specific_error;
     }
 
+    std::string get_date() {
+        time_t t = time(NULL);
+        struct tm* tm = gmtime(&t);
+        char date[256] = {0};
+        strftime(date, sizeof(date), "%a, %d %b %Y %T %Z", tm);
+        return date;
+    }
+
     std::vector<char> b64_decode(const std::string& str) {
         using namespace boost::archive::iterators;
         using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
@@ -327,13 +335,7 @@ namespace pw {
         }
 
         if (!headers.count("Date")) {
-            time_t t = time(NULL);
-            struct tm* tm = gmtime(&t);
-
-            char date[256] = {0};
-            strftime(date, sizeof(date), "%a, %d %b %Y %T %Z", tm);
-
-            std::string header = "Date: " + std::string(date) + "\r\n";
+            std::string header = "Date: " + get_date() + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
 

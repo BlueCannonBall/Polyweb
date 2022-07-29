@@ -170,6 +170,8 @@ namespace pw {
         return conversion_mapping.at(status_code);
     }
 
+    std::string get_date();
+
     std::vector<char> b64_decode(const std::string& str);
     std::string b64_encode(const std::vector<char>& data);
 
