@@ -42,7 +42,7 @@ namespace pw {
             "Web error",     // PW_EWEB
         };
 
-        if (error >= 0 && error < 3) {
+        if (error >= 0 && error <= 2) {
             return error_strings[error];
         } else {
             return "Unknown error";
