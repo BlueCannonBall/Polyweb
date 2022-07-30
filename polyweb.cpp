@@ -70,7 +70,7 @@ namespace pw {
     std::string get_date() {
         time_t t = time(NULL);
         struct tm* tm = gmtime(&t);
-        char date[256] = {0};
+        char date[256];
         strftime(date, sizeof(date), "%a, %d %b %Y %T %Z", tm);
         return date;
     }
@@ -93,7 +93,7 @@ namespace pw {
     std::string percent_encode(const std::string& str, bool plus_as_space, bool allow_slash) {
         std::string ret;
         ret.reserve(str.size());
-        for (const char c : str) {
+        for (char c : str) {
             const static char* allowed_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~";
             if (plus_as_space && c == ' ') {
                 ret.push_back('+');
@@ -117,7 +117,7 @@ namespace pw {
 
         uint8_t reading_percent = 0;
         char current_character;
-        for (const char c : str) {
+        for (char c : str) {
             if (!reading_percent) {
                 if (c == '%') {
                     reading_percent = 2;
@@ -631,7 +631,6 @@ namespace pw {
                 }
             }
         }
-
         return PW_OK;
     }
 
@@ -875,15 +874,26 @@ namespace pw {
                             for (auto& version : split_websocket_version) {
                                 boost::trim(version);
 
-                                int version_num;
-                                unsigned int version_dist;
-                                if ((version_dist = std::abs((version_num = stoi(version)) - PW_WS_VERSION)) < closest_version_dist) {
-                                    closest_version_num = version_num;
-                                    closest_version_dist = version_dist;
+                                try {
+                                    int version_num;
+                                    unsigned int version_dist;
+                                    if ((version_dist = std::abs((version_num = std::stoi(version)) - PW_WS_VERSION)) < closest_version_dist) {
+                                        closest_version_num = version_num;
+                                        closest_version_dist = version_dist;
 
-                                    if (version_dist == 0) {
-                                        break;
+                                        if (version_dist == 0) {
+                                            break;
+                                        }
                                     }
+                                } catch (...) {
+                                    ssize_t result;
+                                    if ((result = conn.send_basic("400", keep_alive, req.http_version)) == 0) {
+                                        detail::set_last_error(PW_EWEB);
+                                        return PW_ERROR;
+                                    } else if (result == PW_ERROR) {
+                                        return PW_ERROR;
+                                    }
+                                    goto cont;
                                 }
                             }
 
@@ -966,6 +976,8 @@ namespace pw {
                         return PW_ERROR;
                     }
                 }
+
+            cont:;
             }
         } while (conn.is_valid() && keep_alive);
         return PW_OK;
