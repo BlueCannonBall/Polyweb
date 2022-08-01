@@ -805,10 +805,6 @@ namespace pw {
 
             std::string ws_route_target;
             for (const auto& route : ws_routes) {
-                if ((!req.query_parameters.empty()) != route.second.query) {
-                    continue;
-                }
-
                 if (route.first == req.target) {
                     ws_route_target = route.first;
                     break;
@@ -819,10 +815,6 @@ namespace pw {
 
             std::string http_route_target;
             for (const auto& route : routes) {
-                if ((!req.query_parameters.empty()) != route.second.query) {
-                    continue;
-                }
-
                 if (route.first == req.target) {
                     http_route_target = route.first;
                     break;

@@ -356,11 +356,9 @@ namespace pw {
     class Route {
     public:
         bool wildcard = false;
-        bool query = false;
 
-        Route(bool wildcard = false, bool query = false) :
-            wildcard(wildcard),
-            query(query) { }
+        Route(bool wildcard = false) :
+            wildcard(wildcard) { }
     };
 
     class HTTPRoute: public Route {
@@ -368,8 +366,8 @@ namespace pw {
         RouteCallback cb;
 
         HTTPRoute() = default;
-        HTTPRoute(RouteCallback cb, bool wildcard = false, bool query = false) :
-            Route(wildcard, query),
+        HTTPRoute(RouteCallback cb, bool wildcard = false) :
+            Route(wildcard),
             cb(cb) { }
     };
 
@@ -381,8 +379,8 @@ namespace pw {
         std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;
-        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool query = false) :
-            Route(wildcard, query),
+        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
+            Route(wildcard),
             on_connect(on_connect),
             on_open(on_open),
             on_message(on_message),
