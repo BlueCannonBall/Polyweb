@@ -834,7 +834,7 @@ namespace pw {
                         if (handle_error(conn, "500", keep_alive, req.http_version) == PW_ERROR) {
                             return PW_ERROR;
                         }
-                        goto end_of_main_loop;
+                        continue;
                     }
 
                     if (!resp.headers.count("Server")) {
@@ -934,7 +934,7 @@ namespace pw {
                         if (handle_error(conn, "500", keep_alive, req.http_version) == PW_ERROR) {
                             return PW_ERROR;
                         }
-                        goto end_of_main_loop;
+                        continue;
                     }
 
                     if (!resp.headers.count("Server")) {
