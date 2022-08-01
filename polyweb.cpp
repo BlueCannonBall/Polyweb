@@ -76,11 +76,11 @@ namespace pw {
     }
 
     time_t parse_date(const std::string& date) {
-        struct tm* timeinfo = {0};
+        struct tm timeinfo = {0};
         std::istringstream ss(date);
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
-        ss >> std::get_time(timeinfo, "%a, %d %b %Y %T %Z");
-        return mktime(timeinfo);
+        ss >> std::get_time(&timeinfo, "%a, %d %b %Y %T %Z");
+        return mktime(&timeinfo);
     }
 
     std::vector<char> b64_decode(const std::string& str) {
