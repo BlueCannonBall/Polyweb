@@ -175,7 +175,8 @@ namespace pw {
         return conversion_mapping.at(status_code);
     }
 
-    std::string get_date(time_t rawtime = time(NULL));
+    std::string build_date(time_t rawtime = time(NULL));
+    time_t parse_date(const std::string& date);
 
     std::vector<char> b64_decode(const std::string& str);
     std::string b64_encode(const std::vector<char>& data);

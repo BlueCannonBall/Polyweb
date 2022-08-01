@@ -4,6 +4,7 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <cmath>
 #include <cstring>
+#include <iomanip>
 #include <openssl/sha.h>
 #include <sstream>
 #include <x86intrin.h>
@@ -66,11 +67,20 @@ namespace pw {
         return base_error + ": " + specific_error;
     }
 
-    std::string get_date(time_t rawtime) {
+    std::string build_date(time_t rawtime) {
         struct tm* timeinfo = gmtime(&rawtime);
-        char ret[256];
-        strftime(ret, sizeof(ret), "%a, %d %b %Y %T %Z", timeinfo);
-        return ret;
+        std::stringstream ss;
+        ss.imbue(std::locale(setlocale(LC_ALL, "C")));
+        ss << std::put_time(timeinfo, "%a, %d %b %Y %T %Z");
+        return ss.str();
+    }
+
+    time_t parse_date(const std::string& date) {
+        struct tm* timeinfo = {0};
+        std::istringstream ss(date);
+        ss.imbue(std::locale(setlocale(LC_ALL, "C")));
+        ss >> std::get_time(timeinfo, "%a, %d %b %Y %T %Z");
+        return mktime(timeinfo);
     }
 
     std::vector<char> b64_decode(const std::string& str) {
@@ -333,7 +343,7 @@ namespace pw {
         }
 
         if (!headers.count("Date")) {
-            std::string header = "Date: " + get_date() + "\r\n";
+            std::string header = "Date: " + build_date() + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
 
