@@ -980,7 +980,7 @@ namespace pw {
     int Server::handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers, const std::string& http_version) {
         HTTPResponse resp;
         try {
-            resp = on_error(status_code);
+            resp = this->on_error(status_code);
         } catch (const HTTPResponse& error_resp) {
             resp = error_resp;
         } catch (...) {
