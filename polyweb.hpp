@@ -5,6 +5,7 @@
 #include "threadpool.hpp"
 #include <boost/algorithm/string.hpp>
 #include <cstdint>
+#include <ctime>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -19,6 +20,10 @@
 #define PW_ESUCCESS 0
 #define PW_ENET     1
 #define PW_EWEB     2
+
+#define PW_DEFAULT_SERVER_ON_ERROR [](const std::string& status_code) -> pw::HTTPResponse { \
+    return pw::HTTPResponse::create_basic(status_code);                                     \
+}
 
 // WebSocket macros
 #define PW_WS_VERSION 13
@@ -170,7 +175,7 @@ namespace pw {
         return conversion_mapping.at(status_code);
     }
 
-    std::string get_date();
+    std::string get_date(time_t rawtime = time(NULL));
 
     std::vector<char> b64_decode(const std::string& str);
     std::string b64_encode(const std::vector<char>& data);
@@ -265,17 +270,6 @@ namespace pw {
         }
 
         int parse(pn::tcp::Connection& conn);
-
-    protected:
-        friend class Connection;
-        friend class Server;
-
-        static inline HTTPResponse create_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            HTTPResponse resp = create_basic(status_code, headers, http_version);
-            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-            resp.headers["Server"] = PW_SERVER_NAME;
-            return resp;
-        }
     };
 
     class WSMessage {
@@ -355,13 +349,6 @@ namespace pw {
         }
 
         int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, char* masking_key = NULL, bool validity_check = true);
-
-    protected:
-        friend class Server;
-
-        inline auto send_basic(const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1", const HTTPHeaders& headers = {}) {
-            return send(HTTPResponse::create_basic(status_code, keep_alive, http_version, headers));
-        }
     };
 
     typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> RouteCallback;
@@ -404,6 +391,8 @@ namespace pw {
 
     class Server: public pn::tcp::Server {
     public:
+        std::function<HTTPResponse(const std::string&)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
+
         Server(void) = default;
         Server(const Server&) = default;
         Server(Server&& s) {
@@ -421,6 +410,9 @@ namespace pw {
             pn::tcp::Server::operator=(std::move(s));
             if (this != &s) {
                 this->routes = std::move(s.routes);
+                this->on_error = std::move(s.on_error);
+
+                s.on_error = PW_DEFAULT_SERVER_ON_ERROR;
             }
 
             return *this;
@@ -477,6 +469,8 @@ namespace pw {
 
         int handle_ws_connection(Connection conn, WSRoute& route);
         int handle_connection(Connection conn);
+        int handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
+        int handle_error(Connection& conn, const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
     };
 } // namespace pw
 

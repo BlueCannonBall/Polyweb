@@ -4,7 +4,6 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <cmath>
 #include <cstring>
-#include <ctime>
 #include <openssl/sha.h>
 #include <sstream>
 #include <x86intrin.h>
@@ -67,12 +66,11 @@ namespace pw {
         return base_error + ": " + specific_error;
     }
 
-    std::string get_date() {
-        time_t t = time(NULL);
-        struct tm* tm = gmtime(&t);
-        char date[256];
-        strftime(date, sizeof(date), "%a, %d %b %Y %T %Z", tm);
-        return date;
+    std::string get_date(time_t rawtime) {
+        struct tm* timeinfo = gmtime(&rawtime);
+        char ret[256];
+        strftime(ret, sizeof(ret), "%a, %d %b %Y %T %Z", timeinfo);
+        return ret;
     }
 
     std::vector<char> b64_decode(const std::string& str) {
@@ -772,7 +770,7 @@ namespace pw {
                         break;
                     }
                 }
-                conn.send_basic(resp_status_code, false);
+                handle_error(conn, resp_status_code, false);
                 return PW_ERROR;
             }
 
@@ -792,11 +790,7 @@ namespace pw {
                         if (boost::to_lower_copy(upgrade_it->second) == "websocket") {
                             websocket = true;
                         } else {
-                            ssize_t result;
-                            if ((result = conn.send_basic("501", keep_alive, req.http_version)) == 0) {
-                                detail::set_last_error(PW_EWEB);
-                                return PW_ERROR;
-                            } else if (result == PW_ERROR) {
+                            if (handle_error(conn, "501", keep_alive, req.http_version) == PW_ERROR) {
                                 return PW_ERROR;
                             }
                             continue;
@@ -845,23 +839,25 @@ namespace pw {
                     } catch (const HTTPResponse& error_resp) {
                         resp = error_resp;
                     } catch (...) {
-                        resp = HTTPResponse::create_basic("500", keep_alive, req.http_version);
+                        if (handle_error(conn, "500", keep_alive, req.http_version) == PW_ERROR) {
+                            return PW_ERROR;
+                        }
+                        goto end_of_main_loop;
                     }
 
-                    resp.headers["Server"] = PW_SERVER_NAME;
+                    if (!resp.headers.count("Server")) {
+                        resp.headers["Server"] = PW_SERVER_NAME;
+                    }
 
                     if (resp.status_code == "101") {
                         resp.body.clear();
-                        resp.headers["Connection"] = "upgrade";
-                        resp.headers["Upgrade"] = "websocket";
+                        HTTPHeaders::const_iterator content_type_it;
+                        if ((content_type_it = resp.headers.find("Content-Type")) != resp.headers.end()) {
+                            resp.headers.erase(content_type_it);
+                        }
 
-                        HTTPHeaders::const_iterator websocket_key_it;
-                        if ((!resp.headers.count("Sec-WebSocket-Accept")) && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
-                            std::string websocket_key = boost::trim_right_copy(websocket_key_it->second);
-                            websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                            std::vector<char> hashed(20);
-                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) hashed.data());
-                            resp.headers["Sec-WebSocket-Accept"] = b64_encode(hashed);
+                        if (!resp.headers.count("Connection")) {
+                            resp.headers["Connection"] = "upgrade";
                         }
 
                         HTTPHeaders::const_iterator websocket_version_it;
@@ -886,18 +882,23 @@ namespace pw {
                                         }
                                     }
                                 } catch (...) {
-                                    ssize_t result;
-                                    if ((result = conn.send_basic("400", keep_alive, req.http_version)) == 0) {
-                                        detail::set_last_error(PW_EWEB);
-                                        return PW_ERROR;
-                                    } else if (result == PW_ERROR) {
+                                    if (handle_error(conn, "400", keep_alive, req.http_version) == PW_ERROR) {
                                         return PW_ERROR;
                                     }
-                                    goto cont;
+                                    goto end_of_main_loop;
                                 }
                             }
 
                             resp.headers["Sec-WebSocket-Version"] = std::to_string(closest_version_num);
+                        }
+
+                        HTTPHeaders::const_iterator websocket_key_it;
+                        if ((!resp.headers.count("Sec-WebSocket-Accept")) && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
+                            std::string websocket_key = boost::trim_right_copy(websocket_key_it->second);
+                            websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+                            std::vector<char> hashed(20);
+                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) hashed.data());
+                            resp.headers["Sec-WebSocket-Accept"] = b64_encode(hashed);
                         }
 
                         HTTPHeaders::const_iterator websocket_protocol_it;
@@ -906,7 +907,7 @@ namespace pw {
                             boost::split(split_websocket_protocol, websocket_protocol_it->second, boost::is_any_of(","));
                             resp.headers["Sec-WebSocket-Protocol"] = boost::trim_copy(split_websocket_protocol.back());
                         }
-                    } else {
+                    } else if (!resp.headers.count("Connection")) {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
                     }
 
@@ -922,19 +923,11 @@ namespace pw {
                         return handle_ws_connection(std::move(conn), ws_routes[ws_route_target]);
                     }
                 } else if (!http_route_target.empty()) {
-                    ssize_t result;
-                    if ((result = conn.send_basic("400", keep_alive, req.http_version)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
+                    if (handle_error(conn, "400", keep_alive, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 } else {
-                    ssize_t result;
-                    if ((result = conn.send_basic("404", keep_alive, req.http_version)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
+                    if (handle_error(conn, "404", keep_alive, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 }
@@ -946,11 +939,18 @@ namespace pw {
                     } catch (const HTTPResponse& error_resp) {
                         resp = error_resp;
                     } catch (...) {
-                        resp = HTTPResponse::create_basic("500", keep_alive, req.http_version);
+                        if (handle_error(conn, "500", keep_alive, req.http_version) == PW_ERROR) {
+                            return PW_ERROR;
+                        }
+                        goto end_of_main_loop;
                     }
 
-                    resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-                    resp.headers["Server"] = PW_SERVER_NAME;
+                    if (!resp.headers.count("Server")) {
+                        resp.headers["Server"] = PW_SERVER_NAME;
+                    }
+                    if (!resp.headers.count("Connection")) {
+                        resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
+                    }
 
                     ssize_t result;
                     if ((result = conn.send(resp)) == 0) {
@@ -960,26 +960,77 @@ namespace pw {
                         return PW_ERROR;
                     }
                 } else if (!ws_route_target.empty()) {
-                    ssize_t result;
-                    if ((result = conn.send_basic("426", {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
+                    if (handle_error(conn, "426", {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 } else {
-                    ssize_t result;
-                    if ((result = conn.send_basic("404", keep_alive, req.http_version)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
+                    if (handle_error(conn, "404", keep_alive, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 }
 
-            cont:;
+            end_of_main_loop:;
             }
         } while (conn.is_valid() && keep_alive);
+        return PW_OK;
+    }
+
+    int Server::handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers, const std::string& http_version) {
+        HTTPResponse resp;
+        try {
+            resp = on_error(status_code);
+        } catch (const HTTPResponse& error_resp) {
+            resp = error_resp;
+        } catch (...) {
+            resp = HTTPResponse::create_basic("500");
+        }
+
+        if (!resp.headers.count("Server")) {
+            resp.headers["Server"] = PW_SERVER_NAME;
+        }
+
+        for (auto& header : headers) {
+            if (!resp.headers.count(header.first)) {
+                resp.headers.insert(std::move(header));
+            }
+        }
+
+        ssize_t result;
+        if ((result = conn.send(resp)) == 0) {
+            detail::set_last_error(PW_EWEB);
+            return PW_ERROR;
+        } else if (result == PW_ERROR) {
+            return PW_ERROR;
+        }
+
+        return PW_OK;
+    }
+
+    int Server::handle_error(Connection& conn, const std::string& status_code, bool keep_alive, const std::string& http_version) {
+        HTTPResponse resp;
+        try {
+            resp = on_error(status_code);
+        } catch (const HTTPResponse& error_resp) {
+            resp = error_resp;
+        } catch (...) {
+            resp = HTTPResponse::create_basic("500");
+        }
+
+        if (!resp.headers.count("Server")) {
+            resp.headers["Server"] = PW_SERVER_NAME;
+        }
+        if (!resp.headers.count("Connection")) {
+            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
+        }
+
+        ssize_t result;
+        if ((result = conn.send(resp)) == 0) {
+            detail::set_last_error(PW_EWEB);
+            return PW_ERROR;
+        } else if (result == PW_ERROR) {
+            return PW_ERROR;
+        }
+
         return PW_OK;
     }
 } // namespace pw
