@@ -10,9 +10,35 @@
 #include <x86intrin.h>
 
 namespace pw {
+    tp::ThreadPool threadpool(std::thread::hardware_concurrency() * 3);
     namespace detail {
-        tp::ThreadPool pool(std::thread::hardware_concurrency() * 3);
         thread_local int last_error = PW_ESUCCESS;
+
+        int days_from_epoch(int mon, int day, int year) {
+            year -= mon <= 2;
+            int era = year / 400;
+            int yoe = year - era * 400;                                     // [0, 399]
+            int doy = (153 * (mon + (mon > 2 ? -3 : 9)) + 2) / 5 + day - 1; // [0, 365]
+            int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;                // [0, 146096]
+            return era * 146097 + doe - 719468;
+        }
+
+        time_t timegm(const struct tm* timeinfo) {
+            int year = timeinfo->tm_year + 1900;
+            int month = timeinfo->tm_mon; // 0-11
+
+            if (month > 11) {
+                year += month / 12;
+                month %= 12;
+            } else if (month < 0) {
+                int years_diff = (11 - month) / 12;
+                year -= years_diff;
+                month += 12 * years_diff;
+            }
+
+            int days_since_epoch = days_from_epoch(month + 1, timeinfo->tm_mday, year);
+            return 60 * (60 * (24L * days_since_epoch + timeinfo->tm_hour) + timeinfo->tm_min) + timeinfo->tm_sec;
+        }
     } // namespace detail
 
     void reverse_memcpy(char* dest, const char* src, size_t len) {
@@ -68,10 +94,15 @@ namespace pw {
     }
 
     std::string build_date(time_t rawtime) {
-        struct tm* timeinfo = gmtime(&rawtime);
+#ifdef _WIN32
+        struct tm timeinfo = *gmtime(&rawtime);
+#else
+        struct tm timeinfo;
+        gmtime_r(&rawtime, &timeinfo);
+#endif
         std::stringstream ss;
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
-        ss << std::put_time(timeinfo, "%a, %d %b %Y %T GMT");
+        ss << std::put_time(&timeinfo, "%a, %d %b %Y %T GMT");
         return ss.str();
     }
 
@@ -80,8 +111,7 @@ namespace pw {
         std::istringstream ss(date);
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
         ss >> std::get_time(&timeinfo, "%a, %d %b %Y %T GMT");
-        time_t rawtime = mktime(&timeinfo);
-        return rawtime + (mktime(localtime(&rawtime)) - mktime(gmtime(&rawtime)));
+        return detail::timegm(&timeinfo);
     }
 
     std::vector<char> b64_decode(const std::string& str) {
@@ -680,7 +710,7 @@ namespace pw {
     int Server::listen(int backlog) {
         if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
                 auto server = (Server*) data;
-                detail::pool.schedule([conn = std::move(conn)](void* data) {
+                threadpool.schedule([conn = std::move(conn)](void* data) {
                     auto server = (Server*) data;
                     Connection web_conn(conn.fd, conn.addr, conn.addrlen);
                     server->handle_connection(std::move(web_conn));

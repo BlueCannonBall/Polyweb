@@ -61,8 +61,8 @@
 #define PW_TOGGLE_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] ^= 0x7f)
 
 namespace pw {
+    extern tp::ThreadPool threadpool;
     namespace detail {
-        extern tp::ThreadPool pool;
         extern thread_local int last_error;
 
         inline void set_last_error(int error) {
@@ -117,6 +117,8 @@ namespace pw {
             }
         };
 
+        int days_from_epoch(int mon, int day, int year);
+        time_t timegm(const struct tm* timeinfo);
     } // namespace detail
 
     void reverse_memcpy(char* dest, const char* src, size_t len);
