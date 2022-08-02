@@ -71,7 +71,7 @@ namespace pw {
         struct tm* timeinfo = gmtime(&rawtime);
         std::stringstream ss;
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
-        ss << std::put_time(timeinfo, "%a, %d %b %Y %T %Z");
+        ss << std::put_time(timeinfo, "%a, %d %b %Y %T GMT");
         return ss.str();
     }
 
@@ -79,8 +79,9 @@ namespace pw {
         struct tm timeinfo = {0};
         std::istringstream ss(date);
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
-        ss >> std::get_time(&timeinfo, "%a, %d %b %Y %T %Z");
-        return mktime(&timeinfo);
+        ss >> std::get_time(&timeinfo, "%a, %d %b %Y %T GMT");
+        time_t rawtime = mktime(&timeinfo);
+        return rawtime + (mktime(localtime(&rawtime)) - mktime(gmtime(&rawtime)));
     }
 
     std::vector<char> b64_decode(const std::string& str) {
