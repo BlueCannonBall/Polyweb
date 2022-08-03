@@ -286,7 +286,7 @@ namespace pw {
             ssize_t read_result;
 #ifdef _WIN32
             for (;;) {
-                if ((read_result = stream.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
+                if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (read_result == PN_ERROR) {
@@ -442,7 +442,7 @@ namespace pw {
             ssize_t read_result;
 #ifdef _WIN32
             for (;;) {
-                if ((read_result = stream.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
+                if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 } else if (read_result == PN_ERROR) {
