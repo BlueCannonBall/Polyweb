@@ -712,8 +712,7 @@ namespace pw {
                 auto server = (Server*) data;
                 threadpool.schedule([conn = std::move(conn)](void* data) {
                     auto server = (Server*) data;
-                    Connection web_conn(conn.fd, conn.addr, conn.addrlen);
-                    server->handle_connection(std::move(web_conn));
+                    server->handle_connection(std::move(conn));
                 },
                     server);
                 return true;

@@ -307,7 +307,13 @@ namespace pw {
 
         Connection(void) = default;
         Connection(const Connection&) = default;
+        Connection(const pn::tcp::Connection& s) {
+            *this = s;
+        }
         Connection(Connection&& s) {
+            *this = std::move(s);
+        }
+        Connection(pn::tcp::Connection&& s) {
             *this = std::move(s);
         }
         Connection(pn::sockfd_t fd) :
@@ -331,10 +337,28 @@ namespace pw {
             return *this;
         }
 
+        inline Connection& operator=(const pn::tcp::Connection& s) {
+            this->fd = s.fd;
+            this->addr = s.addr;
+            this->addrlen = s.addrlen;
+            return *this;
+        }
+        inline Connection& operator=(pn::tcp::Connection&& s) {
+            pn::tcp::Connection::operator=(std::move(s));
+            if (this != &s) {
+                this->ws_closed = false;
+                this->data = NULL;
+            }
+
+            return *this;
+        }
+
+        using pn::tcp::Connection::send;
+
         inline ssize_t send(const HTTPResponse& resp) {
             auto data = resp.build();
             ssize_t result;
-            if ((result = pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL)) == PN_ERROR) {
+            if ((result = send(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
@@ -343,7 +367,7 @@ namespace pw {
         inline ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = NULL) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
-            if ((result = pn::tcp::Connection::send(data.data(), data.size(), MSG_WAITALL)) == PN_ERROR) {
+            if ((result = send(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
