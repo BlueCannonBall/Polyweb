@@ -102,7 +102,7 @@ namespace pw {
 #endif
         std::stringstream ss;
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
-        ss << std::put_time(&timeinfo, "%a, %d %b %Y %T GMT");
+        ss << std::put_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
         return ss.str();
     }
 
@@ -110,7 +110,7 @@ namespace pw {
         struct tm timeinfo = {0};
         std::istringstream ss(date);
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
-        ss >> std::get_time(&timeinfo, "%a, %d %b %Y %T GMT");
+        ss >> std::get_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
         return detail::timegm(&timeinfo);
     }
 
