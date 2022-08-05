@@ -100,7 +100,7 @@ namespace pw {
         struct tm timeinfo;
         gmtime_r(&rawtime, &timeinfo);
 #endif
-        std::stringstream ss;
+        std::ostringstream ss;
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
         ss << std::put_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
         return ss.str();
@@ -139,7 +139,7 @@ namespace pw {
             } else if (allow_slash && c == '/') {
                 ret.push_back('/');
             } else if (c == '\0' || strchr(allowed_characters, c) == NULL) {
-                std::stringstream ss;
+                std::ostringstream ss;
                 ss << std::hex << +c;
                 ret.push_back('%');
                 ret += boost::to_upper_copy(ss.str());
