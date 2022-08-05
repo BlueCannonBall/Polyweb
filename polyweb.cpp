@@ -289,7 +289,7 @@ namespace pw {
                 if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PN_ERROR) {
+                } else if (read_result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 } else if (read_result == sizeof(end_check_buf)) {
@@ -300,7 +300,7 @@ namespace pw {
             if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK | MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PN_ERROR) {
+            } else if (read_result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -310,7 +310,7 @@ namespace pw {
                 if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PN_ERROR) {
+                } else if (read_result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -327,7 +327,7 @@ namespace pw {
             if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PN_ERROR) {
+            } else if (read_result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -445,7 +445,7 @@ namespace pw {
                 if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PN_ERROR) {
+                } else if (read_result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 } else if (read_result == sizeof(end_check_buf)) {
@@ -456,7 +456,7 @@ namespace pw {
             if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK | MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PN_ERROR) {
+            } else if (read_result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -466,7 +466,7 @@ namespace pw {
                 if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PN_ERROR) {
+                } else if (read_result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -483,7 +483,7 @@ namespace pw {
             if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PN_ERROR) {
+            } else if (read_result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -574,7 +574,7 @@ namespace pw {
                 if ((result = conn.recv(frame_header, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (result == PN_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -595,7 +595,7 @@ namespace pw {
                 if ((result = conn.recv(payload_length_16, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (result == PN_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -611,7 +611,7 @@ namespace pw {
                 if ((result = conn.recv(payload_length_64, 8, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (result == PN_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -634,7 +634,7 @@ namespace pw {
                 if ((result = conn.recv(masking_key.bytes, 4, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (result == PN_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -647,7 +647,7 @@ namespace pw {
                 if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (result == PN_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -718,7 +718,7 @@ namespace pw {
                 return true;
             },
                 backlog,
-                this) == PN_ERROR) {
+                this) == PW_ERROR) {
             detail::set_last_error(PW_ENET);
             return PW_ERROR;
         }
@@ -743,7 +743,7 @@ namespace pw {
 
                 case 0x8: {
                     if (conn.ws_closed) {
-                        if (conn.close() == PN_ERROR) {
+                        if (conn.close() == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
                         }
@@ -775,7 +775,7 @@ namespace pw {
                             return PW_ERROR;
                         }
 
-                        if (conn.close() == PN_ERROR) {
+                        if (conn.close() == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
                         }

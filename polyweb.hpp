@@ -79,7 +79,7 @@ namespace pw {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                     break;
-                } else if (read_result == PN_ERROR) {
+                } else if (read_result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                     break;
@@ -358,7 +358,7 @@ namespace pw {
         inline ssize_t send(const HTTPResponse& resp) {
             auto data = resp.build();
             ssize_t result;
-            if ((result = send(data.data(), data.size())) == PN_ERROR) {
+            if ((result = send(data.data(), data.size())) == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
@@ -367,7 +367,7 @@ namespace pw {
         inline ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = NULL) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
-            if ((result = send(data.data(), data.size())) == PN_ERROR) {
+            if ((result = send(data.data(), data.size())) == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
@@ -446,7 +446,7 @@ namespace pw {
         }
 
         inline int bind(const std::string& host, const std::string& port) {
-            if (pn::tcp::Server::bind(host, port) == PN_ERROR) {
+            if (pn::tcp::Server::bind(host, port) == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -459,7 +459,7 @@ namespace pw {
         }
 
         inline int bind(struct sockaddr* addr, socklen_t addrlen) {
-            if (pn::tcp::Server::bind(addr, addrlen) == PN_ERROR) {
+            if (pn::tcp::Server::bind(addr, addrlen) == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
