@@ -222,7 +222,7 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (((!body.empty()) || headers.count("Content-Type")) && !headers.count("Content-Length")) {
+        if (!headers.count("Content-Length")) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
@@ -321,7 +321,7 @@ namespace pw {
 
         HTTPHeaders::const_iterator content_length_it;
         if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
-            this->body.resize(std::stoi(content_length_it->second));
+            this->body.resize(std::stoull(content_length_it->second));
 
             ssize_t read_result;
             if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
@@ -378,7 +378,7 @@ namespace pw {
             ret.insert(ret.end(), header.begin(), header.end());
         }
 
-        if (((!body.empty()) || headers.count("Content-Type")) && !headers.count("Content-Length")) {
+        if (!headers.count("Content-Length")) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
@@ -477,7 +477,7 @@ namespace pw {
 
         HTTPHeaders::const_iterator content_length_it;
         if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
-            this->body.resize(std::stoi(content_length_it->second));
+            this->body.resize(std::stoull(content_length_it->second));
 
             ssize_t read_result;
             if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
