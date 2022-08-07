@@ -230,6 +230,10 @@ namespace pw {
         }
 
         int parse(pn::tcp::Connection& conn);
+
+        inline std::string body_to_string(void) const {
+            return std::string(body.begin(), body.end());
+        }
     };
 
     class HTTPResponse {
@@ -275,6 +279,10 @@ namespace pw {
         }
 
         int parse(pn::tcp::Connection& conn);
+
+        inline std::string body_to_string(void) const {
+            return std::string(body.begin(), body.end());
+        }
     };
 
     class WSMessage {
