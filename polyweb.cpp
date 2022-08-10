@@ -7,7 +7,9 @@
 #include <iomanip>
 #include <openssl/sha.h>
 #include <sstream>
-#include <x86intrin.h>
+#ifdef POLYWEB_SIMD
+    #include <x86intrin.h>
+#endif
 
 namespace pw {
     tp::ThreadPool threadpool(std::thread::hardware_concurrency() * 3);
@@ -43,6 +45,7 @@ namespace pw {
 
     void reverse_memcpy(char* dest, const char* src, size_t len) {
         size_t i = 0;
+#ifdef POLYWEB_SIMD
         for (; i + 32 <= len; i += 32) {
             __builtin_prefetch(src + len - 1 - i - 32, 0, 0);
             __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - 1 - i));
@@ -55,6 +58,7 @@ namespace pw {
             __m128i reversed_vec = _mm_shuffle_epi8(src_vec, _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
             _mm_storeu_si128(((__m128i_u*) dest) + i, reversed_vec);
         }
+#endif
         for (; i < len; i++) {
             __builtin_prefetch(src + len - 1 - i - 1, 0, 0);
             dest[i] = src[len - 1 - i];
@@ -544,6 +548,7 @@ namespace pw {
             memcpy(&ret[end], masking_key, 4);
 
             size_t i = 0;
+#ifdef POLYWEB_SIMD
             for (__m256i mask_vec = _mm256_set1_epi32(masking_key_union.integer); i + 32 <= data.size(); i += 32) {
                 __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
                 __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
@@ -554,6 +559,7 @@ namespace pw {
                 __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                 _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
             }
+#endif
             for (; i < data.size(); i++) {
                 ret[end + 4 + i] ^= masking_key_union.bytes[i % 4];
             }
@@ -655,6 +661,7 @@ namespace pw {
 
             if (masked) {
                 size_t i = 0;
+#ifdef POLYWEB_SIMD
                 for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length.integer; i += 32) {
                     __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &this->data[end + i]);
                     __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
@@ -665,6 +672,7 @@ namespace pw {
                     __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                     _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
                 }
+#endif
                 for (; i < payload_length.integer; i++) {
                     this->data[end + i] ^= masking_key.bytes[i % 4];
                 }
