@@ -236,9 +236,9 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, size_t header_name_read_limit, size_t header_value_read_limit, size_t body_read_limit, size_t misc_read_limit) {
         method.clear();
-        if (detail::read_until(conn, std::back_inserter(method), " ") == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(method), ' ', misc_read_limit) == PW_ERROR) {
             return PW_ERROR;
         }
         if (method.empty()) {
@@ -247,7 +247,7 @@ namespace pw {
         }
 
         target.clear();
-        if (detail::read_until(conn, std::back_inserter(target), " ") == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(target), ' ', misc_read_limit) == PW_ERROR) {
             return PW_ERROR;
         }
         if (target.empty()) {
@@ -256,7 +256,7 @@ namespace pw {
         }
 
         http_version.clear();
-        if (detail::read_until(conn, std::back_inserter(http_version), "\r\n") == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(http_version), "\r\n", misc_read_limit) == PW_ERROR) {
             return PW_ERROR;
         }
         if (http_version.empty()) {
@@ -266,16 +266,17 @@ namespace pw {
 
         for (;;) {
             std::string header_name;
-            if (detail::read_until(conn, std::back_inserter(header_name), ":") == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_name), ':', header_name_read_limit) == PW_ERROR) {
                 return PW_ERROR;
             }
+
             if (header_name.empty()) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             }
 
             std::string header_value;
-            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n") == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n", header_value_read_limit) == PW_ERROR) {
                 return PW_ERROR;
             }
             boost::trim(header_value);
@@ -325,7 +326,20 @@ namespace pw {
 
         HTTPHeaders::const_iterator content_length_it;
         if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
-            this->body.resize(std::stoull(content_length_it->second));
+            unsigned long long content_length;
+            try {
+                content_length = std::stoull(content_length_it->second);
+            } catch (...) {
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
+            }
+
+            if (content_length < body_read_limit) {
+                this->body.resize(content_length);
+            } else {
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
+            }
 
             ssize_t read_result;
             if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
@@ -392,9 +406,9 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, size_t header_name_read_limit, size_t header_value_read_limit, size_t body_read_limit, size_t misc_read_limit) {
         http_version.clear();
-        if (detail::read_until(conn, std::back_inserter(http_version), " ") == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(http_version), ' ', misc_read_limit) == PW_ERROR) {
             return PW_ERROR;
         }
         if (http_version.empty()) {
@@ -403,7 +417,7 @@ namespace pw {
         }
 
         status_code.clear();
-        if (detail::read_until(conn, std::back_inserter(status_code), " ") == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(status_code), ' ', misc_read_limit) == PW_ERROR) {
             return PW_ERROR;
         }
         if (status_code.empty()) {
@@ -412,7 +426,7 @@ namespace pw {
         }
 
         reason_phrase.clear();
-        if (detail::read_until(conn, std::back_inserter(reason_phrase), "\r\n") == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(reason_phrase), "\r\n", misc_read_limit) == PW_ERROR) {
             return PW_ERROR;
         }
         if (reason_phrase.empty()) {
@@ -422,7 +436,7 @@ namespace pw {
 
         for (;;) {
             std::string header_name;
-            if (detail::read_until(conn, std::back_inserter(header_name), ":") == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_name), ':', header_name_read_limit) == PW_ERROR) {
                 return PW_ERROR;
             }
             if (header_name.empty()) {
@@ -431,7 +445,7 @@ namespace pw {
             }
 
             std::string header_value;
-            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n") == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n", header_value_read_limit) == PW_ERROR) {
                 return PW_ERROR;
             }
             boost::trim(header_value);
@@ -481,7 +495,20 @@ namespace pw {
 
         HTTPHeaders::const_iterator content_length_it;
         if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
-            this->body.resize(std::stoull(content_length_it->second));
+            unsigned long long content_length;
+            try {
+                content_length = std::stoull(content_length_it->second);
+            } catch (...) {
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
+            }
+
+            if (content_length < body_read_limit) {
+                this->body.resize(content_length);
+            } else {
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
+            }
 
             ssize_t read_result;
             if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
@@ -571,7 +598,7 @@ namespace pw {
         return ret;
     }
 
-    int WSMessage::parse(pn::tcp::Connection& conn) {
+    int WSMessage::parse(pn::tcp::Connection& conn, size_t ws_frame_read_limit, size_t ws_message_read_limit) {
         bool fin = false;
         while (!fin) {
             char frame_header[2];
@@ -647,16 +674,22 @@ namespace pw {
             }
 
             size_t end = this->data.size();
-            this->data.resize(end + payload_length.integer);
-            {
-                ssize_t result;
-                if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                } else if (result == PW_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PW_ERROR;
+
+            if (payload_length.integer < ws_frame_read_limit && this->data.size() + payload_length.integer < ws_message_read_limit) {
+                this->data.resize(end + payload_length.integer);
+                {
+                    ssize_t result;
+                    if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
                 }
+            } else {
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
             }
 
             if (masked) {
