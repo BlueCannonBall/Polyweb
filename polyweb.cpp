@@ -236,9 +236,9 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, size_t header_name_read_limit, size_t header_value_read_limit, size_t body_read_limit, size_t misc_read_limit) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, size_t header_name_rl, size_t header_value_rl, size_t body_rl, size_t misc_rl) {
         method.clear();
-        if (detail::read_until(conn, std::back_inserter(method), ' ', misc_read_limit) == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(method), ' ', misc_rl) == PW_ERROR) {
             return PW_ERROR;
         }
         if (method.empty()) {
@@ -247,7 +247,7 @@ namespace pw {
         }
 
         target.clear();
-        if (detail::read_until(conn, std::back_inserter(target), ' ', misc_read_limit) == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(target), ' ', misc_rl) == PW_ERROR) {
             return PW_ERROR;
         }
         if (target.empty()) {
@@ -256,7 +256,7 @@ namespace pw {
         }
 
         http_version.clear();
-        if (detail::read_until(conn, std::back_inserter(http_version), "\r\n", misc_read_limit) == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(http_version), "\r\n", misc_rl) == PW_ERROR) {
             return PW_ERROR;
         }
         if (http_version.empty()) {
@@ -266,7 +266,7 @@ namespace pw {
 
         for (;;) {
             std::string header_name;
-            if (detail::read_until(conn, std::back_inserter(header_name), ':', header_name_read_limit) == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_name), ':', header_name_rl) == PW_ERROR) {
                 return PW_ERROR;
             }
 
@@ -276,7 +276,7 @@ namespace pw {
             }
 
             std::string header_value;
-            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n", header_value_read_limit) == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n", header_value_rl) == PW_ERROR) {
                 return PW_ERROR;
             }
             boost::trim(header_value);
@@ -334,11 +334,11 @@ namespace pw {
                 return PW_ERROR;
             }
 
-            if (content_length < body_read_limit) {
-                this->body.resize(content_length);
-            } else {
+            if (content_length > body_rl) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
+            } else {
+                this->body.resize(content_length);
             }
 
             ssize_t read_result;
@@ -406,9 +406,9 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, size_t header_name_read_limit, size_t header_value_read_limit, size_t body_read_limit, size_t misc_read_limit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, size_t header_name_rl, size_t header_value_rl, size_t body_rl, size_t misc_rl) {
         http_version.clear();
-        if (detail::read_until(conn, std::back_inserter(http_version), ' ', misc_read_limit) == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(http_version), ' ', misc_rl) == PW_ERROR) {
             return PW_ERROR;
         }
         if (http_version.empty()) {
@@ -417,7 +417,7 @@ namespace pw {
         }
 
         status_code.clear();
-        if (detail::read_until(conn, std::back_inserter(status_code), ' ', misc_read_limit) == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(status_code), ' ', misc_rl) == PW_ERROR) {
             return PW_ERROR;
         }
         if (status_code.empty()) {
@@ -426,7 +426,7 @@ namespace pw {
         }
 
         reason_phrase.clear();
-        if (detail::read_until(conn, std::back_inserter(reason_phrase), "\r\n", misc_read_limit) == PW_ERROR) {
+        if (detail::read_until(conn, std::back_inserter(reason_phrase), "\r\n", misc_rl) == PW_ERROR) {
             return PW_ERROR;
         }
         if (reason_phrase.empty()) {
@@ -436,7 +436,7 @@ namespace pw {
 
         for (;;) {
             std::string header_name;
-            if (detail::read_until(conn, std::back_inserter(header_name), ':', header_name_read_limit) == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_name), ':', header_name_rl) == PW_ERROR) {
                 return PW_ERROR;
             }
             if (header_name.empty()) {
@@ -445,7 +445,7 @@ namespace pw {
             }
 
             std::string header_value;
-            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n", header_value_read_limit) == PW_ERROR) {
+            if (detail::read_until(conn, std::back_inserter(header_value), "\r\n", header_value_rl) == PW_ERROR) {
                 return PW_ERROR;
             }
             boost::trim(header_value);
@@ -503,11 +503,11 @@ namespace pw {
                 return PW_ERROR;
             }
 
-            if (content_length < body_read_limit) {
-                this->body.resize(content_length);
-            } else {
+            if (content_length > body_rl) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
+            } else {
+                this->body.resize(content_length);
             }
 
             ssize_t read_result;
@@ -598,7 +598,7 @@ namespace pw {
         return ret;
     }
 
-    int WSMessage::parse(pn::tcp::Connection& conn, size_t ws_frame_read_limit, size_t ws_message_read_limit) {
+    int WSMessage::parse(pn::tcp::Connection& conn, size_t frame_rl, size_t message_rl) {
         bool fin = false;
         while (!fin) {
             char frame_header[2];
@@ -675,7 +675,10 @@ namespace pw {
 
             size_t end = this->data.size();
 
-            if (payload_length.integer < ws_frame_read_limit && this->data.size() + payload_length.integer < ws_message_read_limit) {
+            if (payload_length.integer > frame_rl || this->data.size() + payload_length.integer > message_rl) {
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
+            } else {
                 this->data.resize(end + payload_length.integer);
                 {
                     ssize_t result;
@@ -687,9 +690,6 @@ namespace pw {
                         return PW_ERROR;
                     }
                 }
-            } else {
-                detail::set_last_error(PW_EWEB);
-                return PW_ERROR;
             }
 
             if (masked) {

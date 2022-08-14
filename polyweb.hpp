@@ -70,9 +70,9 @@ namespace pw {
         }
 
         template <typename InsertIt>
-        int read_until(pn::tcp::Connection& conn, InsertIt ret, char end, size_t read_limit = 1'000) {
+        int read_until(pn::tcp::Connection& conn, InsertIt ret, char end, size_t rl = 1'000) {
             for (size_t i = 0;; i++) {
-                if (i >= read_limit) {
+                if (i > rl) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 }
@@ -98,9 +98,9 @@ namespace pw {
         }
 
         template <typename InsertIt>
-        int read_until(pn::tcp::Connection& conn, InsertIt ret, const std::string& end_sequence, size_t read_limit = 1'000) {
+        int read_until(pn::tcp::Connection& conn, InsertIt ret, const std::string& end_sequence, size_t rl = 1'000) {
             for (size_t i = 0, search_pos = 0;; i++) {
-                if (i >= read_limit) {
+                if (i > rl) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
                 }
@@ -259,7 +259,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, size_t header_name_read_limit = 500, size_t header_value_read_limit = 4'000'000, size_t body_read_limit = 32'000'000, size_t misc_read_limit = 1'000);
+        int parse(pn::tcp::Connection& conn, size_t header_name_rl = 500, size_t header_value_rl = 4'000'000, size_t body_rl = 32'000'000, size_t misc_rl = 1'000);
 
         inline std::string body_to_string(void) const {
             return std::string(body.begin(), body.end());
@@ -308,7 +308,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, size_t header_name_read_limit = 500, size_t header_value_read_limit = 4'000'000, size_t body_read_limit = 32'000'000, size_t misc_read_limit = 1'000);
+        int parse(pn::tcp::Connection& conn, size_t header_name_rl = 500, size_t header_value_rl = 4'000'000, size_t body_rl = 32'000'000, size_t misc_rl = 1'000);
 
         inline std::string body_to_string(void) const {
             return std::string(body.begin(), body.end());
@@ -335,7 +335,7 @@ namespace pw {
         }
 
         std::vector<char> build(bool masked, char* masking_key = NULL) const;
-        int parse(pn::tcp::Connection& conn, size_t ws_frame_read_limit = 16'000'000, size_t ws_message_read_limit = 32'000'000);
+        int parse(pn::tcp::Connection& conn, size_t frame_rl = 16'000'000, size_t message_rl = 32'000'000);
     };
 
     class Connection: public pn::tcp::Connection {
@@ -457,12 +457,12 @@ namespace pw {
     class Server: public pn::tcp::Server {
     public:
         std::function<HTTPResponse(const std::string&)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
-        size_t header_name_read_limit = 500;
-        size_t header_value_read_limit = 4'000'000;
-        size_t body_read_limit = 32'000'000;
-        size_t ws_frame_read_limit = 16'000'000;
-        size_t ws_message_read_limit = 32'000'000;
-        size_t misc_read_limit = 1'000;
+        size_t header_name_rl = 500;
+        size_t header_value_rl = 4'000'000;
+        size_t body_rl = 32'000'000;
+        size_t ws_frame_rl = 16'000'000;
+        size_t ws_message_rl = 32'000'000;
+        size_t misc_rl = 1'000;
 
         Server(void) = default;
         Server(const Server&) = default;
@@ -482,20 +482,20 @@ namespace pw {
             if (this != &s) {
                 this->routes = std::move(s.routes);
                 this->on_error = std::move(s.on_error);
-                this->header_name_read_limit = s.header_name_read_limit;
-                this->header_value_read_limit = s.header_value_read_limit;
-                this->body_read_limit = s.body_read_limit;
-                this->ws_frame_read_limit = s.ws_frame_read_limit;
-                this->ws_message_read_limit = s.ws_message_read_limit;
-                this->misc_read_limit = s.misc_read_limit;
+                this->header_name_rl = s.header_name_rl;
+                this->header_value_rl = s.header_value_rl;
+                this->body_rl = s.body_rl;
+                this->ws_frame_rl = s.ws_frame_rl;
+                this->ws_message_rl = s.ws_message_rl;
+                this->misc_rl = s.misc_rl;
 
                 s.on_error = PW_DEFAULT_SERVER_ON_ERROR;
-                s.header_name_read_limit = 500;
-                s.header_value_read_limit = 4'000'000;
-                s.body_read_limit = 32'000'000;
-                s.ws_frame_read_limit = 16'000'000;
-                s.ws_message_read_limit = 32'000'000;
-                s.misc_read_limit = 1'000;
+                s.header_name_rl = 500;
+                s.header_value_rl = 4'000'000;
+                s.body_rl = 32'000'000;
+                s.ws_frame_rl = 16'000'000;
+                s.ws_message_rl = 32'000'000;
+                s.misc_rl = 1'000;
             }
 
             return *this;
