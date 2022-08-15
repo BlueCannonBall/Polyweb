@@ -259,7 +259,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, size_t header_name_rl = 500, size_t header_value_rl = 4'000'000, size_t body_rl = 32'000'000, size_t misc_rl = 1'000);
+        int parse(pn::tcp::Connection& conn, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         inline std::string body_to_string(void) const {
             return std::string(body.begin(), body.end());
@@ -308,7 +308,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, size_t header_name_rl = 500, size_t header_value_rl = 4'000'000, size_t body_rl = 32'000'000, size_t misc_rl = 1'000);
+        int parse(pn::tcp::Connection& conn, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         inline std::string body_to_string(void) const {
             return std::string(body.begin(), body.end());
@@ -335,7 +335,7 @@ namespace pw {
         }
 
         std::vector<char> build(bool masked, char* masking_key = NULL) const;
-        int parse(pn::tcp::Connection& conn, size_t frame_rl = 16'000'000, size_t message_rl = 32'000'000);
+        int parse(pn::tcp::Connection& conn, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
     class Connection: public pn::tcp::Connection {
@@ -457,12 +457,13 @@ namespace pw {
     class Server: public pn::tcp::Server {
     public:
         std::function<HTTPResponse(const std::string&)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
-        size_t header_name_rl = 500;
-        size_t header_value_rl = 4'000'000;
-        size_t body_rl = 32'000'000;
-        size_t ws_frame_rl = 16'000'000;
-        size_t ws_message_rl = 32'000'000;
-        size_t misc_rl = 1'000;
+        size_t header_climit = 100;
+        size_t header_name_rlimit = 500;
+        size_t header_value_rlimit = 4'000'000;
+        size_t body_rlimit = 32'000'000;
+        size_t ws_frame_rlimit = 16'000'000;
+        size_t ws_message_rlimit = 32'000'000;
+        size_t misc_rlimit = 1'000;
 
         Server(void) = default;
         Server(const Server&) = default;
@@ -482,20 +483,22 @@ namespace pw {
             if (this != &s) {
                 this->routes = std::move(s.routes);
                 this->on_error = std::move(s.on_error);
-                this->header_name_rl = s.header_name_rl;
-                this->header_value_rl = s.header_value_rl;
-                this->body_rl = s.body_rl;
-                this->ws_frame_rl = s.ws_frame_rl;
-                this->ws_message_rl = s.ws_message_rl;
-                this->misc_rl = s.misc_rl;
+                this->header_climit = s.header_climit;
+                this->header_name_rlimit = s.header_name_rlimit;
+                this->header_value_rlimit = s.header_value_rlimit;
+                this->body_rlimit = s.body_rlimit;
+                this->ws_frame_rlimit = s.ws_frame_rlimit;
+                this->ws_message_rlimit = s.ws_message_rlimit;
+                this->misc_rlimit = s.misc_rlimit;
 
                 s.on_error = PW_DEFAULT_SERVER_ON_ERROR;
-                s.header_name_rl = 500;
-                s.header_value_rl = 4'000'000;
-                s.body_rl = 32'000'000;
-                s.ws_frame_rl = 16'000'000;
-                s.ws_message_rl = 32'000'000;
-                s.misc_rl = 1'000;
+                s.header_climit = 100;
+                s.header_name_rlimit = 500;
+                s.header_value_rlimit = 4'000'000;
+                s.body_rlimit = 32'000'000;
+                s.ws_frame_rlimit = 16'000'000;
+                s.ws_message_rlimit = 32'000'000;
+                s.misc_rlimit = 1'000;
             }
 
             return *this;
