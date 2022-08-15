@@ -16,6 +16,7 @@ namespace pw {
     namespace detail {
         thread_local int last_error = PW_ESUCCESS;
 
+        // Taken from: https://stackoverflow.com/a/58037981/12728023
         int days_from_epoch(int mon, int day, int year) {
             year -= mon <= 2;
             int era = year / 400;
@@ -25,6 +26,7 @@ namespace pw {
             return era * 146097 + doe - 719468;
         }
 
+        // Taken from: https://stackoverflow.com/a/58037981/12728023
         time_t timegm(const struct tm* timeinfo) {
             int year = timeinfo->tm_year + 1900;
             int month = timeinfo->tm_mon; // 0-11
@@ -47,7 +49,6 @@ namespace pw {
         size_t i = 0;
 #ifdef POLYWEB_SIMD
         for (; i + 32 <= len; i += 32) {
-            __builtin_prefetch(src + len - 1 - i - 32, 0, 0);
             __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - 1 - i));
             __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31));
             _mm256_storeu_si256(((__m256i_u*) dest) + i, reversed_vec);
@@ -60,7 +61,6 @@ namespace pw {
         }
 #endif
         for (; i < len; i++) {
-            __builtin_prefetch(src + len - 1 - i - 1, 0, 0);
             dest[i] = src[len - 1 - i];
         }
     }
