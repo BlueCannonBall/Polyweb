@@ -932,6 +932,9 @@ namespace pw {
                         if (!resp.headers.count("Connection")) {
                             resp.headers["Connection"] = "upgrade";
                         }
+                        if (!resp.headers.count("Upgrade")) {
+                            resp.headers["Upgrade"] = "websocket";
+                        }
 
                         HTTPHeaders::const_iterator websocket_version_it;
                         if ((websocket_version_it = req.headers.find("Sec-WebSocket-Version")) != req.headers.end()) {
