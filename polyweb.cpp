@@ -193,6 +193,36 @@ namespace pw {
         return ret;
     }
 
+    std::string QueryParameters::build(void) const {
+        std::string ret;
+        bool first = true;
+        for (auto it = map.begin(); it != map.end(); it++) {
+            if (!first) ret.push_back('&');
+            std::string encoded_key = percent_encode(it->first, false, false);
+            std::string encoded_value = percent_encode(it->second, false, false);
+            ret.insert(ret.end(), encoded_key.begin(), encoded_key.end());
+            ret.push_back('=');
+            ret.insert(ret.end(), encoded_value.begin(), encoded_value.end());
+            first = false;
+        }
+        return ret;
+    }
+
+    void QueryParameters::parse(const std::string& query_string) {
+        std::vector<std::string> split_query_string;
+        boost::split(split_query_string, query_string, boost::is_any_of("&"));
+
+        for (const auto& parameter : split_query_string) {
+            std::vector<std::string> split_parameter;
+            boost::split(split_parameter, parameter, boost::is_any_of("="));
+            if (split_parameter.size() > 1) {
+                map[percent_decode(split_parameter[0], true)] = percent_decode(split_parameter[1], true);
+            } else if (!split_parameter[0].empty()) {
+                map[percent_decode(split_parameter[0], true)]; // Create key with empty value
+            }
+        }
+    }
+
     std::vector<char> HTTPRequest::build(void) const {
         std::vector<char> ret;
 
@@ -201,18 +231,10 @@ namespace pw {
 
         std::string encoded_target = percent_encode(this->target);
         ret.insert(ret.end(), encoded_target.begin(), encoded_target.end());
-        if (!query_parameters.empty()) {
+        if (!query_parameters->empty()) {
             ret.push_back('?');
-            bool first = true;
-            for (auto it = query_parameters.begin(); it != query_parameters.end(); it++) {
-                if (!first) ret.push_back('&');
-                std::string encoded_key = percent_encode(it->first, false, false);
-                std::string encoded_value = percent_encode(it->second, false, false);
-                ret.insert(ret.end(), encoded_key.begin(), encoded_key.end());
-                ret.push_back('=');
-                ret.insert(ret.end(), encoded_value.begin(), encoded_value.end());
-                first = false;
-            }
+            std::string query_string = query_parameters.build();
+            ret.insert(ret.end(), query_string.begin(), query_string.end());
         }
         ret.push_back(' ');
 
@@ -356,23 +378,12 @@ namespace pw {
             }
         }
 
-        size_t query_string_begin;
-        if ((query_string_begin = target.find('?')) != std::string::npos) {
-            if (query_string_begin != target.size() - 1) {
-                std::string query_string(target.begin() + query_string_begin + 1, target.end());
-
-                std::vector<std::string> split_query_string;
-                boost::split(split_query_string, query_string, boost::is_any_of("&"));
-
-                for (const auto& parameter : split_query_string) {
-                    std::vector<std::string> split_parameter;
-                    boost::split(split_parameter, parameter, boost::is_any_of("="));
-                    if (split_parameter.size() > 1) {
-                        query_parameters[percent_decode(split_parameter[0], true)] = percent_decode(split_parameter[1], true);
-                    }
-                }
+        std::string::iterator query_string_begin;
+        if ((query_string_begin = std::find(target.begin(), target.end(), '?')) != target.end()) {
+            if (next(query_string_begin) != target.end()) {
+                query_parameters.parse(std::string(next(query_string_begin), std::find(next(query_string_begin), target.end(), '#')));
             }
-            target.resize(query_string_begin);
+            target.resize(std::distance(target.begin(), query_string_begin));
         }
         target = percent_decode(target);
 

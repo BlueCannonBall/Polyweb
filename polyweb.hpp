@@ -217,7 +217,37 @@ namespace pw {
     std::string percent_decode(const std::string& str, bool plus_as_space = false);
 
     typedef std::unordered_map<std::string, std::string, detail::case_insensitive_hasher, detail::case_insensitive_comparer> HTTPHeaders;
-    typedef std::unordered_map<std::string, std::string> QueryParameters;
+
+    class QueryParameters {
+    private:
+        std::unordered_map<std::string, std::string> map;
+
+    public:
+        typedef decltype(map) map_type;
+
+        operator map_type() const {
+            return map;
+        }
+
+        const map_type& operator*() const {
+            return map;
+        }
+
+        map_type& operator*() {
+            return map;
+        }
+
+        const map_type* operator->() const {
+            return &map;
+        }
+
+        map_type* operator->() {
+            return &map;
+        }
+
+        std::string build(void) const;
+        void parse(const std::string& query_string);
+    };
 
     class HTTPRequest {
     public:
