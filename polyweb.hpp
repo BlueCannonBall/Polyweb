@@ -12,6 +12,11 @@
 #include <utility>
 #include <vector>
 
+// Bridged
+#ifdef _WIN32
+    #define timegm _mkgmtime
+#endif
+
 #define PW_ERROR       PN_ERROR
 #define PW_OK          PN_OK
 #define PW_SERVER_NAME "Polyweb/net Engine"
@@ -21,8 +26,8 @@
 #define PW_ENET     1
 #define PW_EWEB     2
 
-#define PW_DEFAULT_SERVER_ON_ERROR [](const std::string& status_code) -> pw::HTTPResponse { \
-    return pw::HTTPResponse::create_basic(status_code);                                     \
+#define PW_DEFAULT_SERVER_ON_ERROR [](const std::string& status_code) { \
+    return pw::HTTPResponse::create_basic(status_code);                 \
 }
 
 // WebSocket macros
@@ -146,9 +151,6 @@ namespace pw {
                 return std::hash<std::string>()(key_copy);
             }
         };
-
-        int days_from_epoch(int mon, int day, int year);
-        time_t timegm(const struct tm* timeinfo);
     } // namespace detail
 
     void reverse_memcpy(char* dest, const char* src, size_t len);

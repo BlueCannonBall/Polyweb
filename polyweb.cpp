@@ -15,34 +15,6 @@ namespace pw {
     tp::ThreadPool threadpool(std::thread::hardware_concurrency() * 3);
     namespace detail {
         thread_local int last_error = PW_ESUCCESS;
-
-        // Taken from: https://stackoverflow.com/a/58037981/12728023
-        int days_from_epoch(int mon, int day, int year) {
-            year -= mon <= 2;
-            int era = year / 400;
-            int yoe = year - era * 400;                                     // [0, 399]
-            int doy = (153 * (mon + (mon > 2 ? -3 : 9)) + 2) / 5 + day - 1; // [0, 365]
-            int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;                // [0, 146096]
-            return era * 146097 + doe - 719468;
-        }
-
-        // Taken from: https://stackoverflow.com/a/58037981/12728023
-        time_t timegm(const struct tm* timeinfo) {
-            int year = timeinfo->tm_year + 1900;
-            int month = timeinfo->tm_mon; // 0-11
-
-            if (month > 11) {
-                year += month / 12;
-                month %= 12;
-            } else if (month < 0) {
-                int years_diff = (11 - month) / 12;
-                year -= years_diff;
-                month += 12 * years_diff;
-            }
-
-            int days_since_epoch = days_from_epoch(month + 1, timeinfo->tm_mday, year);
-            return 60 * (60 * (24L * days_since_epoch + timeinfo->tm_hour) + timeinfo->tm_min) + timeinfo->tm_sec;
-        }
     } // namespace detail
 
     void reverse_memcpy(char* dest, const char* src, size_t len) {
@@ -115,7 +87,7 @@ namespace pw {
         std::istringstream ss(date);
         ss.imbue(std::locale(setlocale(LC_ALL, "C")));
         ss >> std::get_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
-        return detail::timegm(&timeinfo);
+        return timegm(&timeinfo);
     }
 
     std::vector<char> b64_decode(const std::string& str) {
@@ -790,7 +762,7 @@ namespace pw {
     int Server::handle_ws_connection(Connection conn, WSRoute& route) {
         route.on_open(conn);
 
-        while (conn.is_valid()) {
+        while (conn) {
             WSMessage message;
             if (message.parse(conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
                 route.on_close(conn, 0, {}, false);
@@ -851,13 +823,12 @@ namespace pw {
                     break;
             }
         }
-
         return PW_OK;
     }
 
     int Server::handle_connection(Connection conn) {
         bool keep_alive = true, websocket = false;
-        while (conn.is_valid() && keep_alive) {
+        while (conn && keep_alive) {
             HTTPRequest req;
             if (req.parse(conn, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PW_ERROR) {
                 std::string resp_status_code;
