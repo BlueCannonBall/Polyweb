@@ -562,7 +562,7 @@ namespace pw {
 
             union {
                 char bytes[4];
-                int integer;
+                int32_t integer;
             } masking_key_union;
             memcpy(masking_key_union.bytes, masking_key, 4);
             memcpy(&ret[end], masking_key, 4);
