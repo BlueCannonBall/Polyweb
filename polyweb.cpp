@@ -933,31 +933,25 @@ namespace pw {
                             std::vector<std::string> split_websocket_version;
                             boost::split(split_websocket_version, websocket_version_it->second, boost::is_any_of(","));
 
-                            int closest_version_num = PW_WS_VERSION;
-                            unsigned int closest_version_dist = UINT_MAX;
+                            const static std::string version_string = std::to_string(PW_WS_VERSION);
+                            bool found_version = false;
                             for (auto& version : split_websocket_version) {
                                 boost::trim(version);
 
-                                try {
-                                    int version_num;
-                                    unsigned int version_dist;
-                                    if ((version_dist = std::abs((version_num = std::stoi(version)) - PW_WS_VERSION)) < closest_version_dist) {
-                                        closest_version_num = version_num;
-                                        closest_version_dist = version_dist;
-
-                                        if (version_dist == 0) {
-                                            break;
-                                        }
-                                    }
-                                } catch (...) {
-                                    if (handle_error(conn, "400", keep_alive, req.http_version) == PW_ERROR) {
-                                        return PW_ERROR;
-                                    }
-                                    goto end_of_main_loop;
+                                if (version == version_string) {
+                                    found_version = true;
+                                    break;
                                 }
                             }
 
-                            resp.headers["Sec-WebSocket-Version"] = std::to_string(closest_version_num);
+                            if (found_version) {
+                                resp.headers["Sec-WebSocket-Version"] = version_string;
+                            } else {
+                                if (handle_error(conn, "501", keep_alive, req.http_version) == PW_ERROR) {
+                                    return PW_ERROR;
+                                }
+                                continue;
+                            }
                         }
 
                         HTTPHeaders::const_iterator websocket_key_it;
