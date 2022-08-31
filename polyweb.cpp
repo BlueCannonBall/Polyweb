@@ -1030,8 +1030,6 @@ namespace pw {
                         return PW_ERROR;
                     }
                 }
-
-            end_of_main_loop:;
             }
         }
         return PW_OK;
