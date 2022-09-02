@@ -408,9 +408,12 @@ namespace pw {
         }
 
         inline Connection& operator=(const pn::tcp::Connection& s) {
-            this->fd = s.fd;
-            this->addr = s.addr;
-            this->addrlen = s.addrlen;
+            pn::tcp::Connection::operator=(s);
+            if (this != &s) {
+                this->ws_closed = false;
+                this->data = NULL;
+            }
+
             return *this;
         }
         inline Connection& operator=(pn::tcp::Connection&& s) {
