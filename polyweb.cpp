@@ -766,6 +766,7 @@ namespace pw {
             WSMessage message;
             if (message.parse(*conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
                 route.on_close(conn, 0, {}, false);
+                conn->close();
                 return PW_ERROR;
             }
 
