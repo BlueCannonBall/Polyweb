@@ -744,9 +744,9 @@ namespace pw {
     int Server::listen(int backlog) {
         if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
                 auto server = (Server*) data;
-                threadpool.schedule([conn = std::move(conn)](void* data) {
+                threadpool.schedule([conn](void* data) {
                     auto server = (Server*) data;
-                    server->handle_connection(std::move(conn));
+                    server->handle_connection(pn::UniqueSock<pw::Connection>(conn));
                 },
                     server);
                 return true;
@@ -759,12 +759,12 @@ namespace pw {
         return PW_OK;
     }
 
-    int Server::handle_ws_connection(Connection conn, WSRoute& route) {
+    int Server::handle_ws_connection(pn::SharedSock<Connection> conn, WSRoute& route) {
         route.on_open(conn);
 
         while (conn) {
             WSMessage message;
-            if (message.parse(conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
+            if (message.parse(*conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
                 route.on_close(conn, 0, {}, false);
                 return PW_ERROR;
             }
@@ -776,8 +776,8 @@ namespace pw {
                     break;
 
                 case 0x8: {
-                    if (conn.ws_closed) {
-                        if (conn.close() == PW_ERROR) {
+                    if (conn->ws_closed) {
+                        if (conn->close() == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
                         }
@@ -802,14 +802,14 @@ namespace pw {
                         route.on_close(conn, status_code_union.integer, reason, true);
 
                         ssize_t result;
-                        if ((result = conn.send(WSMessage(std::move(message.data), 0x8))) == 0) {
+                        if ((result = conn->send(WSMessage(std::move(message.data), 0x8))) == 0) {
                             detail::set_last_error(PW_EWEB);
                             return PW_ERROR;
                         } else if (result == PW_ERROR) {
                             return PW_ERROR;
                         }
 
-                        if (conn.close() == PW_ERROR) {
+                        if (conn->close() == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
                         }
@@ -819,18 +819,18 @@ namespace pw {
                 }
 
                 case 0x9:
-                    conn.send(WSMessage(std::move(message.data), 0xA));
+                    conn->send(WSMessage(std::move(message.data), 0xA));
                     break;
             }
         }
         return PW_OK;
     }
 
-    int Server::handle_connection(Connection conn) {
+    int Server::handle_connection(pn::UniqueSock<Connection> conn) {
         bool keep_alive = true, websocket = false;
         while (conn && keep_alive) {
             HTTPRequest req;
-            if (req.parse(conn, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PW_ERROR) {
+            if (req.parse(*conn, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PW_ERROR) {
                 std::string resp_status_code;
                 switch (get_last_error()) {
                     case PW_ENET: {
@@ -843,7 +843,7 @@ namespace pw {
                         break;
                     }
                 }
-                handle_error(conn, resp_status_code, false);
+                handle_error(*conn, resp_status_code, false);
                 return PW_ERROR;
             }
 
@@ -863,7 +863,7 @@ namespace pw {
                         if (boost::to_lower_copy(upgrade_it->second) == "websocket") {
                             websocket = true;
                         } else {
-                            if (handle_error(conn, "501", keep_alive, req.http_version) == PW_ERROR) {
+                            if (handle_error(*conn, "501", keep_alive, req.http_version) == PW_ERROR) {
                                 return PW_ERROR;
                             }
                             continue;
@@ -900,11 +900,11 @@ namespace pw {
                 if (!ws_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = ws_routes[ws_route_target].on_connect(conn, req);
+                        resp = ws_routes[ws_route_target].on_connect(*conn, req);
                     } catch (const HTTPResponse& error_resp) {
                         resp = error_resp;
                     } catch (...) {
-                        if (handle_error(conn, "500", keep_alive, req.http_version) == PW_ERROR) {
+                        if (handle_error(*conn, "500", keep_alive, req.http_version) == PW_ERROR) {
                             return PW_ERROR;
                         }
                         continue;
@@ -947,7 +947,7 @@ namespace pw {
                             if (found_version) {
                                 resp.headers["Sec-WebSocket-Version"] = version_string;
                             } else {
-                                if (handle_error(conn, "501", keep_alive, req.http_version) == PW_ERROR) {
+                                if (handle_error(*conn, "501", keep_alive, req.http_version) == PW_ERROR) {
                                     return PW_ERROR;
                                 }
                                 continue;
@@ -974,7 +974,7 @@ namespace pw {
                     }
 
                     ssize_t result;
-                    if ((result = conn.send(resp)) == 0) {
+                    if ((result = conn->send(resp)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
@@ -985,11 +985,11 @@ namespace pw {
                         return handle_ws_connection(std::move(conn), ws_routes[ws_route_target]);
                     }
                 } else if (!http_route_target.empty()) {
-                    if (handle_error(conn, "400", keep_alive, req.http_version) == PW_ERROR) {
+                    if (handle_error(*conn, "400", keep_alive, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 } else {
-                    if (handle_error(conn, "404", keep_alive, req.http_version) == PW_ERROR) {
+                    if (handle_error(*conn, "404", keep_alive, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 }
@@ -997,11 +997,11 @@ namespace pw {
                 if (!http_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = routes[http_route_target].cb(conn, req);
+                        resp = routes[http_route_target].cb(*conn, req);
                     } catch (const HTTPResponse& error_resp) {
                         resp = error_resp;
                     } catch (...) {
-                        if (handle_error(conn, "500", keep_alive, req.http_version) == PW_ERROR) {
+                        if (handle_error(*conn, "500", keep_alive, req.http_version) == PW_ERROR) {
                             return PW_ERROR;
                         }
                         continue;
@@ -1015,18 +1015,18 @@ namespace pw {
                     }
 
                     ssize_t result;
-                    if ((result = conn.send(resp)) == 0) {
+                    if ((result = conn->send(resp)) == 0) {
                         detail::set_last_error(PW_EWEB);
                         return PW_ERROR;
                     } else if (result == PW_ERROR) {
                         return PW_ERROR;
                     }
                 } else if (!ws_route_target.empty()) {
-                    if (handle_error(conn, "426", {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version) == PW_ERROR) {
+                    if (handle_error(*conn, "426", {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 } else {
-                    if (handle_error(conn, "404", keep_alive, req.http_version) == PW_ERROR) {
+                    if (handle_error(*conn, "404", keep_alive, req.http_version) == PW_ERROR) {
                         return PW_ERROR;
                     }
                 }
@@ -1042,7 +1042,7 @@ namespace pw {
         } catch (const HTTPResponse& error_resp) {
             resp = error_resp;
         } catch (...) {
-            resp = HTTPResponse::create_basic("500");
+            resp = HTTPResponse::make_basic("500");
         }
 
         if (!resp.headers.count("Server")) {
@@ -1073,7 +1073,7 @@ namespace pw {
         } catch (const HTTPResponse& error_resp) {
             resp = error_resp;
         } catch (...) {
-            resp = HTTPResponse::create_basic("500");
+            resp = HTTPResponse::make_basic("500");
         }
 
         if (!resp.headers.count("Server")) {
