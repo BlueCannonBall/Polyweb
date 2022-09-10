@@ -445,9 +445,9 @@ namespace pw {
     class WSRoute: public Route {
     public:
         RouteCallback on_connect;
-        std::function<void(pn::SharedSock<Connection>)> on_open;
-        std::function<void(pn::SharedSock<Connection>, const WSMessage&)> on_message;
-        std::function<void(pn::SharedSock<Connection>, uint16_t, const std::string&, bool clean)> on_close;
+        std::function<void(pn::SharedSock<Connection>&)> on_open;
+        std::function<void(pn::SharedSock<Connection>&, const WSMessage&)> on_message;
+        std::function<void(pn::SharedSock<Connection>&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;
         WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
