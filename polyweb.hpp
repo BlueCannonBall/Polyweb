@@ -27,7 +27,7 @@
 #define PW_EWEB     2
 
 #define PW_DEFAULT_SERVER_ON_ERROR [](const std::string& status_code) { \
-    return pw::HTTPResponse::make_basic(status_code);                 \
+    return pw::HTTPResponse::make_basic(status_code);                   \
 }
 
 // WebSocket macros
@@ -155,7 +155,7 @@ namespace pw {
 
     void reverse_memcpy(char* dest, const char* src, size_t len);
 
-    inline int get_last_error(void) {
+    inline int get_last_error() {
         return detail::last_error;
     }
 
@@ -247,7 +247,7 @@ namespace pw {
             return &map;
         }
 
-        std::string build(void) const;
+        std::string build() const;
         void parse(const std::string& query_string);
     };
 
@@ -260,7 +260,7 @@ namespace pw {
         QueryParameters query_parameters;
         std::string http_version = "HTTP/1.1";
 
-        HTTPRequest(void) = default;
+        HTTPRequest() = default;
         HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}) :
             method(method),
             target(target),
@@ -284,16 +284,16 @@ namespace pw {
             query_parameters(query_parameters),
             http_version(http_version) { }
 
-        std::vector<char> build(void) const;
+        std::vector<char> build() const;
 
-        inline std::string build_str(void) const {
+        inline std::string build_str() const {
             std::vector<char> ret = build();
             return std::string(ret.begin(), ret.end());
         }
 
         int parse(pn::tcp::Connection& conn, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
-        inline std::string body_to_string(void) const {
+        inline std::string body_to_string() const {
             return std::string(body.begin(), body.end());
         }
     };
@@ -306,7 +306,7 @@ namespace pw {
         HTTPHeaders headers;
         std::string http_version = "HTTP/1.1";
 
-        HTTPResponse(void) = default;
+        HTTPResponse() = default;
         HTTPResponse(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
@@ -333,16 +333,16 @@ namespace pw {
             return resp;
         }
 
-        std::vector<char> build(void) const;
+        std::vector<char> build() const;
 
-        inline std::string build_str(void) const {
+        inline std::string build_str() const {
             std::vector<char> ret = build();
             return std::string(ret.begin(), ret.end());
         }
 
         int parse(pn::tcp::Connection& conn, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
-        inline std::string body_to_string(void) const {
+        inline std::string body_to_string() const {
             return std::string(body.begin(), body.end());
         }
     };
@@ -352,7 +352,7 @@ namespace pw {
         std::vector<char> data;
         uint8_t opcode = 2;
 
-        WSMessage(void) = default;
+        WSMessage() = default;
         WSMessage(const std::string& str, uint8_t opcode = 1) :
             data(str.begin(), str.end()),
             opcode(opcode) { }
@@ -362,7 +362,7 @@ namespace pw {
         WSMessage(uint8_t opcode) :
             opcode(opcode) { }
 
-        inline std::string to_string(void) const {
+        inline std::string to_string() const {
             return std::string(data.begin(), data.end());
         }
 
@@ -375,7 +375,7 @@ namespace pw {
         bool ws_closed = false;
         void* data = NULL; // User data
 
-        Connection(void) = default;
+        Connection() = default;
         Connection(const pn::tcp::Connection& conn) {
             *this = conn;
         }
@@ -445,9 +445,9 @@ namespace pw {
     class WSRoute: public Route {
     public:
         RouteCallback on_connect;
-        std::function<void(pn::SharedSock<Connection>&)> on_open;
-        std::function<void(pn::SharedSock<Connection>&, const WSMessage&)> on_message;
-        std::function<void(pn::SharedSock<Connection>&, uint16_t, const std::string&, bool clean)> on_close;
+        std::function<void(Connection&)> on_open;
+        std::function<void(Connection&, const WSMessage&)> on_message;
+        std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;
         WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
@@ -469,7 +469,7 @@ namespace pw {
         size_t ws_message_rlimit = 32'000'000;
         size_t misc_rlimit = 1'000;
 
-        Server(void) = default;
+        Server() = default;
         Server(pn::sockfd_t fd) :
             pn::tcp::Server(fd) { }
         Server(struct sockaddr addr, socklen_t addrlen) :
@@ -526,7 +526,7 @@ namespace pw {
         std::unordered_map<std::string, HTTPRoute> routes;
         std::unordered_map<std::string, WSRoute> ws_routes;
 
-        int handle_ws_connection(pn::SharedSock<Connection> conn, WSRoute& route);
+        int handle_ws_connection(pn::UniqueSock<Connection> conn, WSRoute& route);
         int handle_connection(pn::UniqueSock<Connection> conn);
         int handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
         int handle_error(Connection& conn, const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");

@@ -165,7 +165,7 @@ namespace pw {
         return ret;
     }
 
-    std::string QueryParameters::build(void) const {
+    std::string QueryParameters::build() const {
         std::string ret;
         bool first = true;
         for (auto it = map.begin(); it != map.end(); it++) {
@@ -195,7 +195,7 @@ namespace pw {
         }
     }
 
-    std::vector<char> HTTPRequest::build(void) const {
+    std::vector<char> HTTPRequest::build() const {
         std::vector<char> ret;
 
         ret.insert(ret.end(), this->method.begin(), this->method.end());
@@ -362,7 +362,7 @@ namespace pw {
         return PW_OK;
     }
 
-    std::vector<char> HTTPResponse::build(void) const {
+    std::vector<char> HTTPResponse::build() const {
         std::vector<char> ret;
 
         ret.insert(ret.end(), this->http_version.begin(), this->http_version.end());
@@ -759,13 +759,13 @@ namespace pw {
         return PW_OK;
     }
 
-    int Server::handle_ws_connection(pn::SharedSock<Connection> conn, WSRoute& route) {
-        route.on_open(conn);
+    int Server::handle_ws_connection(pn::UniqueSock<Connection> conn, WSRoute& route) {
+        route.on_open(*conn);
 
         while (conn) {
             WSMessage message;
             if (message.parse(*conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
-                route.on_close(conn, 0, {}, false);
+                route.on_close(*conn, 0, {}, false);
                 conn->close();
                 return PW_ERROR;
             }
@@ -773,7 +773,7 @@ namespace pw {
             switch (message.opcode) {
                 case 0x1:
                 case 0x2:
-                    route.on_message(conn, message);
+                    route.on_message(*conn, message);
                     break;
 
                 case 0x8: {
@@ -800,7 +800,7 @@ namespace pw {
                             reason.assign(message.data.begin() + 2, message.data.end());
                         }
 
-                        route.on_close(conn, status_code_union.integer, reason, true);
+                        route.on_close(*conn, status_code_union.integer, reason, true);
 
                         ssize_t result;
                         if ((result = conn->send(WSMessage(std::move(message.data), 0x8))) == 0) {

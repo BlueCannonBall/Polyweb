@@ -44,7 +44,7 @@ namespace pw {
                 type(type),
                 data(data) { }
 
-            CommandStatus await(void) {
+            CommandStatus await() {
                 std::unique_lock<std::mutex> lock(mutex);
                 while (status == CommandStatus::Running) {
                     condition.wait(lock);
@@ -130,7 +130,7 @@ namespace pw {
                 }
             };
 
-            ~ThreadPool(void) {
+            ~ThreadPool() {
                 for (auto& thread : threads) {
                     auto cmd = std::make_shared<Command>(CommandType::Quit);
                     {
@@ -217,7 +217,7 @@ namespace pw {
                 }
             }
 
-            inline decltype(threads)::size_type size(void) const {
+            inline decltype(threads)::size_type size() const {
                 return threads.size();
             }
         };
