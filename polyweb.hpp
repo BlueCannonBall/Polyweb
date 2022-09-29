@@ -209,7 +209,7 @@ namespace pw {
         return conversion_mapping.at(status_code);
     }
 
-    std::string build_date(time_t rawtime = time(NULL));
+    std::string build_date(time_t rawtime = time(nullptr));
     time_t parse_date(const std::string& date);
 
     std::vector<char> b64_decode(const std::string& str);
@@ -366,14 +366,14 @@ namespace pw {
             return std::string(data.begin(), data.end());
         }
 
-        std::vector<char> build(bool masked, char* masking_key = NULL) const;
+        std::vector<char> build(bool masked, char* masking_key = nullptr) const;
         int parse(pn::tcp::Connection& conn, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
     class Connection: public pn::tcp::Connection {
     public:
         bool ws_closed = false;
-        void* data = NULL; // User data
+        void* data = nullptr; // User data
 
         Connection() = default;
         Connection(const pn::tcp::Connection& conn) {
@@ -406,7 +406,7 @@ namespace pw {
             return result;
         }
 
-        inline ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = NULL) {
+        inline ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = nullptr) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
             if ((result = send(data.data(), data.size())) == PW_ERROR) {
@@ -419,7 +419,7 @@ namespace pw {
             return send(HTTPResponse::make_basic(status_code, headers, http_version));
         }
 
-        int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, char* masking_key = NULL, bool validity_check = true);
+        int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, char* masking_key = nullptr, bool validity_check = true);
     };
 
     typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> RouteCallback;

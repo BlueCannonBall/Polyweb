@@ -114,7 +114,7 @@ namespace pw {
                 ret.push_back('+');
             } else if (allow_slash && c == '/') {
                 ret.push_back('/');
-            } else if (c == '\0' || strchr(allowed_characters, c) == NULL) {
+            } else if (c == '\0' || strchr(allowed_characters, c) == nullptr) {
                 std::ostringstream ss;
                 ss << std::hex << +c;
                 ret.push_back('%');
