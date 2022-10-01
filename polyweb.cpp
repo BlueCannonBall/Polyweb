@@ -487,23 +487,53 @@ namespace pw {
         HTTPHeaders::const_iterator transfer_encoding_it;
         HTTPHeaders::const_iterator content_length_it;
         if ((transfer_encoding_it = headers.find("Transfer-Encoding")) != headers.end()) {
-            for (;;) {
-                std::string chunk_size_string;
-                if (detail::read_until(conn, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PW_ERROR) {
-                    return PW_ERROR;
-                }
-                if (chunk_size_string.empty()) {
-                    detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                }
+            if (boost::to_lower_copy(transfer_encoding_it->second) == "chunked") {
+                for (;;) {
+                    std::string chunk_size_string;
+                    if (detail::read_until(conn, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PW_ERROR) {
+                        return PW_ERROR;
+                    }
+                    if (chunk_size_string.empty()) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    }
 
-                unsigned long long chunk_size;
-                {
-                    std::istringstream ss(chunk_size_string);
-                    ss >> std::hex >> chunk_size;
-                }
+                    unsigned long long chunk_size;
+                    {
+                        std::istringstream ss(chunk_size_string);
+                        ss >> std::hex >> chunk_size;
+                    }
 
-                if (!chunk_size) {
+                    if (!chunk_size) {
+                        char end_buf[2];
+                        ssize_t result;
+                        if ((result = conn.recv(end_buf, 2, MSG_WAITALL)) == 0) {
+                            detail::set_last_error(PW_EWEB);
+                            return PW_ERROR;
+                        } else if (result == PW_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PW_ERROR;
+                        }
+                        break;
+                    }
+
+                    size_t end = body.size();
+
+                    if (chunk_size > body_chunk_rlimit || end + chunk_size > body_rlimit) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else {
+                        body.resize(end + chunk_size);
+                        ssize_t result;
+                        if ((result = conn.recv(&body[end], chunk_size, MSG_WAITALL)) == 0) {
+                            detail::set_last_error(PW_EWEB);
+                            return PW_ERROR;
+                        } else if (result == PW_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PW_ERROR;
+                        }
+                    }
+
                     char end_buf[2];
                     ssize_t result;
                     if ((result = conn.recv(end_buf, 2, MSG_WAITALL)) == 0) {
@@ -513,35 +543,10 @@ namespace pw {
                         detail::set_last_error(PW_ENET);
                         return PW_ERROR;
                     }
-                    break;
                 }
-
-                size_t end = body.size();
-
-                if (chunk_size > body_chunk_rlimit || end + chunk_size > body_rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                } else {
-                    body.resize(end + chunk_size);
-                    ssize_t result;
-                    if ((result = conn.recv(&body[end], chunk_size, MSG_WAITALL)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PW_ERROR;
-                    }
-                }
-
-                char end_buf[2];
-                ssize_t result;
-                if ((result = conn.recv(end_buf, 2, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                } else if (result == PW_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PW_ERROR;
-                }
+            } else { // Only chunked transfer encoding is supported atm
+                detail::set_last_error(PW_EWEB);
+                return PW_ERROR;
             }
         } else if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
             unsigned long long content_length;
