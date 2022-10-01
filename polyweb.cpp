@@ -820,11 +820,15 @@ namespace pw {
 
     int Server::handle_ws_connection(pn::UniqueSock<Connection> conn, WSRoute& route) {
         route.on_open(*conn);
-        while (conn) {
+        for (;;) {
+            if (!conn) {
+                route.on_close(*conn, 0, {}, false);
+                break;
+            }
+
             WSMessage message;
             if (message.parse(*conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
                 route.on_close(*conn, 0, {}, false);
-                conn->close();
                 return PW_ERROR;
             }
 
@@ -836,7 +840,7 @@ namespace pw {
 
                 case 0x8: {
                     if (conn->ws_closed) {
-                        if (conn->close() == PW_ERROR) {
+                        if (conn->close(true, false) == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
                         }
@@ -868,7 +872,7 @@ namespace pw {
                             return PW_ERROR;
                         }
 
-                        if (conn->close() == PW_ERROR) {
+                        if (conn->close(true, false) == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
                         }
