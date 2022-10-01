@@ -287,38 +287,37 @@ namespace pw {
             this->headers[std::move(header_name)] = std::move(header_value);
 
             char end_check_buf[2];
-            ssize_t read_result;
+            ssize_t result;
 #ifdef _WIN32
             for (;;) {
-                if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
+                if ((result = conn.recv(end_check_buf, 2, MSG_PEEK)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PW_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
-                } else if (read_result == sizeof(end_check_buf)) {
+                } else if (result == 2) {
                     break;
                 }
             }
 #else
-            if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK | MSG_WAITALL)) == 0) {
+            if ((result = conn.recv(end_check_buf, 2, MSG_PEEK | MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PW_ERROR) {
+            } else if (result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
 #endif
 
-            if (memcmp("\r\n", end_check_buf, sizeof(end_check_buf)) == 0) {
-                if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_WAITALL)) == 0) {
+            if (memcmp("\r\n", end_check_buf, 2) == 0) {
+                if ((result = conn.recv(end_check_buf, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PW_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
-
                 break;
             }
         }
@@ -340,11 +339,11 @@ namespace pw {
                 this->body.resize(content_length);
             }
 
-            ssize_t read_result;
-            if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
+            ssize_t result;
+            if ((result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PW_ERROR) {
+            } else if (result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -394,7 +393,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         http_version.clear();
         if (detail::read_until(conn, std::back_inserter(http_version), ' ', misc_rlimit) == PW_ERROR) {
             return PW_ERROR;
@@ -450,44 +449,101 @@ namespace pw {
             this->headers[std::move(header_name)] = std::move(header_value);
 
             char end_check_buf[2];
-            ssize_t read_result;
+            ssize_t result;
 #ifdef _WIN32
             for (;;) {
-                if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK)) == 0) {
+                if ((result = conn.recv(end_check_buf, 2, MSG_PEEK)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PW_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
-                } else if (read_result == sizeof(end_check_buf)) {
+                } else if (result == 2) {
                     break;
                 }
             }
 #else
-            if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_PEEK | MSG_WAITALL)) == 0) {
+            if ((result = conn.recv(end_check_buf, 2, MSG_PEEK | MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PW_ERROR) {
+            } else if (result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
 #endif
 
-            if (memcmp("\r\n", end_check_buf, sizeof(end_check_buf)) == 0) {
-                if ((read_result = conn.recv(end_check_buf, sizeof(end_check_buf), MSG_WAITALL)) == 0) {
+            if (memcmp("\r\n", end_check_buf, 2) == 0) {
+                if ((result = conn.recv(end_check_buf, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PW_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
-
                 break;
             }
         }
 
+        HTTPHeaders::const_iterator transfer_encoding_it;
         HTTPHeaders::const_iterator content_length_it;
-        if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
+        if ((transfer_encoding_it = headers.find("Transfer-Encoding")) != headers.end()) {
+            for (;;) {
+                std::string chunk_size_string;
+                if (detail::read_until(conn, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PW_ERROR) {
+                    return PW_ERROR;
+                }
+                if (chunk_size_string.empty()) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                }
+
+                unsigned long long chunk_size;
+                {
+                    std::istringstream ss(chunk_size_string);
+                    ss >> std::hex >> chunk_size;
+                }
+
+                if (!chunk_size) {
+                    char end_buf[2];
+                    ssize_t result;
+                    if ((result = conn.recv(end_buf, 2, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+                    break;
+                }
+
+                size_t end = body.size();
+
+                if (chunk_size > body_chunk_rlimit || end + chunk_size > body_rlimit) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else {
+                    body.resize(end + chunk_size);
+                    ssize_t result;
+                    if ((result = conn.recv(&body[end], chunk_size, MSG_WAITALL)) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PW_ERROR;
+                    } else if (result == PW_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PW_ERROR;
+                    }
+                }
+
+                char end_buf[2];
+                ssize_t result;
+                if ((result = conn.recv(end_buf, 2, MSG_WAITALL)) == 0) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else if (result == PW_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PW_ERROR;
+                }
+            }
+        } else if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
             unsigned long long content_length;
             try {
                 content_length = std::stoull(content_length_it->second);
@@ -503,11 +559,11 @@ namespace pw {
                 this->body.resize(content_length);
             }
 
-            ssize_t read_result;
-            if ((read_result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
+            ssize_t result;
+            if ((result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
-            } else if (read_result == PW_ERROR) {
+            } else if (result == PW_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PW_ERROR;
             }
@@ -668,20 +724,18 @@ namespace pw {
 
             size_t end = this->data.size();
 
-            if (payload_length.integer > frame_rlimit || this->data.size() + payload_length.integer > message_rlimit) {
+            if (payload_length.integer > frame_rlimit || end + payload_length.integer > message_rlimit) {
                 detail::set_last_error(PW_EWEB);
                 return PW_ERROR;
             } else {
                 this->data.resize(end + payload_length.integer);
-                {
-                    ssize_t result;
-                    if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PW_ERROR;
-                    } else if (result == PW_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PW_ERROR;
-                    }
+                ssize_t result;
+                if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else if (result == PW_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PW_ERROR;
                 }
             }
 
@@ -902,8 +956,6 @@ namespace pw {
                     HTTPResponse resp;
                     try {
                         resp = ws_routes[ws_route_target].on_connect(*conn, req);
-                    } catch (const HTTPResponse& error_resp) {
-                        resp = error_resp;
                     } catch (...) {
                         if (handle_error(*conn, "500", keep_alive, req.http_version) == PW_ERROR) {
                             return PW_ERROR;
@@ -999,8 +1051,6 @@ namespace pw {
                     HTTPResponse resp;
                     try {
                         resp = routes[http_route_target].cb(*conn, req);
-                    } catch (const HTTPResponse& error_resp) {
-                        resp = error_resp;
                     } catch (...) {
                         if (handle_error(*conn, "500", keep_alive, req.http_version) == PW_ERROR) {
                             return PW_ERROR;
@@ -1040,8 +1090,6 @@ namespace pw {
         HTTPResponse resp;
         try {
             resp = this->on_error(status_code);
-        } catch (const HTTPResponse& error_resp) {
-            resp = error_resp;
         } catch (...) {
             resp = HTTPResponse::make_basic("500");
         }
@@ -1071,8 +1119,6 @@ namespace pw {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
-        } catch (const HTTPResponse& error_resp) {
-            resp = error_resp;
         } catch (...) {
             resp = HTTPResponse::make_basic("500");
         }

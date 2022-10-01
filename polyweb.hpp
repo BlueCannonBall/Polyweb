@@ -83,11 +83,11 @@ namespace pw {
                 }
 
                 char c;
-                ssize_t read_result;
-                if ((read_result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
+                ssize_t result;
+                if ((result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PW_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -111,11 +111,11 @@ namespace pw {
                 }
 
                 char c;
-                ssize_t read_result;
-                if ((read_result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
+                ssize_t result;
+                if ((result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PW_ERROR;
-                } else if (read_result == PW_ERROR) {
+                } else if (result == PW_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PW_ERROR;
                 }
@@ -340,7 +340,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         inline std::string body_to_string() const {
             return std::string(body.begin(), body.end());
