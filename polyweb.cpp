@@ -820,7 +820,6 @@ namespace pw {
 
     int Server::handle_ws_connection(pn::UniqueSock<Connection> conn, WSRoute& route) {
         route.on_open(*conn);
-
         while (conn) {
             WSMessage message;
             if (message.parse(*conn, this->ws_frame_rlimit, this->ws_message_rlimit) == PW_ERROR) {
