@@ -333,20 +333,22 @@ namespace pw {
                 return PW_ERROR;
             }
 
-            if (content_length > body_rlimit) {
-                detail::set_last_error(PW_EWEB);
-                return PW_ERROR;
-            } else {
-                this->body.resize(content_length);
-            }
+            if (content_length) {
+                if (content_length > body_rlimit) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else {
+                    this->body.resize(content_length);
+                }
 
-            ssize_t result;
-            if ((result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
-                detail::set_last_error(PW_EWEB);
-                return PW_ERROR;
-            } else if (result == PW_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PW_ERROR;
+                ssize_t result;
+                if ((result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else if (result == PW_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PW_ERROR;
+                }
             }
         }
 
@@ -558,20 +560,22 @@ namespace pw {
                 return PW_ERROR;
             }
 
-            if (content_length > body_rlimit) {
-                detail::set_last_error(PW_EWEB);
-                return PW_ERROR;
-            } else {
-                this->body.resize(content_length);
-            }
+            if (content_length) {
+                if (content_length > body_rlimit) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else {
+                    this->body.resize(content_length);
+                }
 
-            ssize_t result;
-            if ((result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
-                detail::set_last_error(PW_EWEB);
-                return PW_ERROR;
-            } else if (result == PW_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PW_ERROR;
+                ssize_t result;
+                if ((result = conn.recv(body.data(), body.size(), MSG_WAITALL)) == 0) {
+                    detail::set_last_error(PW_EWEB);
+                    return PW_ERROR;
+                } else if (result == PW_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PW_ERROR;
+                }
             }
         }
 
