@@ -840,6 +840,7 @@ namespace pw {
 
                 case 0x8: {
                     if (conn->ws_closed) {
+                        route.on_close(*conn, 0, {}, true);
                         if (conn->close(true, false) == PW_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PW_ERROR;
