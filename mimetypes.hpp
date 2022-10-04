@@ -2,13 +2,13 @@
 #define _POLYWEB_MIMETYPES_HPP
 
 #include <boost/algorithm/string.hpp>
-#include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace pw {
     inline std::string filename_to_mimetype(const std::string& filename) {
-        const static std::map<std::string, std::string> mimetypes = {
+        const static std::unordered_map<std::string, std::string> mimetypes = {
             {"123", "application/vnd.lotus-1-2-3"},
             {"3dml", "text/vnd.in3d.3dml"},
             {"3ds", "image/x-3ds"},

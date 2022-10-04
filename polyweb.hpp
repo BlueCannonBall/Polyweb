@@ -6,7 +6,6 @@
 #include <boost/algorithm/string.hpp>
 #include <cstdint>
 #include <ctime>
-#include <map>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -164,7 +163,7 @@ namespace pw {
     std::string universal_strerror(int error = get_last_error());
 
     inline std::string status_code_to_reason_phrase(const std::string& status_code) {
-        const static std::map<std::string, std::string> conversion_mapping = {
+        const static std::unordered_map<std::string, std::string> conversion_mapping = {
             {"100", "Continue"},
             {"101", "Switching Protocols"},
             {"200", "OK"},
