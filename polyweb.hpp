@@ -476,27 +476,6 @@ namespace pw {
         Server(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen) :
             pn::tcp::Server(fd, addr, addrlen) { }
 
-        inline int bind(const std::string& host, const std::string& port) {
-            if (pn::tcp::Server::bind(host, port) == PW_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PW_ERROR;
-            }
-            return PW_OK;
-        }
-
-        inline int bind(const std::string& host, unsigned short port) {
-            std::string str_port = std::to_string(port);
-            return bind(host, str_port);
-        }
-
-        inline int bind(struct sockaddr* addr, socklen_t addrlen) {
-            if (pn::tcp::Server::bind(addr, addrlen) == PW_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PW_ERROR;
-            }
-            return PW_OK;
-        }
-
         inline void route(const std::string& target, HTTPRoute route) {
             routes[target] = route;
         }
