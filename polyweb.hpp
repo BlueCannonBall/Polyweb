@@ -16,8 +16,6 @@
     #define timegm _mkgmtime
 #endif
 
-#define PW_ERROR       PN_ERROR
-#define PW_OK          PN_OK
 #define PW_SERVER_NAME "Polyweb/net Engine"
 
 // Errors
@@ -78,17 +76,17 @@ namespace pw {
             for (size_t i = 0;; i++) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
+                    return PN_ERROR;
                 }
 
                 char c;
                 ssize_t result;
                 if ((result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                } else if (result == PW_ERROR) {
+                    return PN_ERROR;
+                } else if (result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
-                    return PW_ERROR;
+                    return PN_ERROR;
                 }
 
                 if (c == end) {
@@ -98,7 +96,7 @@ namespace pw {
                 }
             }
 
-            return PW_OK;
+            return PN_OK;
         }
 
         template <typename InsertIt>
@@ -106,17 +104,17 @@ namespace pw {
             for (size_t i = 0, search_pos = 0;; i++) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
+                    return PN_ERROR;
                 }
 
                 char c;
                 ssize_t result;
                 if ((result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
-                    return PW_ERROR;
-                } else if (result == PW_ERROR) {
+                    return PN_ERROR;
+                } else if (result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
-                    return PW_ERROR;
+                    return PN_ERROR;
                 }
 
                 if (c == end_sequence[search_pos]) {
@@ -135,7 +133,7 @@ namespace pw {
                 }
             }
 
-            return PW_OK;
+            return PN_OK;
         }
 
         struct case_insensitive_comparer {
@@ -399,7 +397,7 @@ namespace pw {
         inline ssize_t send(const HTTPResponse& resp) {
             auto data = resp.build();
             ssize_t result;
-            if ((result = send(data.data(), data.size())) == PW_ERROR) {
+            if ((result = send(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
@@ -408,7 +406,7 @@ namespace pw {
         inline ssize_t send(const WSMessage& message, bool masked = false, char* masking_key = nullptr) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
-            if ((result = send(data.data(), data.size())) == PW_ERROR) {
+            if ((result = send(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
