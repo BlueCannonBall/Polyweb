@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-// LIMITED-SIZE AUTOMATICALLY-SCALABLE THREADPOOL LIBRARY
+// LIMITED-SIZE AUTOMATICALLY-RESIZING THREADPOOL LIBRARY
 
 namespace pw {
     namespace tp {
