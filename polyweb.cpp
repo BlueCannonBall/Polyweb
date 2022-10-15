@@ -737,12 +737,12 @@ namespace pw {
             if (masked) {
                 size_t i = 0;
 #ifdef POLYWEB_SIMD
-                for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length.integer; i += 32) {
+                for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length; i += 32) {
                     __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &this->data[end + i]);
                     __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                     _mm256_storeu_si256((__m256i_u*) &this->data[end + i], masked_vec);
                 }
-                for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length.integer; i += 16) {
+                for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length; i += 16) {
                     __m128i src_vec = _mm_loadu_si128((__m128i_u*) &this->data[end + i]);
                     __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                     _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
