@@ -7,6 +7,11 @@
 #include <iomanip>
 #include <openssl/sha.h>
 #include <sstream>
+#if __has_include(<endian.h>)
+    #include <endian.h>
+#elif __has_include(<machine/endian.h>)
+    #include <machine/endian.h>
+#endif
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>
 #endif
@@ -16,26 +21,30 @@ namespace pw {
     tp::ThreadPool threadpool(roundf(2.f * log2f(std::thread::hardware_concurrency()) + std::thread::hardware_concurrency() + 4.f));
     namespace detail {
         thread_local int last_error = PW_ESUCCESS;
+
+        void reverse_memcpy(char* dest, const char* src, size_t len) {
+            size_t i = 0;
+#ifdef POLYWEB_SIMD
+            for (const static __m256i pattern_vec = _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31); i + 32 <= len; i += 32) {
+                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - 1 - i));
+                __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, pattern_vec);
+                _mm256_storeu_si256(((__m256i_u*) &dest[i]), reversed_vec);
+            }
+            for (const static __m128i pattern_vec = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= len; i += 16) {
+                __builtin_prefetch(src + len - 1 - i - 16, 0, 0);
+                __m128i src_vec = _mm_loadu_si128((__m128i_u*) (src + len - 1 - i));
+                __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
+                _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
+            }
+#endif
+            for (; i < len; i++) {
+                dest[i] = src[len - 1 - i];
+            }
+        }
     } // namespace detail
 
-    void reverse_memcpy(char* dest, const char* src, size_t len) {
-        size_t i = 0;
-#ifdef POLYWEB_SIMD
-        for (const static __m256i pattern_vec = _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31); i + 32 <= len; i += 32) {
-            __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - 1 - i));
-            __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, pattern_vec);
-            _mm256_storeu_si256(((__m256i_u*) &dest[i]), reversed_vec);
-        }
-        for (const static __m128i pattern_vec = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= len; i += 16) {
-            __builtin_prefetch(src + len - 1 - i - 16, 0, 0);
-            __m128i src_vec = _mm_loadu_si128((__m128i_u*) (src + len - 1 - i));
-            __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
-            _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
-        }
-#endif
-        for (; i < len; i++) {
-            dest[i] = src[len - 1 - i];
-        }
+    void reverse_memcpy(void* dest, const void* src, size_t len) {
+        detail::reverse_memcpy((char*) dest, (const char*) src, len);
     }
 
     std::string strerror(int error) {
@@ -596,28 +605,20 @@ namespace pw {
         } else if (data.size() <= UINT16_MAX) {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 126);
             ret.resize(4);
-            union {
-                char bytes[2];
-                uint16_t integer;
-            } size;
-            size.integer = data.size();
+            uint16_t size_16 = data.size();
 #if __BYTE_ORDER == __BIG_ENDIAN
-            memcpy(ret.data() + 2, size.bytes, 2);
+            memcpy(ret.data() + 2, &size_16, 2);
 #else
-            reverse_memcpy(ret.data() + 2, size.bytes, 2);
+            reverse_memcpy(ret.data() + 2, &size_16, 2);
 #endif
         } else {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 127);
             ret.resize(10);
-            union {
-                char bytes[8];
-                uint64_t integer;
-            } size;
-            size.integer = data.size();
+            uint64_t size_64 = data.size();
 #if __BYTE_ORDER == __BIG_ENDIAN
-            memcpy(ret.data() + 2, size.bytes, 8);
+            memcpy(ret.data() + 2, &size_64, 8);
 #else
-            reverse_memcpy(ret.data() + 2, size.bytes, 8);
+            reverse_memcpy(ret.data() + 2, &size_64, 8);
 #endif
         }
 
@@ -626,28 +627,25 @@ namespace pw {
             size_t end = ret.size();
             ret.resize(end + 4 + data.size());
 
-            union {
-                char bytes[4];
-                int32_t integer;
-            } masking_key_union;
-            memcpy(masking_key_union.bytes, masking_key, 4);
+            int32_t masking_key_integer;
+            memcpy(&masking_key_integer, masking_key, 4);
             memcpy(&ret[end], masking_key, 4);
 
             size_t i = 0;
 #ifdef POLYWEB_SIMD
-            for (__m256i mask_vec = _mm256_set1_epi32(masking_key_union.integer); i + 32 <= data.size(); i += 32) {
+            for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= data.size(); i += 32) {
                 __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
                 __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                 _mm256_storeu_si256((__m256i_u*) &ret[end + 4 + i], masked_vec);
             }
-            for (__m128i mask_vec = _mm_set1_epi32(masking_key_union.integer); i + 16 <= data.size(); i += 16) {
+            for (__m128i mask_vec = _mm_set1_epi32(masking_key_integer); i + 16 <= data.size(); i += 16) {
                 __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[i]);
                 __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                 _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
             }
 #endif
             for (; i < data.size(); i++) {
-                ret[end + 4 + i] ^= masking_key_union.bytes[i % 4];
+                ret[end + 4 + i] ^= masking_key[i % 4];
             }
         } else {
             PW_CLEAR_WS_FRAME_MASKED(ret);
@@ -676,54 +674,41 @@ namespace pw {
             if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) this->opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
             bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
 
-            union {
-                char bytes[sizeof(unsigned long long)];
-                unsigned long long integer = 0ull;
-            } payload_length;
+            unsigned long long payload_length;
             uint8_t payload_length_7 = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
             if (payload_length_7 == 126) {
-                char payload_length_16[2];
+                uint16_t payload_length_16;
                 ssize_t result;
-                if ((result = conn.recv(payload_length_16, 2, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&payload_length_16, 2, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else if (result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 }
-
-#if __BYTE_ORDER == __BIG_ENDIAN
-                memcpy(payload_length.bytes + sizeof(payload_length) - 2, payload_length_16, 2);
-#else
-                reverse_memcpy(payload_length.bytes, payload_length_16, 2);
-#endif
+                payload_length = ntohs(payload_length_16);
             } else if (payload_length_7 == 127) {
-                char payload_length_64[8];
+                uint64_t payload_length_64;
                 ssize_t result;
-                if ((result = conn.recv(payload_length_64, 8, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&payload_length_64, 8, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else if (result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 }
-
-#if __BYTE_ORDER == __BIG_ENDIAN
-                memcpy(payload_length.bytes + sizeof(payload_length) - 8, payload_length_64, 8);
-#else
-                reverse_memcpy(payload_length.bytes, payload_length_64, 8);
-#endif
+                payload_length = ntohll(payload_length_64);
             } else {
-                payload_length.integer = payload_length_7;
+                payload_length = payload_length_7;
             }
 
             union {
                 char bytes[4];
-                int integer;
+                int32_t integer;
             } masking_key;
             if (masked) {
                 ssize_t result;
-                if ((result = conn.recv(masking_key.bytes, 4, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&masking_key, 4, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else if (result == PN_ERROR) {
@@ -734,13 +719,13 @@ namespace pw {
 
             size_t end = this->data.size();
 
-            if (payload_length.integer > frame_rlimit || end + payload_length.integer > message_rlimit) {
+            if (payload_length > frame_rlimit || end + payload_length > message_rlimit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
             } else {
-                this->data.resize(end + payload_length.integer);
+                this->data.resize(end + payload_length);
                 ssize_t result;
-                if ((result = conn.recv(&this->data[end], payload_length.integer, MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&this->data[end], payload_length, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else if (result == PN_ERROR) {
@@ -763,7 +748,7 @@ namespace pw {
                     _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
                 }
 #endif
-                for (; i < payload_length.integer; i++) {
+                for (; i < payload_length; i++) {
                     this->data[end + i] ^= masking_key.bytes[i % 4];
                 }
             }
@@ -780,16 +765,10 @@ namespace pw {
         WSMessage message(8);
         message.data.resize(2 + reason.size());
 
-        union {
-            char bytes[2];
-            uint16_t integer;
-        } status_code_union;
-        status_code_union.integer = status_code;
-
 #if __BYTE_ORDER == __BIG_ENDIAN
-        memcpy(message.data.data(), status_code_union.bytes, 2);
+        memcpy(message.data.data(), &status_code, 2);
 #else
-        reverse_memcpy(message.data.data(), status_code_union.bytes, 2);
+        reverse_memcpy(message.data.data(), &status_code, 2);
 #endif
         memcpy(message.data.data() + 2, reason.data(), reason.size());
 
@@ -851,24 +830,21 @@ namespace pw {
                             return PN_ERROR;
                         }
                     } else {
-                        union {
-                            char bytes[2];
-                            uint16_t integer;
-                        } status_code_union;
+                        uint16_t status_code = 0;
                         std::string reason;
 
                         if (message.data.size() >= 2) {
 #if __BYTE_ORDER__ == __BIG_ENDIAN
-                            memcpy(status_code_union.bytes, message.data.data(), 2);
+                            memcpy(&status_code, message.data.data(), 2);
 #else
-                            reverse_memcpy(status_code_union.bytes, message.data.data(), 2);
+                            reverse_memcpy(&status_code, message.data.data(), 2);
 #endif
                         }
                         if (message.data.size() > 2) {
                             reason.assign(message.data.begin() + 2, message.data.end());
                         }
 
-                        route.on_close(*conn, status_code_union.integer, reason, true);
+                        route.on_close(*conn, status_code, reason, true);
 
                         ssize_t result;
                         if ((result = conn->send(WSMessage(std::move(message.data), 0x8))) == 0) {

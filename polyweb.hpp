@@ -11,12 +11,12 @@
 #include <utility>
 #include <vector>
 
+#define PW_SERVER_NAME "Polyweb"
+
 // Bridged
 #ifdef _WIN32
     #define timegm _mkgmtime
 #endif
-
-#define PW_SERVER_NAME "Polyweb/net Engine"
 
 // Errors
 #define PW_ESUCCESS 0
@@ -150,7 +150,7 @@ namespace pw {
         };
     } // namespace detail
 
-    void reverse_memcpy(char* dest, const char* src, size_t len);
+    void reverse_memcpy(void* dest, const void* src, size_t len);
 
     inline int get_last_error() {
         return detail::last_error;
