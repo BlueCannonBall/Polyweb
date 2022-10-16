@@ -6,6 +6,7 @@
 #include <boost/algorithm/string.hpp>
 #include <cstdint>
 #include <ctime>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -28,7 +29,7 @@
 }
 
 // WebSocket macros
-#define PW_WS_VERSION 13
+#define PW_WS_VERSION "13"
 
 #define PW_GET_WS_FRAME_FIN(frame_header)            (frame_header[0] & 0b10000000)
 #define PW_GET_WS_FRAME_RSV1(frame_header)           (frame_header[0] & 0b01000000)
@@ -496,7 +497,12 @@ namespace pw {
             }
         }
 
-        int listen(int backlog = 128);
+        int listen(
+            std::function<bool(pn::tcp::Connection&, void*)> filter = [](pn::tcp::Connection&, void*) {
+                return false;
+            },
+            void* filter_data = nullptr,
+            int backlog = 128);
 
     protected:
         std::unordered_map<std::string, HTTPRoute> routes;

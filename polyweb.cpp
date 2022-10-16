@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <openssl/sha.h>
 #include <sstream>
+#include <stdexcept>
 #if __has_include(<endian.h>)
     #include <endian.h>
 #elif __has_include(<machine/endian.h>)
@@ -784,20 +785,26 @@ namespace pw {
         return PN_OK;
     }
 
-    int Server::listen(int backlog) {
-        if (pn::tcp::Server::listen([](pn::tcp::Connection& conn, void* data) -> bool {
-                auto server = (Server*) data;
-                threadpool.schedule([conn](void* data) {
+    int Server::listen(std::function<bool(pn::tcp::Connection&, void*)> filter, void* filter_data, int backlog) {
+        if (pn::tcp::Server::listen([filter = std::move(filter), filter_data](pn::tcp::Connection& conn, void* data) -> bool {
+                if (filter(conn, filter_data)) {
+                    conn.close(true, false);
+                } else {
                     auto server = (Server*) data;
-                    server->handle_connection(pn::UniqueSock<pw::Connection>(conn));
-                },
-                    server);
+                    threadpool.schedule([conn](void* data) {
+                        auto server = (Server*) data;
+                        server->handle_connection(pn::UniqueSock<pw::Connection>(conn));
+                    },
+                        server);
+                }
                 return true;
             },
                 backlog,
                 this) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
+        } else {
+            throw std::logic_error("pn::tcp::Server::listen returned without an error");
         }
         return PN_OK;
     }
@@ -976,19 +983,17 @@ namespace pw {
                             std::vector<std::string> split_websocket_version;
                             boost::split(split_websocket_version, websocket_version_it->second, boost::is_any_of(","));
 
-                            const static std::string version_string = std::to_string(PW_WS_VERSION);
                             bool found_version = false;
                             for (auto& version : split_websocket_version) {
                                 boost::trim(version);
-
-                                if (version == version_string) {
+                                if (version == PW_WS_VERSION) {
                                     found_version = true;
                                     break;
                                 }
                             }
 
                             if (found_version) {
-                                resp.headers["Sec-WebSocket-Version"] = version_string;
+                                resp.headers["Sec-WebSocket-Version"] = PW_WS_VERSION;
                             } else {
                                 if (handle_error(*conn, "501", keep_alive, req.http_version) == PN_ERROR) {
                                     return PN_ERROR;

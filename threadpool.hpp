@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
