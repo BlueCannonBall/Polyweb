@@ -793,7 +793,7 @@ namespace pw {
                     auto server = (Server*) data;
                     threadpool.schedule([conn](void* data) {
                         auto server = (Server*) data;
-                        server->handle_connection(pn::UniqueSock<pw::Connection>(conn));
+                        server->handle_connection(pn::UniqueSock<Connection>(conn));
                     },
                         server);
                 }
