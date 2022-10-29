@@ -364,8 +364,8 @@ namespace pw {
 
         std::string::iterator query_string_begin;
         if ((query_string_begin = std::find(target.begin(), target.end(), '?')) != target.end()) {
-            if (next(query_string_begin) != target.end()) {
-                query_parameters.parse(std::string(next(query_string_begin), std::find(next(query_string_begin), target.end(), '#')));
+            if (std::next(query_string_begin) != target.end()) {
+                query_parameters.parse(std::string(std::next(query_string_begin), target.end()));
             }
             target.resize(std::distance(target.begin(), query_string_begin));
         }
