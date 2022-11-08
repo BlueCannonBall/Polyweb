@@ -27,13 +27,13 @@ namespace pw {
             size_t i = 0;
 #ifdef POLYWEB_SIMD
             for (const static __m256i pattern_vec = _mm256_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31); i + 32 <= len; i += 32) {
-                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) (src + len - 1 - i));
+                __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) (src + len - 1 - i));
                 __m256i reversed_vec = _mm256_shuffle_epi8(src_vec, pattern_vec);
                 _mm256_storeu_si256(((__m256i_u*) &dest[i]), reversed_vec);
             }
             for (const static __m128i pattern_vec = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= len; i += 16) {
                 __builtin_prefetch(src + len - 1 - i - 16, 0, 0);
-                __m128i src_vec = _mm_loadu_si128((__m128i_u*) (src + len - 1 - i));
+                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + len - 1 - i));
                 __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
                 _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
             }
@@ -635,12 +635,12 @@ namespace pw {
             size_t i = 0;
 #ifdef POLYWEB_SIMD
             for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= data.size(); i += 32) {
-                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
+                __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &data[i]);
                 __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                 _mm256_storeu_si256((__m256i_u*) &ret[end + 4 + i], masked_vec);
             }
             for (__m128i mask_vec = _mm_set1_epi32(masking_key_integer); i + 16 <= data.size(); i += 16) {
-                __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[i]);
+                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &data[i]);
                 __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                 _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
             }
@@ -739,12 +739,12 @@ namespace pw {
                 size_t i = 0;
 #ifdef POLYWEB_SIMD
                 for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length; i += 32) {
-                    __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &this->data[end + i]);
+                    __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &this->data[end + i]);
                     __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                     _mm256_storeu_si256((__m256i_u*) &this->data[end + i], masked_vec);
                 }
                 for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length; i += 16) {
-                    __m128i src_vec = _mm_loadu_si128((__m128i_u*) &this->data[end + i]);
+                    __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &this->data[end + i]);
                     __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                     _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
                 }
