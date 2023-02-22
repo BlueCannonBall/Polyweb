@@ -24,6 +24,10 @@
 #define PW_ENET     1
 #define PW_EWEB     2
 
+// Default callback macros
+#define PW_DEFAULT_WS_ROUTE_ON_CONNECT [](const pw::Connection&, const pw::HTTPRequest&) { \
+    return pw::HTTPResponse("101");                                                        \
+}
 #define PW_DEFAULT_SERVER_ON_ERROR [](const std::string& status_code) { \
     return pw::HTTPResponse::make_basic(status_code);                   \
 }
@@ -442,7 +446,7 @@ namespace pw {
 
     class WSRoute: public Route {
     public:
-        RouteCallback on_connect;
+        RouteCallback on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
         std::function<void(Connection&)> on_open;
         std::function<void(Connection&, const WSMessage&)> on_message;
         std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
