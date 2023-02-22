@@ -32,7 +32,6 @@ namespace pw {
                 _mm256_storeu_si256(((__m256i_u*) &dest[i]), reversed_vec);
             }
             for (const static __m128i pattern_vec = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= len; i += 16) {
-                __builtin_prefetch(src + len - 1 - i - 16, 0, 0);
                 __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + len - 1 - i));
                 __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
                 _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
