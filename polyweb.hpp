@@ -452,6 +452,11 @@ namespace pw {
         std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;
+        WSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
+            Route(wildcard),
+            on_open(on_open),
+            on_message(on_message),
+            on_close(on_close) { }
         WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
             Route(wildcard),
             on_connect(on_connect),
