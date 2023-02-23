@@ -448,7 +448,7 @@ namespace pw {
     public:
         RouteCallback on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
         std::function<void(Connection&)> on_open;
-        std::function<void(Connection&, const WSMessage&)> on_message;
+        std::function<void(Connection&, WSMessage)> on_message;
         std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;

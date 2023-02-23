@@ -825,7 +825,7 @@ namespace pw {
             switch (message.opcode) {
                 case 0x1:
                 case 0x2:
-                    route.on_message(*conn, message);
+                    route.on_message(*conn, std::move(message));
                     break;
 
                 case 0x8: {
