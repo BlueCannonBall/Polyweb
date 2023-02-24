@@ -263,28 +263,28 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPRequest() = default;
-        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}) :
+        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}):
             method(method),
             target(target),
-            headers(headers) { }
-        HTTPRequest(const std::string& method, const std::string& target, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+            headers(headers) {}
+        HTTPRequest(const std::string& method, const std::string& target, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             method(method),
             target(target),
             headers(headers),
             body(body),
-            http_version(http_version) { }
-        HTTPRequest(const std::string& method, const std::string& target, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+            http_version(http_version) {}
+        HTTPRequest(const std::string& method, const std::string& target, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             method(method),
             target(target),
             headers(headers),
             body(body.begin(), body.end()),
-            http_version(http_version) { }
-        HTTPRequest(const std::string& method, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+            http_version(http_version) {}
+        HTTPRequest(const std::string& method, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             method(method),
             target(target),
             headers(headers),
             query_parameters(query_parameters),
-            http_version(http_version) { }
+            http_version(http_version) {}
 
         std::vector<char> build() const;
 
@@ -309,23 +309,23 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPResponse() = default;
-        HTTPResponse(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+        HTTPResponse(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             headers(headers),
-            http_version(http_version) { }
-        HTTPResponse(const std::string& status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+            http_version(http_version) {}
+        HTTPResponse(const std::string& status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body),
             headers(headers),
-            http_version(http_version) { }
-        HTTPResponse(const std::string& status_code, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") :
+            http_version(http_version) {}
+        HTTPResponse(const std::string& status_code, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body.begin(), body.end()),
             headers(headers),
-            http_version(http_version) { }
+            http_version(http_version) {}
 
         static inline HTTPResponse make_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
             HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
@@ -355,14 +355,14 @@ namespace pw {
         uint8_t opcode = 2;
 
         WSMessage() = default;
-        WSMessage(const std::string& str, uint8_t opcode = 1) :
+        WSMessage(const std::string& str, uint8_t opcode = 1):
             data(str.begin(), str.end()),
-            opcode(opcode) { }
-        WSMessage(const std::vector<char>& data, uint8_t opcode = 2) :
+            opcode(opcode) {}
+        WSMessage(const std::vector<char>& data, uint8_t opcode = 2):
             data(data),
-            opcode(opcode) { }
-        WSMessage(uint8_t opcode) :
-            opcode(opcode) { }
+            opcode(opcode) {}
+        WSMessage(uint8_t opcode):
+            opcode(opcode) {}
 
         inline std::string to_string() const {
             return std::string(data.begin(), data.end());
@@ -381,12 +381,12 @@ namespace pw {
         Connection(const pn::tcp::Connection& conn) {
             *this = conn;
         }
-        Connection(pn::sockfd_t fd) :
-            pn::tcp::Connection(fd) { }
-        Connection(struct sockaddr addr, socklen_t addrlen) :
-            pn::tcp::Connection(addr, addrlen) { }
-        Connection(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen) :
-            pn::tcp::Connection(fd, addr, addrlen) { }
+        Connection(pn::sockfd_t fd):
+            pn::tcp::Connection(fd) {}
+        Connection(struct sockaddr addr, socklen_t addrlen):
+            pn::tcp::Connection(addr, addrlen) {}
+        Connection(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen):
+            pn::tcp::Connection(fd, addr, addrlen) {}
 
         inline Connection& operator=(const pn::tcp::Connection& conn) {
             if (this != &conn) {
@@ -430,8 +430,8 @@ namespace pw {
     public:
         bool wildcard = false;
 
-        Route(bool wildcard = false) :
-            wildcard(wildcard) { }
+        Route(bool wildcard = false):
+            wildcard(wildcard) {}
     };
 
     class HTTPRoute: public Route {
@@ -439,9 +439,9 @@ namespace pw {
         RouteCallback cb;
 
         HTTPRoute() = default;
-        HTTPRoute(RouteCallback cb, bool wildcard = false) :
+        HTTPRoute(RouteCallback cb, bool wildcard = false):
             Route(wildcard),
-            cb(cb) { }
+            cb(cb) {}
     };
 
     class WSRoute: public Route {
@@ -452,17 +452,17 @@ namespace pw {
         std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
 
         WSRoute() = default;
-        WSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
+        WSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false):
             Route(wildcard),
             on_open(on_open),
             on_message(on_message),
-            on_close(on_close) { }
-        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false) :
+            on_close(on_close) {}
+        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false):
             Route(wildcard),
             on_connect(on_connect),
             on_open(on_open),
             on_message(on_message),
-            on_close(on_close) { }
+            on_close(on_close) {}
     };
 
     class Server: public pn::tcp::Server {
@@ -477,12 +477,12 @@ namespace pw {
         size_t misc_rlimit = 1'000;
 
         Server() = default;
-        Server(pn::sockfd_t fd) :
-            pn::tcp::Server(fd) { }
-        Server(struct sockaddr addr, socklen_t addrlen) :
-            pn::tcp::Server(addr, addrlen) { }
-        Server(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen) :
-            pn::tcp::Server(fd, addr, addrlen) { }
+        Server(pn::sockfd_t fd):
+            pn::tcp::Server(fd) {}
+        Server(struct sockaddr addr, socklen_t addrlen):
+            pn::tcp::Server(addr, addrlen) {}
+        Server(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen):
+            pn::tcp::Server(fd, addr, addrlen) {}
 
         inline void route(const std::string& target, HTTPRoute route) {
             routes[target] = route;
