@@ -586,7 +586,7 @@ namespace pw {
         return PN_OK;
     }
 
-    std::vector<char> WSMessage::build(bool masked, char* masking_key) const {
+    std::vector<char> WSMessage::build(bool masked, const char* masking_key) const {
         std::vector<char> ret(2);
 
         PW_SET_WS_FRAME_FIN(ret);
@@ -751,7 +751,7 @@ namespace pw {
         return PN_OK;
     }
 
-    int Connection::close_ws(uint16_t status_code, const std::string& reason, bool masked, char* masking_key, bool validity_check) {
+    int Connection::close_ws(uint16_t status_code, const std::string& reason, bool masked, const char* masking_key, bool validity_check) {
         if (validity_check && !this->is_valid()) {
             this->ws_closed = true;
             return PN_OK;
