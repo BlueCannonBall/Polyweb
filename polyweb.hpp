@@ -489,10 +489,7 @@ namespace pw {
         }
 
         inline void unroute(const std::string& target) {
-            decltype(routes)::const_iterator route_it;
-            if ((route_it = routes.find(target)) != routes.end()) {
-                routes.erase(route_it);
-            }
+            routes.erase(target);
         }
 
         inline void route_ws(const std::string& target, const WSRoute& route) {
@@ -500,10 +497,7 @@ namespace pw {
         }
 
         inline void unroute_ws(const std::string& target) {
-            decltype(ws_routes)::const_iterator route_it;
-            if ((route_it = ws_routes.find(target)) != ws_routes.end()) {
-                ws_routes.erase(route_it);
-            }
+            ws_routes.erase(target);
         }
 
         int listen(

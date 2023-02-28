@@ -959,11 +959,8 @@ namespace pw {
                     }
 
                     if (resp.status_code == "101") {
+                        resp.headers.erase("Content-Type");
                         resp.body.clear();
-                        HTTPHeaders::const_iterator content_type_it;
-                        if ((content_type_it = resp.headers.find("Content-Type")) != resp.headers.end()) {
-                            resp.headers.erase(content_type_it);
-                        }
 
                         if (!resp.headers.count("Connection")) {
                             resp.headers["Connection"] = "upgrade";
