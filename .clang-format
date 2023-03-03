@@ -31,8 +31,8 @@ DeriveLineEnding: true
 # EmptyLineBeforeAccessModifier: Always
 FixNamespaceComments: true
 IncludeBlocks: Merge
-# IndentAccessModifiers: true
-IndentCaseLabels: true
+IndentCaseBlocks: false
+IndentCaseLabels: false
 IndentExternBlock: Indent
 IndentGotoLabels: true
 IndentPPDirectives: BeforeHash

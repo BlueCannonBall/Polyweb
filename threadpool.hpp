@@ -89,32 +89,32 @@ namespace pw {
                     commands->working = true;
 
                     switch (command->type) {
-                        default: {
-                            commands->working = false;
-                            throw std::runtime_error("Invalid command type");
+                    default: {
+                        commands->working = false;
+                        throw std::runtime_error("Invalid command type");
+                    }
+
+                    case CommandType::Execute: {
+                        auto cmd = (CommandExecute*) command.get();
+                        try {
+                            cmd->func(cmd->arg);
+
+                            std::unique_lock<std::mutex> lock(cmd->mutex);
+                            cmd->status = CommandStatus::Success;
+                        } catch (const std::exception& e) {
+                            std::unique_lock<std::mutex> lock(cmd->mutex);
+                            cmd->status = CommandStatus::Failure;
+                            cmd->error = e;
                         }
 
-                        case CommandType::Execute: {
-                            auto cmd = (CommandExecute*) command.get();
-                            try {
-                                cmd->func(cmd->arg);
+                        cmd->condition.notify_all();
+                        break;
+                    }
 
-                                std::unique_lock<std::mutex> lock(cmd->mutex);
-                                cmd->status = CommandStatus::Success;
-                            } catch (const std::exception& e) {
-                                std::unique_lock<std::mutex> lock(cmd->mutex);
-                                cmd->status = CommandStatus::Failure;
-                                cmd->error = e;
-                            }
-
-                            cmd->condition.notify_all();
-                            break;
-                        }
-
-                        case CommandType::Quit: {
-                            commands->working = false;
-                            return;
-                        }
+                    case CommandType::Quit: {
+                        commands->working = false;
+                        return;
+                    }
                     }
                 }
             }

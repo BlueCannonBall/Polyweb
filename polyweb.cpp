@@ -61,14 +61,14 @@ namespace pw {
         std::string specific_error;
 
         switch (error) {
-            case PW_ENET: {
-                specific_error = pn::universal_strerror();
-                break;
-            }
+        case PW_ENET: {
+            specific_error = pn::universal_strerror();
+            break;
+        }
 
-            default: {
-                return base_error;
-            }
+        default: {
+            return base_error;
+        }
         }
 
         return base_error + ": " + specific_error;
@@ -818,55 +818,55 @@ namespace pw {
             }
 
             switch (message.opcode) {
-                case 0x1:
-                case 0x2:
-                    route.on_message(*conn, std::move(message));
-                    break;
+            case 0x1:
+            case 0x2:
+                route.on_message(*conn, std::move(message));
+                break;
 
-                case 0x8: {
-                    if (conn->ws_closed) {
-                        route.on_close(*conn, 0, {}, true);
-                        if (conn->close(true, false) == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        }
-                    } else {
-                        uint16_t status_code = 0;
-                        std::string reason;
+            case 0x8: {
+                if (conn->ws_closed) {
+                    route.on_close(*conn, 0, {}, true);
+                    if (conn->close(true, false) == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    }
+                } else {
+                    uint16_t status_code = 0;
+                    std::string reason;
 
-                        if (message.data.size() >= 2) {
+                    if (message.data.size() >= 2) {
 #if __BYTE_ORDER__ == __BIG_ENDIAN
-                            memcpy(&status_code, message.data.data(), 2);
+                        memcpy(&status_code, message.data.data(), 2);
 #else
-                            reverse_memcpy(&status_code, message.data.data(), 2);
+                        reverse_memcpy(&status_code, message.data.data(), 2);
 #endif
-                        }
-                        if (message.data.size() > 2) {
-                            reason.assign(message.data.begin() + 2, message.data.end());
-                        }
-
-                        route.on_close(*conn, status_code, reason, true);
-
-                        ssize_t result;
-                        if ((result = conn->send(WSMessage(std::move(message.data), 0x8))) == 0) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
-                        } else if (result == PN_ERROR) {
-                            return PN_ERROR;
-                        }
-
-                        if (conn->close(true, false) == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        }
+                    }
+                    if (message.data.size() > 2) {
+                        reason.assign(message.data.begin() + 2, message.data.end());
                     }
 
-                    return PN_OK;
+                    route.on_close(*conn, status_code, reason, true);
+
+                    ssize_t result;
+                    if ((result = conn->send(WSMessage(std::move(message.data), 0x8))) == 0) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    } else if (result == PN_ERROR) {
+                        return PN_ERROR;
+                    }
+
+                    if (conn->close(true, false) == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    }
                 }
 
-                case 0x9:
-                    conn->send(WSMessage(std::move(message.data), 0xA));
-                    break;
+                return PN_OK;
+            }
+
+            case 0x9:
+                conn->send(WSMessage(std::move(message.data), 0xA));
+                break;
             }
         }
         return PN_OK;
@@ -879,15 +879,15 @@ namespace pw {
             if (req.parse(*conn, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PN_ERROR) {
                 std::string resp_status_code;
                 switch (get_last_error()) {
-                    case PW_ENET: {
-                        resp_status_code = "500";
-                        break;
-                    }
+                case PW_ENET: {
+                    resp_status_code = "500";
+                    break;
+                }
 
-                    case PW_EWEB: {
-                        resp_status_code = "400";
-                        break;
-                    }
+                case PW_EWEB: {
+                    resp_status_code = "400";
+                    break;
+                }
                 }
                 handle_error(*conn, resp_status_code, false);
                 return PN_ERROR;
