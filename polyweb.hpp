@@ -76,8 +76,8 @@ namespace pw {
             last_error = error;
         }
 
-        template <typename InsertIt>
-        int read_until(pn::tcp::Connection& conn, InsertIt ret, char end, size_t rl = 1'000) {
+        template <typename OutputIt>
+        int read_until(pn::tcp::Connection& conn, OutputIt ret, char end, size_t rl = 1'000) {
             for (size_t i = 0;; i++) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
@@ -104,8 +104,8 @@ namespace pw {
             return PN_OK;
         }
 
-        template <typename InsertIt>
-        int read_until(pn::tcp::Connection& conn, InsertIt ret, const std::string& end_sequence, size_t rl = 1'000) {
+        template <typename OutputIt>
+        int read_until(pn::tcp::Connection& conn, OutputIt ret, const std::string& end_sequence, size_t rl = 1'000) {
             for (size_t i = 0, search_pos = 0;; i++) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
@@ -141,16 +141,15 @@ namespace pw {
             return PN_OK;
         }
 
-        struct case_insensitive_comparer {
+        struct CaseInsensitiveComparer {
             bool operator()(const std::string& a, const std::string& b) const {
                 return boost::iequals(a, b);
             }
         };
 
-        struct case_insensitive_hasher {
-            size_t operator()(const std::string& key) const {
-                std::string key_copy = boost::to_lower_copy(key);
-                return std::hash<std::string>()(key_copy);
+        struct CaseInsensitiveHasher {
+            size_t operator()(const std::string& str) const {
+                return std::hash<std::string>()(boost::to_lower_copy(str));
             }
         };
     } // namespace detail
@@ -220,7 +219,7 @@ namespace pw {
     std::string percent_encode(const std::string& str, bool plus_as_space = false, bool allow_slash = true);
     std::string percent_decode(const std::string& str, bool plus_as_space = false);
 
-    typedef std::unordered_map<std::string, std::string, detail::case_insensitive_hasher, detail::case_insensitive_comparer> HTTPHeaders;
+    typedef std::unordered_map<std::string, std::string, detail::CaseInsensitiveHasher, detail::CaseInsensitiveComparer> HTTPHeaders;
 
     class QueryParameters {
     private:
