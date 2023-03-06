@@ -105,7 +105,7 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int read_until(pn::tcp::Connection& conn, OutputIt ret, const std::string& end_sequence, size_t rl = 1'000) {
+        int read_until(pn::tcp::Connection& conn, OutputIt ret, const std::vector<char>& end_sequence, size_t rl = 1'000) {
             for (size_t i = 0, search_pos = 0;; i++) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
@@ -139,6 +139,11 @@ namespace pw {
             }
 
             return PN_OK;
+        }
+
+        template <typename OutputIt>
+        int read_until(pn::tcp::Connection& conn, OutputIt ret, const std::string& end_sequence, size_t rl = 1'000) {
+            return read_until(conn, ret, std::vector<char>(end_sequence.begin(), end_sequence.end()), rl);
         }
 
         struct CaseInsensitiveComparer {
