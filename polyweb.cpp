@@ -624,11 +624,11 @@ namespace pw {
             size_t end = ret.size();
             ret.resize(end + 4 + data.size());
 
-            char auto_masking_key[4];
+            unsigned char random_bits[4];
             if (!masking_key) {
                 const static std::independent_bits_engine<std::default_random_engine, 8, unsigned char> generator;
-                std::generate(std::begin(auto_masking_key), std::end(auto_masking_key), generator);
-                masking_key = auto_masking_key;
+                std::generate(std::begin(random_bits), std::end(random_bits), generator);
+                masking_key = (const char*) random_bits;
             }
 
             int32_t masking_key_integer;
