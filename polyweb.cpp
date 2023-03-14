@@ -1,4 +1,5 @@
 #include "polyweb.hpp"
+#include <algorithm>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
@@ -6,6 +7,7 @@
 #include <cstring>
 #include <iomanip>
 #include <openssl/sha.h>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #if __has_include(<endian.h>)
@@ -621,6 +623,13 @@ namespace pw {
             PW_SET_WS_FRAME_MASKED(ret);
             size_t end = ret.size();
             ret.resize(end + 4 + data.size());
+
+            char auto_masking_key[4];
+            if (!masking_key) {
+                const static std::independent_bits_engine<std::default_random_engine, 8, unsigned char> generator;
+                std::generate(std::begin(auto_masking_key), std::end(auto_masking_key), generator);
+                masking_key = auto_masking_key;
+            }
 
             int32_t masking_key_integer;
             memcpy(&masking_key_integer, masking_key, 4);
