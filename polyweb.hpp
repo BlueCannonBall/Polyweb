@@ -406,7 +406,7 @@ namespace pw {
         inline ssize_t send(const HTTPResponse& resp, int flags = 0) {
             auto data = resp.build();
             ssize_t result;
-            if ((result = send(data.data(), data.size()), flags) == PN_ERROR) {
+            if ((result = send(data.data(), data.size(), flags)) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
@@ -415,7 +415,7 @@ namespace pw {
         inline ssize_t send(const WSMessage& message, bool masked = false, const char* masking_key = nullptr, int flags = 0) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
-            if ((result = send(data.data(), data.size()), flags) == PN_ERROR) {
+            if ((result = send(data.data(), data.size(), flags)) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
