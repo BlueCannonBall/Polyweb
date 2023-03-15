@@ -372,7 +372,7 @@ namespace pw {
             return std::string(data.begin(), data.end());
         }
 
-        std::vector<char> build(bool masked, const char* masking_key = nullptr) const;
+        std::vector<char> build(bool masked = false, const char* masking_key = nullptr) const;
         int parse(pn::tcp::Connection& conn, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
@@ -403,26 +403,26 @@ namespace pw {
 
         using pn::tcp::Connection::send;
 
-        inline ssize_t send(const HTTPResponse& resp) {
+        inline ssize_t send(const HTTPResponse& resp, int flags = 0) {
             auto data = resp.build();
             ssize_t result;
-            if ((result = send(data.data(), data.size())) == PN_ERROR) {
+            if ((result = send(data.data(), data.size()), flags) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
         }
 
-        inline ssize_t send(const WSMessage& message, bool masked = false, const char* masking_key = nullptr) {
+        inline ssize_t send(const WSMessage& message, bool masked = false, const char* masking_key = nullptr, int flags = 0) {
             auto data = message.build(masked, masking_key);
             ssize_t result;
-            if ((result = send(data.data(), data.size())) == PN_ERROR) {
+            if ((result = send(data.data(), data.size()), flags) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
             }
             return result;
         }
 
-        inline auto send_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
-            return send(HTTPResponse::make_basic(status_code, headers, http_version));
+        inline auto send_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1", int flags = 0) {
+            return send(HTTPResponse::make_basic(status_code, headers, http_version), flags);
         }
 
         int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, const char* masking_key = nullptr, bool validity_check = true);
