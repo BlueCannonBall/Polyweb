@@ -124,7 +124,7 @@ namespace pw {
 
         public:
             ThreadPool(unsigned int pool_size = std::thread::hardware_concurrency()) {
-                for (unsigned int i = 0; i < pool_size; i++) {
+                for (unsigned int i = 0; i < pool_size; ++i) {
                     auto new_queue = new CommandQueue;
                     std::thread new_thread(&ThreadPool::runner, this, new_queue);
                     threads.push_back({std::move(new_thread), new_queue});
@@ -210,7 +210,7 @@ namespace pw {
 
                     threads.resize(new_pool_size);
                 } else {
-                    for (unsigned int i = threads.size(); i < new_pool_size; i++) {
+                    for (unsigned int i = threads.size(); i < new_pool_size; ++i) {
                         auto new_queue = new CommandQueue;
                         std::thread new_thread(&ThreadPool::runner, this, new_queue);
                         threads.push_back({std::move(new_thread), new_queue});

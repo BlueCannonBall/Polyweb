@@ -78,7 +78,7 @@ namespace pw {
 
         template <typename OutputIt>
         int read_until(pn::tcp::Connection& conn, OutputIt ret, char end, size_t rl = 1'000) {
-            for (size_t i = 0;; i++) {
+            for (size_t i = 0;; ++i) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;

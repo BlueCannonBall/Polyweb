@@ -34,7 +34,7 @@ namespace pw {
                 _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
             }
 #endif
-            for (; i < len; i++) {
+            for (; i < len; ++i) {
                 dest[i] = src[len - 1 - i];
             }
         }
@@ -175,7 +175,7 @@ namespace pw {
     std::string QueryParameters::build() const {
         std::string ret;
         bool first = true;
-        for (auto it = map.begin(); it != map.end(); it++) {
+        for (auto it = map.begin(); it != map.end(); ++it) {
             if (!first) ret.push_back('&');
             std::string encoded_key = percent_encode(it->first, false, false);
             std::string encoded_value = percent_encode(it->second, false, false);
@@ -265,7 +265,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        for (size_t i = 0;; i++) {
+        for (size_t i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -430,7 +430,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        for (size_t i = 0;; i++) {
+        for (size_t i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -648,7 +648,7 @@ namespace pw {
                 _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
             }
 #endif
-            for (; i < data.size(); i++) {
+            for (; i < data.size(); ++i) {
                 ret[end + 4 + i] ^= masking_key[i % 4];
             }
         } else {
@@ -753,7 +753,7 @@ namespace pw {
                         _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
                     }
 #endif
-                    for (; i < payload_length; i++) {
+                    for (; i < payload_length; ++i) {
                         this->data[end + i] ^= masking_key.bytes[i % 4];
                     }
                 }
