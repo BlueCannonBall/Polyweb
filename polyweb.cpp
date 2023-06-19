@@ -1005,7 +1005,7 @@ namespace pw {
                         }
 
                         HTTPHeaders::const_iterator websocket_key_it;
-                        if ((!resp.headers.count("Sec-WebSocket-Accept")) && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
+                        if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = boost::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                             std::vector<char> hashed(20);
@@ -1014,7 +1014,7 @@ namespace pw {
                         }
 
                         HTTPHeaders::const_iterator websocket_protocol_it;
-                        if ((!resp.headers.count("Sec-WebSocket-Protocol")) && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
+                        if (!resp.headers.count("Sec-WebSocket-Protocol") && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
                             std::vector<std::string> split_websocket_protocol;
                             boost::split(split_websocket_protocol, websocket_protocol_it->second, boost::is_any_of(","));
                             resp.headers["Sec-WebSocket-Protocol"] = boost::trim_copy(split_websocket_protocol.back());
