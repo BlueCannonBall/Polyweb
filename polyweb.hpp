@@ -365,6 +365,9 @@ namespace pw {
         WSMessage(const std::vector<char>& data, uint8_t opcode = 2):
             data(data),
             opcode(opcode) {}
+        WSMessage(std::vector<char>&& data, uint8_t opcode = 2):
+            data(data),
+            opcode(opcode) {}
         WSMessage(uint8_t opcode):
             opcode(opcode) {}
 
