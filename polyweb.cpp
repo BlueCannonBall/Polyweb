@@ -63,14 +63,12 @@ namespace pw {
         std::string specific_error;
 
         switch (error) {
-        case PW_ENET: {
+        case PW_ENET:
             specific_error = pn::universal_strerror();
             break;
-        }
 
-        default: {
+        default:
             return base_error;
-        }
         }
 
         return base_error + ": " + specific_error;
@@ -834,7 +832,7 @@ namespace pw {
                 route.on_message(*conn, std::move(message));
                 break;
 
-            case 0x8: {
+            case 0x8:
                 if (conn->ws_closed) {
                     route.on_close(*conn, 0, {}, true);
                     if (conn->close(true, false) == PN_ERROR) {
@@ -871,9 +869,7 @@ namespace pw {
                         return PN_ERROR;
                     }
                 }
-
                 return PN_OK;
-            }
 
             case 0x9:
                 conn->send(WSMessage(std::move(message.data), 0xA));
@@ -890,15 +886,13 @@ namespace pw {
             if (req.parse(*conn, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PN_ERROR) {
                 std::string resp_status_code;
                 switch (get_last_error()) {
-                case PW_ENET: {
+                case PW_ENET:
                     resp_status_code = "500";
                     break;
-                }
 
-                case PW_EWEB: {
+                case PW_EWEB:
                     resp_status_code = "400";
                     break;
-                }
                 }
                 handle_error(*conn, resp_status_code, false);
                 return PN_ERROR;

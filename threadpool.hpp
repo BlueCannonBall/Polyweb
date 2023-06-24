@@ -89,11 +89,6 @@ namespace pw {
                     commands->working = true;
 
                     switch (command->type) {
-                    default: {
-                        commands->working = false;
-                        throw std::runtime_error("Invalid command type");
-                    }
-
                     case CommandType::Execute: {
                         auto cmd = (CommandExecute*) command.get();
                         try {
@@ -111,10 +106,9 @@ namespace pw {
                         break;
                     }
 
-                    case CommandType::Quit: {
+                    case CommandType::Quit:
                         commands->working = false;
                         return;
-                    }
                     }
                 }
             }
