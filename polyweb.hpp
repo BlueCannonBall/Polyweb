@@ -372,7 +372,7 @@ namespace pw {
             return std::string(data.begin(), data.end());
         }
 
-        std::vector<char> build(bool masked = false, const char* masking_key = nullptr) const;
+        std::vector<char> build(const char* masking_key = nullptr) const;
         int parse(pn::tcp::Connection& conn, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
@@ -412,8 +412,8 @@ namespace pw {
             return result;
         }
 
-        inline ssize_t send(const WSMessage& message, bool masked = false, const char* masking_key = nullptr, int flags = 0) {
-            auto data = message.build(masked, masking_key);
+        inline ssize_t send(const WSMessage& message, const char* masking_key = nullptr, int flags = 0) {
+            auto data = message.build(masking_key);
             ssize_t result;
             if ((result = send(data.data(), data.size(), flags)) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
@@ -425,7 +425,7 @@ namespace pw {
             return send(HTTPResponse::make_basic(status_code, headers, http_version), flags);
         }
 
-        int close_ws(uint16_t status_code, const std::string& reason, bool masked = false, const char* masking_key = nullptr, bool validity_check = true);
+        int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
     };
 
     typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> RouteCallback;

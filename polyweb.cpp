@@ -586,7 +586,7 @@ namespace pw {
         return PN_OK;
     }
 
-    std::vector<char> WSMessage::build(bool masked, const char* masking_key) const {
+    std::vector<char> WSMessage::build(const char* masking_key) const {
         std::vector<char> ret(2);
 
         PW_SET_WS_FRAME_FIN(ret);
@@ -617,7 +617,7 @@ namespace pw {
 #endif
         }
 
-        if (masked) {
+        if (masking_key) {
             PW_SET_WS_FRAME_MASKED(ret);
             size_t end = ret.size();
             ret.resize(end + 4 + data.size());
@@ -760,7 +760,7 @@ namespace pw {
         return PN_OK;
     }
 
-    int Connection::close_ws(uint16_t status_code, const std::string& reason, bool masked, const char* masking_key, bool validity_check) {
+    int Connection::close_ws(uint16_t status_code, const std::string& reason, const char* masking_key, bool validity_check) {
         if (validity_check && !this->is_valid()) {
             this->ws_closed = true;
             return PN_OK;
@@ -777,7 +777,7 @@ namespace pw {
         memcpy(message.data.data() + 2, reason.data(), reason.size());
 
         ssize_t result;
-        if ((result = this->send(message, masked, masking_key)) == 0) {
+        if ((result = this->send(message, masking_key)) == 0) {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         } else if (result == PN_ERROR) {
