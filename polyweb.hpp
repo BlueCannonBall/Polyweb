@@ -4,6 +4,7 @@
 #include "Polynet/polynet.hpp"
 #include "threadpool.hpp"
 #include <boost/algorithm/string.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <ctime>
 #include <functional>
