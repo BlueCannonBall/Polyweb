@@ -380,7 +380,7 @@ namespace pw {
         int parse(pn::tcp::Connection& conn, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
-    class Connection: public pn::tcp::Connection {
+    class Connection : public pn::tcp::Connection {
     public:
         bool ws_closed = false;
         void* data = nullptr; // User data
@@ -442,7 +442,7 @@ namespace pw {
             wildcard(wildcard) {}
     };
 
-    class HTTPRoute: public Route {
+    class HTTPRoute : public Route {
     public:
         RouteCallback cb;
 
@@ -452,7 +452,7 @@ namespace pw {
             cb(cb) {}
     };
 
-    class WSRoute: public Route {
+    class WSRoute : public Route {
     public:
         RouteCallback on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
         std::function<void(Connection&)> on_open;
@@ -473,7 +473,7 @@ namespace pw {
             on_close(on_close) {}
     };
 
-    class Server: public pn::tcp::Server {
+    class Server : public pn::tcp::Server {
     public:
         std::function<HTTPResponse(const std::string&)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
         size_t header_climit = 100;

@@ -42,7 +42,6 @@ KeepEmptyLinesAtTheStartOfBlocks: false
 # LambdaBodyIndentation: Signature
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: All
-# PPIndentWidth: 4
 SortIncludes: true
 SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false
@@ -51,7 +50,7 @@ SpaceAfterTemplateKeyword: true
 # SpaceBeforeCaseColon: false
 SpaceBeforeCpp11BracedList: true
 SpaceBeforeCtorInitializerColon: false
-SpaceBeforeInheritanceColon: false
+SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceBeforeSquareBrackets: false
