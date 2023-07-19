@@ -87,7 +87,7 @@ namespace pw {
 
                 char c;
                 ssize_t result;
-                if ((result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&c, sizeof c, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else if (result == PN_ERROR) {
@@ -115,7 +115,7 @@ namespace pw {
 
                 char c;
                 ssize_t result;
-                if ((result = conn.recv(&c, sizeof(c), MSG_WAITALL)) == 0) {
+                if ((result = conn.recv(&c, sizeof c, MSG_WAITALL)) == 0) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else if (result == PN_ERROR) {
