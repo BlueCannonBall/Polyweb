@@ -8,7 +8,7 @@ pw::Server server;
 server.route("/hello_world",
     pw::HTTPRoute {
         [](const pw::Connection& conn, const pw::HTTPRequest& req) -> pw::HTTPResponse {
-            return pw::HTTPResponse("Hello, World!", {{"Content-Type", "text/plain"}});
+            return pw::HTTPResponse("200", "Hello, World!", {{"Content-Type", "text/plain"}});
         },
     });
 
@@ -16,7 +16,7 @@ server.route("/hello_world",
 server.route("/wildcard/",
     pw::HTTPRoute {
         [](const pw::Connection& conn, const pw::HTTPRequest& req) -> pw::HTTPResponse {
-            return pw::HTTPResponse(req.target, {{"Content-Type", "text/plain"}});
+            return pw::HTTPResponse("200", req.target, {{"Content-Type", "text/plain"}});
         },
         true,
     });
@@ -26,7 +26,7 @@ server.route("/multiply",
         [](const pw::Connection& conn, const pw::HTTPRequest& req) -> pw::HTTPResponse {
             int x = std::stoi(req.query_parameters->find("x")->second);
             int y = std::stoi(req.query_parameters->find("y")->second);
-            return pw::HTTPResponse(std::to_string(x * y), {{"Content-Type", "text/plain"}});
+            return pw::HTTPResponse("200", std::to_string(x * y), {{"Content-Type", "text/plain"}});
         },
     });
 
