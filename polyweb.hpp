@@ -333,7 +333,7 @@ namespace pw {
             http_version(http_version) {}
 
         static inline HTTPResponse make_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
-            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code) + '\n', headers, http_version);
+            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code), headers, http_version);
             if (!resp.headers.count("Content-Type")) {
                 resp.headers["Content-Type"] = "text/plain";
             }
