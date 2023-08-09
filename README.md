@@ -40,4 +40,4 @@ if (server.listen() == PN_ERROR) {
     exit(EXIT_FAILURE);
 }
 ```
-Note that Polyweb functions/methods throw Polyweb errors while methods inherited from Polynet throw Polynet errors. Do not attempt to call `recv` on a `pw::Connection`. See `polyweb.h` to check out more ways to use Polynet.
+Note that Polyweb functions/methods throw Polyweb errors while methods inherited from Polynet throw Polynet errors. Do not attempt to call `recv` on a `pw::Connection`. See `polyweb.h` to check out more ways to use Polyweb.
