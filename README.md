@@ -1,7 +1,7 @@
 # Polyweb
 A backend web framework utilizing Polynet.
 
-### Quick Examples
+## Quick Examples
 ```cpp
 pw::Server server;
 
