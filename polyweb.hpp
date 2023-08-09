@@ -78,7 +78,7 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, OutputIt ret, char end, size_t rl = 1'000) {
+        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, char end, size_t rl = 1'000) {
             for (size_t i = 0;; ++i) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
@@ -106,7 +106,7 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, size_t rl = 1'000) {
+        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, size_t rl = 1'000) {
             for (size_t i = 0, search_pos = 0;; i++) {
                 if (i > rl) {
                     detail::set_last_error(PW_EWEB);
@@ -143,7 +143,7 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, OutputIt ret, const std::string& end_sequence, size_t rl = 1'000) {
+        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::string& end_sequence, size_t rl = 1'000) {
             return recv_until(conn, buf_receiver, ret, std::vector<char>(end_sequence.begin(), end_sequence.end()), rl);
         }
 
@@ -298,7 +298,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         inline std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -347,7 +347,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         inline std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -377,7 +377,7 @@ namespace pw {
         }
 
         std::vector<char> build(const char* masking_key = nullptr) const;
-        int parse(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
     class Connection : public pn::tcp::Connection {
@@ -519,8 +519,8 @@ namespace pw {
         std::unordered_map<std::string, HTTPRoute> routes;
         std::unordered_map<std::string, WSRoute> ws_routes;
 
-        int handle_ws_connection(pn::UniqueSock<Connection> conn, pn::BufReceiver& buf_receiver, WSRoute& route);
-        int handle_connection(pn::UniqueSock<Connection> conn, pn::BufReceiver& buf_receiver);
+        int handle_ws_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver, WSRoute& route);
+        int handle_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver);
         int handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
         int handle_error(Connection& conn, const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
     };

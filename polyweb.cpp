@@ -235,7 +235,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         method.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -400,7 +400,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         http_version.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -657,7 +657,7 @@ namespace pw {
         return ret;
     }
 
-    int WSMessage::parse(pn::tcp::Connection& conn, pn::BufReceiver& buf_receiver, size_t frame_rlimit, size_t message_rlimit) {
+    int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit, size_t message_rlimit) {
         bool fin = false;
         while (!fin) {
             char frame_header[2];
@@ -796,7 +796,7 @@ namespace pw {
                     auto server = (Server*) data;
                     threadpool.schedule([conn](void* data) {
                         auto server = (Server*) data;
-                        pn::BufReceiver buf_receiver;
+                        pn::tcp::BufReceiver buf_receiver;
                         server->handle_connection(pn::UniqueSock<Connection>(conn), buf_receiver);
                     },
                         server);
@@ -813,7 +813,7 @@ namespace pw {
         return PN_OK;
     }
 
-    int Server::handle_ws_connection(pn::UniqueSock<Connection> conn, pn::BufReceiver& buf_receiver, WSRoute& route) {
+    int Server::handle_ws_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver, WSRoute& route) {
         route.on_open(*conn);
         for (;;) {
             if (!conn) {
@@ -881,7 +881,7 @@ namespace pw {
         return PN_OK;
     }
 
-    int Server::handle_connection(pn::UniqueSock<Connection> conn, pn::BufReceiver& buf_receiver) {
+    int Server::handle_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver) {
         bool keep_alive = true, websocket = false;
         while (conn && keep_alive) {
             HTTPRequest req;
