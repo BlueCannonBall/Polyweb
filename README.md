@@ -28,7 +28,6 @@ server.route("/multiply",
             int y = std::stoi(req.query_parameters->find("y")->second);
             return pw::HTTPResponse(std::to_string(x * y), {{"Content-Type", "text/plain"}});
         },
-        true,
     });
 
 if (server.bind("0.0.0.0", 8000) == PN_ERROR) {
