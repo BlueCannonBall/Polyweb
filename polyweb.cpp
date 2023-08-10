@@ -796,7 +796,7 @@ namespace pw {
                     auto server = (Server*) data;
                     threadpool.schedule([conn](void* data) {
                         auto server = (Server*) data;
-                        pn::tcp::BufReceiver buf_receiver;
+                        pn::tcp::BufReceiver buf_receiver(server->buffer_size);
                         server->handle_connection(pn::UniqueSock<Connection>(conn), buf_receiver);
                     },
                         server);

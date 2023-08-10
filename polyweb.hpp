@@ -476,6 +476,7 @@ namespace pw {
     class Server : public pn::tcp::Server {
     public:
         std::function<HTTPResponse(const std::string&)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
+        size_t buffer_size = 4'000;
         size_t header_climit = 100;
         size_t header_name_rlimit = 500;
         size_t header_value_rlimit = 4'000'000;
