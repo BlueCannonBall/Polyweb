@@ -329,7 +329,7 @@ namespace pw {
                 if ((result = buf_receiver.recv(conn, body.data(), body.size(), MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
-                } else if (result != body.size()) {
+                } else if ((size_t) result != body.size()) {
                     detail::set_last_error(PW_EWEB);
                     body.resize(result);
                     return PN_ERROR;
@@ -497,8 +497,9 @@ namespace pw {
                         if ((result = buf_receiver.recv(conn, &body[end], chunk_size, MSG_WAITALL)) == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PN_ERROR;
-                        } else if (result != chunk_size) {
+                        } else if ((unsigned long long) result != chunk_size) {
                             detail::set_last_error(PW_EWEB);
+                            body.resize(end + result);
                             return PN_ERROR;
                         }
                     }
@@ -537,7 +538,7 @@ namespace pw {
                 if ((result = buf_receiver.recv(conn, body.data(), body.size(), MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
-                } else if (result != body.size()) {
+                } else if ((size_t) result != body.size()) {
                     detail::set_last_error(PW_EWEB);
                     body.resize(result);
                     return PN_ERROR;
@@ -693,8 +694,9 @@ namespace pw {
                     if ((result = buf_receiver.recv(conn, &this->data[end], payload_length, MSG_WAITALL)) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
-                    } else if (result != payload_length) {
+                    } else if ((unsigned long long) result != payload_length) {
                         detail::set_last_error(PW_EWEB);
+                        this->data.resize(end + result);
                         return PN_ERROR;
                     }
                 }
