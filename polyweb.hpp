@@ -87,11 +87,11 @@ namespace pw {
 
                 char c;
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, &c, sizeof c)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, &c, 1)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != 1) {
+                    detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
 
@@ -115,11 +115,11 @@ namespace pw {
 
                 char c;
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, &c, sizeof c)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, &c, 1)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != 1) {
+                    detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
 

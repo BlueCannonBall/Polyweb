@@ -293,37 +293,18 @@ namespace pw {
 
             char end_check_buf[2];
             ssize_t result;
-#ifdef _WIN32
-            for (;;) {
-                if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_PEEK)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result == 2) {
-                    break;
-                }
-            }
-#else
-            if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_PEEK | MSG_WAITALL)) == 0) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            } else if (result == PN_ERROR) {
+            if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_WAITALL)) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
+            } else if (result != 2) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
             }
-#endif
 
             if (memcmp("\r\n", end_check_buf, 2) == 0) {
-                if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                }
                 break;
+            } else {
+                buf_receiver.rewind(end_check_buf, 2);
             }
         }
 
@@ -341,16 +322,16 @@ namespace pw {
                 if (content_length > body_rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
-                } else {
-                    this->body.resize(content_length);
                 }
 
+                this->body.resize(content_length);
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, body.data(), body.size(), MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, body.data(), body.size(), MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != body.size()) {
+                    detail::set_last_error(PW_EWEB);
+                    body.resize(result);
                     return PN_ERROR;
                 }
             }
@@ -457,37 +438,18 @@ namespace pw {
 
             char end_check_buf[2];
             ssize_t result;
-#ifdef _WIN32
-            for (;;) {
-                if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_PEEK)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result == 2) {
-                    break;
-                }
-            }
-#else
-            if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_PEEK | MSG_WAITALL)) == 0) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            } else if (result == PN_ERROR) {
+            if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_WAITALL)) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
+            } else if (result != 2) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
             }
-#endif
 
             if (memcmp("\r\n", end_check_buf, 2) == 0) {
-                if ((result = buf_receiver.recv(conn, end_check_buf, 2, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                }
                 break;
+            } else {
+                buf_receiver.rewind(end_check_buf, 2);
             }
         }
 
@@ -514,11 +476,11 @@ namespace pw {
                     if (!chunk_size) {
                         char end_buf[2];
                         ssize_t result;
-                        if ((result = buf_receiver.recv(conn, end_buf, 2, MSG_WAITALL)) == 0) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
-                        } else if (result == PN_ERROR) {
+                        if ((result = buf_receiver.recv(conn, end_buf, 2, MSG_WAITALL)) == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if (result != 2) {
+                            detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
                         break;
@@ -532,22 +494,22 @@ namespace pw {
                     } else {
                         body.resize(end + chunk_size);
                         ssize_t result;
-                        if ((result = buf_receiver.recv(conn, &body[end], chunk_size, MSG_WAITALL)) == 0) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
-                        } else if (result == PN_ERROR) {
+                        if ((result = buf_receiver.recv(conn, &body[end], chunk_size, MSG_WAITALL)) == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if (result != chunk_size) {
+                            detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
                     }
 
                     char end_buf[2];
                     ssize_t result;
-                    if ((result = buf_receiver.recv(conn, end_buf, 2, MSG_WAITALL)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
-                    } else if (result == PN_ERROR) {
+                    if ((result = buf_receiver.recv(conn, end_buf, 2, MSG_WAITALL)) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if (result != 2) {
+                        detail::set_last_error(PW_EWEB);
                         return PN_ERROR;
                     }
                 }
@@ -568,16 +530,16 @@ namespace pw {
                 if (content_length > body_rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
-                } else {
-                    this->body.resize(content_length);
                 }
 
+                this->body.resize(content_length);
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, body.data(), body.size(), MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, body.data(), body.size(), MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != body.size()) {
+                    detail::set_last_error(PW_EWEB);
+                    body.resize(result);
                     return PN_ERROR;
                 }
             }
@@ -663,11 +625,11 @@ namespace pw {
             char frame_header[2];
             {
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, frame_header, 2, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, frame_header, 2, MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != 2) {
+                    detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
             }
@@ -681,22 +643,22 @@ namespace pw {
             if (payload_length_7 == 126) {
                 uint16_t payload_length_16;
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, &payload_length_16, 2, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, &payload_length_16, 2, MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != 2) {
+                    detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
                 payload_length = ntohs(payload_length_16);
             } else if (payload_length_7 == 127) {
                 uint64_t payload_length_64;
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, &payload_length_64, 8, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, &payload_length_64, 8, MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != 8) {
+                    detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
                 payload_length = ntohll(payload_length_64);
@@ -710,11 +672,11 @@ namespace pw {
             } masking_key;
             if (masked) {
                 ssize_t result;
-                if ((result = buf_receiver.recv(conn, &masking_key, 4, MSG_WAITALL)) == 0) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (result == PN_ERROR) {
+                if ((result = buf_receiver.recv(conn, &masking_key, 4, MSG_WAITALL)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if (result != 4) {
+                    detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
             }
@@ -728,11 +690,11 @@ namespace pw {
                 } else {
                     this->data.resize(end + payload_length);
                     ssize_t result;
-                    if ((result = buf_receiver.recv(conn, &this->data[end], payload_length, MSG_WAITALL)) == 0) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
-                    } else if (result == PN_ERROR) {
+                    if ((result = buf_receiver.recv(conn, &this->data[end], payload_length, MSG_WAITALL)) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if (result != payload_length) {
+                        detail::set_last_error(PW_EWEB);
                         return PN_ERROR;
                     }
                 }
