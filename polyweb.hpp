@@ -2,8 +2,8 @@
 #define _POLYWEB_HPP
 
 #include "Polynet/polynet.hpp"
+#include "string.hpp"
 #include "threadpool.hpp"
-#include <boost/algorithm/string.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
@@ -48,25 +48,25 @@
 #define PW_SET_WS_FRAME_RSV1(frame_header)                   (frame_header[0] |= 0b01000000)
 #define PW_SET_WS_FRAME_RSV2(frame_header)                   (frame_header[0] |= 0b00100000)
 #define PW_SET_WS_FRAME_RSV3(frame_header)                   (frame_header[0] |= 0b00010000)
-#define PW_SET_WS_FRAME_OPCODE(frame_header, opcode)         (frame_header[0] = (frame_header[0] & ~0x0f) | (opcode & ~0xf0))
+#define PW_SET_WS_FRAME_OPCODE(frame_header, opcode)         (frame_header[0] = (frame_header[0] & ~0x0F) | (opcode & ~0xF0))
 #define PW_SET_WS_FRAME_MASKED(frame_header)                 (frame_header[1] |= 0b10000000)
-#define PW_SET_WS_FRAME_PAYLOAD_LENGTH(frame_header, length) (frame_header[1] = (frame_header[1] & ~0x7f) | (length & ~0x80))
+#define PW_SET_WS_FRAME_PAYLOAD_LENGTH(frame_header, length) (frame_header[1] = (frame_header[1] & ~0x7F) | (length & ~0x80))
 
 #define PW_CLEAR_WS_FRAME_FIN(frame_header)            (frame_header[0] &= ~0b10000000)
 #define PW_CLEAR_WS_FRAME_RSV1(frame_header)           (frame_header[0] &= ~0b01000000)
 #define PW_CLEAR_WS_FRAME_RSV2(frame_header)           (frame_header[0] &= ~0b00100000)
 #define PW_CLEAR_WS_FRAME_RSV3(frame_header)           (frame_header[0] &= ~0b00010000)
-#define PW_CLEAR_WS_FRAME_OPCODE(frame_header)         (frame_header[0] &= ~0x0f)
+#define PW_CLEAR_WS_FRAME_OPCODE(frame_header)         (frame_header[0] &= ~0x0F)
 #define PW_CLEAR_WS_FRAME_MASKED(frame_header)         (frame_header[1] &= ~0b10000000)
-#define PW_CLEAR_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] &= ~0x7f)
+#define PW_CLEAR_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] &= ~0x7F)
 
 #define PW_TOGGLE_WS_FRAME_FIN(frame_header)            (frame_header[0] ^= 0b10000000)
 #define PW_TOGGLE_WS_FRAME_RSV1(frame_header)           (frame_header[0] ^= 0b01000000)
 #define PW_TOGGLE_WS_FRAME_RSV2(frame_header)           (frame_header[0] ^= 0b00100000)
 #define PW_TOGGLE_WS_FRAME_RSV3(frame_header)           (frame_header[0] ^= 0b00010000)
-#define PW_TOGGLE_WS_FRAME_OPCODE(frame_header)         (frame_header[0] ^= 0x0f)
+#define PW_TOGGLE_WS_FRAME_OPCODE(frame_header)         (frame_header[0] ^= 0x0F)
 #define PW_TOGGLE_WS_FRAME_MASKED(frame_header)         (frame_header[1] ^= 0b10000000)
-#define PW_TOGGLE_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] ^= 0x7f)
+#define PW_TOGGLE_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] ^= 0x7F)
 
 namespace pw {
     extern tp::ThreadPool threadpool;
@@ -149,13 +149,13 @@ namespace pw {
 
         struct CaseInsensitiveComparer {
             bool operator()(const std::string& a, const std::string& b) const {
-                return boost::iequals(a, b);
+                return string::iequals(a, b);
             }
         };
 
         struct CaseInsensitiveHasher {
             size_t operator()(const std::string& str) const {
-                return std::hash<std::string>()(boost::to_lower_copy(str));
+                return std::hash<std::string>()(string::to_lower_copy(str));
             }
         };
     } // namespace detail
@@ -219,8 +219,8 @@ namespace pw {
     std::string build_date(time_t rawtime = time(nullptr));
     time_t parse_date(const std::string& date);
 
-    std::vector<char> b64_decode(const std::string& str);
-    std::string b64_encode(const std::vector<char>& data);
+    std::string base64_encode(const std::vector<char>& data);
+    std::vector<char> base64_decode(const std::string& str);
 
     std::string percent_encode(const std::string& str, bool plus_as_space = false, bool allow_slash = true);
     std::string percent_decode(const std::string& str, bool plus_as_space = false);

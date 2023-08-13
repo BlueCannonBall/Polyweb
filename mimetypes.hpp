@@ -1,7 +1,7 @@
 #ifndef _POLYWEB_MIMETYPES_HPP
 #define _POLYWEB_MIMETYPES_HPP
 
-#include <boost/algorithm/string.hpp>
+#include "string.hpp"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -1004,8 +1004,7 @@ namespace pw {
             {"zmm", "application/vnd.handheld-entertainment+xml"},
         };
 
-        std::vector<std::string> split_filename;
-        boost::split(split_filename, filename, boost::is_any_of("."));
+        std::vector<std::string> split_filename = string::split(filename, '.');
 
         decltype(mimetypes)::const_iterator ret_it;
         if ((ret_it = mimetypes.find(split_filename.back())) != mimetypes.end()) {

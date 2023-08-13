@@ -1,8 +1,6 @@
 #include "polyweb.hpp"
 #include <algorithm>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
-#include <boost/archive/iterators/transform_width.hpp>
+#include <bitset>
 #include <cmath>
 #include <cstring>
 #include <iomanip>
@@ -95,26 +93,108 @@ namespace pw {
         return timegm(&timeinfo);
     }
 
-    std::vector<char> b64_decode(const std::string& str) {
-        using namespace boost::archive::iterators;
-        using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
-        return boost::algorithm::trim_right_copy_if(std::vector<char>(It(std::begin(str)), It(std::end(str))), [](char c) {
-            return c == '\0';
-        });
+    std::string base64_encode(const std::vector<char>& data) {
+        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabdcefghijklmnopqrstuvwxyz0123456789+/";
+
+        std::string ret;
+        ret.reserve(data.size() + (data.size() / 3));
+
+        size_t i = 0;
+        for (; i + 3 <= data.size(); i += 3) {
+            std::bitset<24> bits((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+            ret.insert(ret.end(),
+                {
+                    alphabet[(bits >> 18).to_ulong()],
+                    alphabet[((bits >> 12) & std::bitset<24>(0x3F)).to_ulong()],
+                    alphabet[((bits >> 6) & std::bitset<24>(0x3F)).to_ulong()],
+                    alphabet[(bits & std::bitset<24>(0x3F)).to_ulong()],
+                });
+        }
+        if (size_t leftover = data.size() - i) {
+            switch (leftover) {
+            case 1: {
+                std::bitset<12> bits(data[i] << 4);
+                ret.insert(ret.end(),
+                    {
+                        alphabet[(bits >> 6).to_ulong()],
+                        alphabet[(bits & std::bitset<12>(0x3F)).to_ulong()],
+                        '=',
+                        '=',
+                    });
+                break;
+            }
+
+            case 2: {
+                std::bitset<18> bits((data[i] << 10) | (data[i + 1] << 2));
+                ret.insert(ret.end(),
+                    {
+                        alphabet[(bits >> 12).to_ulong()],
+                        alphabet[((bits >> 6) & std::bitset<18>(0x3F)).to_ulong()],
+                        alphabet[(bits & std::bitset<18>(0x3F)).to_ulong()],
+                        '=',
+                    });
+                break;
+            }
+            }
+        }
+
+        return ret;
     }
 
-    std::string b64_encode(const std::vector<char>& data) {
-        using namespace boost::archive::iterators;
-        using It = base64_from_binary<transform_width<std::vector<char>::const_iterator, 6, 8>>;
-        auto ret = std::string(It(std::begin(data)), It(std::end(data)));
-        return ret.append((3 - data.size() % 3) % 3, '=');
+    std::vector<char> base64_decode(const std::string& str) {
+        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabdcefghijklmnopqrstuvwxyz0123456789+/";
+
+        std::vector<char> ret;
+        ret.reserve(str.size());
+
+        size_t i = 0;
+        for (; i + 4 <= str.size() && str[i + 3] != '='; i += 4) {
+            uint8_t indices[4] = {
+                (uint8_t)(strchr(alphabet, str[i]) - alphabet),
+                (uint8_t)(strchr(alphabet, str[i + 1]) - alphabet),
+                (uint8_t)(strchr(alphabet, str[i + 2]) - alphabet),
+                (uint8_t)(strchr(alphabet, str[i + 3]) - alphabet),
+            };
+            std::bitset<24> bits((indices[0] << 18) | (indices[1] << 12) | (indices[2] << 6) | indices[3]);
+            ret.insert(ret.end(),
+                {
+                    (char) (bits >> 16).to_ulong(),
+                    (char) ((bits >> 8) & std::bitset<24>(0xFF)).to_ulong(),
+                    (char) (bits & std::bitset<24>(0xFF)).to_ulong(),
+                });
+        }
+
+        if (str.back() == '=') {
+            if (str[str.size() - 2] != '=') {
+                uint8_t indices[2] = {
+                    (uint8_t)(strchr(alphabet, str[i]) - alphabet),
+                    (uint8_t)(strchr(alphabet, str[i + 1]) - alphabet),
+                };
+                std::bitset<12> bits((indices[0] << 6) | indices[1]);
+                ret.push_back((bits >> 4).to_ulong());
+            } else {
+                uint8_t indices[3] = {
+                    (uint8_t)(strchr(alphabet, str[i]) - alphabet),
+                    (uint8_t)(strchr(alphabet, str[i + 1]) - alphabet),
+                    (uint8_t)(strchr(alphabet, str[i + 2]) - alphabet),
+                };
+                std::bitset<18> bits((indices[0] << 12) | (indices[1] << 6) | indices[2]);
+                ret.insert(ret.end(),
+                    {
+                        (char) (bits >> 10).to_ulong(),
+                        (char) ((bits >> 2) & std::bitset<18>(0xFF)).to_ulong(),
+                    });
+            }
+        }
+
+        return ret;
     }
 
     std::string percent_encode(const std::string& str, bool plus_as_space, bool allow_slash) {
         std::string ret;
         ret.reserve(str.size());
         for (char c : str) {
-            const static char* allowed_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~";
+            static constexpr char allowed_characters[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~";
             if (plus_as_space && c == ' ') {
                 ret.push_back('+');
             } else if (allow_slash && c == '/') {
@@ -123,7 +203,7 @@ namespace pw {
                 std::ostringstream ss;
                 ss << std::hex << +c;
                 ret.push_back('%');
-                ret += boost::to_upper_copy(ss.str());
+                ret += string::to_upper_copy(ss.str());
             } else {
                 ret.push_back(c);
             }
@@ -186,12 +266,10 @@ namespace pw {
     }
 
     void QueryParameters::parse(const std::string& query_string) {
-        std::vector<std::string> split_query_string;
-        boost::split(split_query_string, query_string, boost::is_any_of("&"));
+        std::vector<std::string> split_query_string = string::split(query_string, '&');
 
         for (const auto& parameter : split_query_string) {
-            std::vector<std::string> split_parameter;
-            boost::split(split_parameter, parameter, boost::is_any_of("="));
+            std::vector<std::string> split_parameter = string::split(parameter, '=');
             if (split_parameter.size() > 1) {
                 map[percent_decode(split_parameter[0], true)] = percent_decode(split_parameter[1], true);
             } else if (!split_parameter[0].empty()) {
@@ -283,7 +361,7 @@ namespace pw {
             if (detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
-            boost::trim(header_value);
+            string::trim(header_value);
             if (header_value.empty()) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -428,7 +506,7 @@ namespace pw {
             if (detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
-            boost::trim(header_value);
+            string::trim(header_value);
             if (header_value.empty()) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -456,7 +534,7 @@ namespace pw {
         HTTPHeaders::const_iterator transfer_encoding_it;
         HTTPHeaders::const_iterator content_length_it;
         if ((transfer_encoding_it = headers.find("Transfer-Encoding")) != headers.end()) {
-            if (boost::to_lower_copy(transfer_encoding_it->second) == "chunked") {
+            if (string::iequals(transfer_encoding_it->second, "chunked")) {
                 for (;;) {
                     std::string chunk_size_string;
                     if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PN_ERROR) {
@@ -866,18 +944,14 @@ namespace pw {
 
             HTTPHeaders::const_iterator connection_it;
             if ((connection_it = req.headers.find("Connection")) != req.headers.end()) {
-                std::vector<std::string> split_connection;
-                boost::split(split_connection, boost::to_lower_copy(connection_it->second), boost::is_any_of(","));
-                for (auto& header : split_connection) {
-                    boost::trim(header);
-                }
-
+                std::vector<std::string> split_connection = string::split_and_trim(string::to_lower_copy(connection_it->second), ',');
                 if (req.http_version == "HTTP/1.1") {
                     keep_alive = std::find(split_connection.begin(), split_connection.end(), "close") == split_connection.end();
 
                     HTTPHeaders::const_iterator upgrade_it;
                     if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
-                        if (boost::to_lower_copy(upgrade_it->second) == "websocket") {
+                        std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
+                        if (std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
                             websocket = true;
                         } else {
                             if (handle_error(*conn, "501", keep_alive, req.http_version) == PN_ERROR) {
@@ -898,7 +972,7 @@ namespace pw {
                 if (route.first == req.target) {
                     ws_route_target = route.first;
                     break;
-                } else if (route.second.wildcard && boost::starts_with(req.target, route.first) && route.first.size() > ws_route_target.size()) {
+                } else if (route.second.wildcard && string::starts_with(req.target, route.first) && route.first.size() > ws_route_target.size()) {
                     ws_route_target = route.first;
                 }
             }
@@ -908,7 +982,7 @@ namespace pw {
                 if (route.first == req.target) {
                     http_route_target = route.first;
                     break;
-                } else if (route.second.wildcard && boost::starts_with(req.target, route.first) && route.first.size() > http_route_target.size()) {
+                } else if (route.second.wildcard && string::starts_with(req.target, route.first) && route.first.size() > http_route_target.size()) {
                     http_route_target = route.first;
                 }
             }
@@ -942,12 +1016,10 @@ namespace pw {
 
                         HTTPHeaders::const_iterator websocket_version_it;
                         if ((websocket_version_it = req.headers.find("Sec-WebSocket-Version")) != req.headers.end()) {
-                            std::vector<std::string> split_websocket_version;
-                            boost::split(split_websocket_version, websocket_version_it->second, boost::is_any_of(","));
+                            std::vector<std::string> split_websocket_version = string::split_and_trim(websocket_version_it->second, ',');
 
                             bool found_version = false;
                             for (auto& version : split_websocket_version) {
-                                boost::trim(version);
                                 if (version == PW_WS_VERSION) {
                                     found_version = true;
                                     break;
@@ -966,18 +1038,17 @@ namespace pw {
 
                         HTTPHeaders::const_iterator websocket_key_it;
                         if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
-                            std::string websocket_key = boost::trim_right_copy(websocket_key_it->second);
+                            std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                             std::vector<char> hashed(20);
                             SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) hashed.data());
-                            resp.headers["Sec-WebSocket-Accept"] = b64_encode(hashed);
+                            resp.headers["Sec-WebSocket-Accept"] = base64_encode(hashed);
                         }
 
                         HTTPHeaders::const_iterator websocket_protocol_it;
                         if (!resp.headers.count("Sec-WebSocket-Protocol") && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
-                            std::vector<std::string> split_websocket_protocol;
-                            boost::split(split_websocket_protocol, websocket_protocol_it->second, boost::is_any_of(","));
-                            resp.headers["Sec-WebSocket-Protocol"] = boost::trim_copy(split_websocket_protocol.back());
+                            std::vector<std::string> split_websocket_protocol = string::split(websocket_protocol_it->second, ',');
+                            resp.headers["Sec-WebSocket-Protocol"] = string::trim_copy(split_websocket_protocol.back());
                         }
                     } else if (!resp.headers.count("Connection")) {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";

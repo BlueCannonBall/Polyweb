@@ -3,6 +3,8 @@ A backend web framework utilizing Polynet.
 
 ## Quick Examples
 ```cpp
+pn::init();
+
 pw::Server server;
 
 server.route("/hello_world",
@@ -39,5 +41,7 @@ if (server.listen() == PN_ERROR) {
     std::cerr << "Error: " << pw::universal_strerror() << std::endl;
     exit(EXIT_FAILURE);
 }
+
+pn::quit();
 ```
 Note that Polyweb functions/methods throw Polyweb errors while methods inherited from Polynet throw Polynet errors. Do not attempt to call `recv` on a `pw::Connection`. See `polyweb.h` to check out more ways to use Polyweb.
