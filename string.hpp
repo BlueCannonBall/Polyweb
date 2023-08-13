@@ -1,3 +1,6 @@
+#ifndef _POLYWEB_STRING_HPP
+#define _POLYWEB_STRING_HPP
+
 #include <string>
 #include <vector>
 
@@ -26,3 +29,5 @@ namespace pw {
         std::vector<std::string> split_and_trim(const std::string& str, char delimiter);
     } // namespace string
 } // namespace pw
+
+#endif
