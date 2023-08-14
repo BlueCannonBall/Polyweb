@@ -304,7 +304,7 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!headers.count("Content-Length")) {
+        if (!headers.count("Content-Length") && !this->body.empty()) {
             std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
