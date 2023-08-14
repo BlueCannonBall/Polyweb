@@ -22,6 +22,7 @@ namespace pw {
     tp::ThreadPool threadpool(roundf(2.f * log2f(std::thread::hardware_concurrency()) + std::thread::hardware_concurrency() + 4.f));
     namespace detail {
         thread_local int last_error = PW_ESUCCESS;
+        static constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
         void reverse_memcpy(char* dest, const char* src, size_t len) {
             size_t i = 0;
@@ -94,8 +95,6 @@ namespace pw {
     }
 
     std::string base64_encode(const std::vector<char>& data) {
-        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabdcefghijklmnopqrstuvwxyz0123456789+/";
-
         std::string ret;
         ret.reserve(data.size() + (data.size() / 3));
 
@@ -104,10 +103,10 @@ namespace pw {
             std::bitset<24> bits((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
             ret.insert(ret.end(),
                 {
-                    alphabet[(bits >> 18).to_ulong()],
-                    alphabet[((bits >> 12) & std::bitset<24>(0x3F)).to_ulong()],
-                    alphabet[((bits >> 6) & std::bitset<24>(0x3F)).to_ulong()],
-                    alphabet[(bits & std::bitset<24>(0x3F)).to_ulong()],
+                    detail::base64_alphabet[(bits >> 18).to_ulong()],
+                    detail::base64_alphabet[((bits >> 12) & std::bitset<24>(0x3F)).to_ulong()],
+                    detail::base64_alphabet[((bits >> 6) & std::bitset<24>(0x3F)).to_ulong()],
+                    detail::base64_alphabet[(bits & std::bitset<24>(0x3F)).to_ulong()],
                 });
         }
         if (size_t leftover = data.size() - i) {
@@ -116,8 +115,8 @@ namespace pw {
                 std::bitset<12> bits(data[i] << 4);
                 ret.insert(ret.end(),
                     {
-                        alphabet[(bits >> 6).to_ulong()],
-                        alphabet[(bits & std::bitset<12>(0x3F)).to_ulong()],
+                        detail::base64_alphabet[(bits >> 6).to_ulong()],
+                        detail::base64_alphabet[(bits & std::bitset<12>(0x3F)).to_ulong()],
                         '=',
                         '=',
                     });
@@ -128,9 +127,9 @@ namespace pw {
                 std::bitset<18> bits((data[i] << 10) | (data[i + 1] << 2));
                 ret.insert(ret.end(),
                     {
-                        alphabet[(bits >> 12).to_ulong()],
-                        alphabet[((bits >> 6) & std::bitset<18>(0x3F)).to_ulong()],
-                        alphabet[(bits & std::bitset<18>(0x3F)).to_ulong()],
+                        detail::base64_alphabet[(bits >> 12).to_ulong()],
+                        detail::base64_alphabet[((bits >> 6) & std::bitset<18>(0x3F)).to_ulong()],
+                        detail::base64_alphabet[(bits & std::bitset<18>(0x3F)).to_ulong()],
                         '=',
                     });
                 break;
@@ -142,14 +141,12 @@ namespace pw {
     }
 
     std::vector<char> base64_decode(const std::string& str) {
-        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
         std::vector<uint8_t> indices;
         indices.reserve(str.size());
 
         for (char c : str) {
-            if (const char* ptr = strchr(alphabet, c)) {
-                indices.push_back(ptr - alphabet);
+            if (const char* ptr = strchr(detail::base64_alphabet, c)) {
+                indices.push_back(ptr - detail::base64_alphabet);
             } else {
                 break;
             }
