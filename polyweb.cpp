@@ -156,7 +156,7 @@ namespace pw {
         }
 
         std::vector<char> ret;
-        ret.reserve(indices.size());
+        ret.reserve(indices.size() * 6 / 8);
 
         size_t i = 0;
         for (; i + 4 <= indices.size(); i += 4) {
