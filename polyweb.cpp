@@ -142,20 +142,25 @@ namespace pw {
     }
 
     std::vector<char> base64_decode(const std::string& str) {
-        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabdcefghijklmnopqrstuvwxyz0123456789+/";
+        static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+        std::vector<uint8_t> indices;
+        indices.reserve(str.size());
+
+        for (char c : str) {
+            if (const char* ptr = strchr(alphabet, c)) {
+                indices.push_back(ptr - alphabet);
+            } else {
+                break;
+            }
+        }
 
         std::vector<char> ret;
-        ret.reserve(str.size());
+        ret.reserve(indices.size());
 
         size_t i = 0;
-        for (; i + 4 <= str.size() && str[i + 3] != '='; i += 4) {
-            uint8_t indices[4] = {
-                (uint8_t)(strchr(alphabet, str[i]) - alphabet),
-                (uint8_t)(strchr(alphabet, str[i + 1]) - alphabet),
-                (uint8_t)(strchr(alphabet, str[i + 2]) - alphabet),
-                (uint8_t)(strchr(alphabet, str[i + 3]) - alphabet),
-            };
-            std::bitset<24> bits((indices[0] << 18) | (indices[1] << 12) | (indices[2] << 6) | indices[3]);
+        for (; i + 4 <= indices.size(); i += 4) {
+            std::bitset<24> bits((indices[i] << 18) | (indices[i + 1] << 12) | (indices[i + 2] << 6) | indices[i + 3]);
             ret.insert(ret.end(),
                 {
                     (char) (bits >> 16).to_ulong(),
@@ -163,27 +168,23 @@ namespace pw {
                     (char) (bits & std::bitset<24>(0xFF)).to_ulong(),
                 });
         }
-
-        if (str.back() == '=') {
-            if (str[str.size() - 2] != '=') {
-                uint8_t indices[2] = {
-                    (uint8_t)(strchr(alphabet, str[i]) - alphabet),
-                    (uint8_t)(strchr(alphabet, str[i + 1]) - alphabet),
-                };
-                std::bitset<12> bits((indices[0] << 6) | indices[1]);
+        if (size_t leftover = indices.size() - i) {
+            switch (leftover) {
+            case 2: {
+                std::bitset<12> bits((indices[i] << 6) | indices[i + 1]);
                 ret.push_back((bits >> 4).to_ulong());
-            } else {
-                uint8_t indices[3] = {
-                    (uint8_t)(strchr(alphabet, str[i]) - alphabet),
-                    (uint8_t)(strchr(alphabet, str[i + 1]) - alphabet),
-                    (uint8_t)(strchr(alphabet, str[i + 2]) - alphabet),
-                };
-                std::bitset<18> bits((indices[0] << 12) | (indices[1] << 6) | indices[2]);
+                break;
+            }
+
+            case 3: {
+                std::bitset<18> bits((indices[i] << 12) | (indices[i + 1] << 6) | indices[i + 2]);
                 ret.insert(ret.end(),
                     {
                         (char) (bits >> 10).to_ulong(),
                         (char) ((bits >> 2) & std::bitset<18>(0xFF)).to_ulong(),
                     });
+                break;
+            }
             }
         }
 
