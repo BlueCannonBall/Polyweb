@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <ctime>
 #include <functional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -27,10 +28,10 @@
 
 // Default callback macros
 #define PW_DEFAULT_WS_ROUTE_ON_CONNECT [](const pw::Connection&, const pw::HTTPRequest&) { \
-    return pw::HTTPResponse("101");                                                        \
+    return pw::HTTPResponse(101);                                                          \
 }
-#define PW_DEFAULT_SERVER_ON_ERROR [](const std::string& status_code) { \
-    return pw::HTTPResponse::make_basic(status_code);                   \
+#define PW_DEFAULT_SERVER_ON_ERROR [](uint16_t status_code) { \
+    return pw::HTTPResponse::make_basic(status_code);         \
 }
 
 // WebSocket macros
@@ -170,50 +171,59 @@ namespace pw {
 
     std::string universal_strerror(int error = get_last_error());
 
-    inline std::string status_code_to_reason_phrase(const std::string& status_code) {
-        const static std::unordered_map<std::string, std::string> conversion_mapping = {
-            {"100", "Continue"},
-            {"101", "Switching Protocols"},
-            {"200", "OK"},
-            {"201", "Created"},
-            {"202", "Accepted"},
-            {"203", "Non-Authoritative Information"},
-            {"204", "No Content"},
-            {"205", "Reset Content"},
-            {"206", "Partial Content"},
-            {"300", "Multiple Choices"},
-            {"301", "Moved Permanently"},
-            {"302", "Found"},
-            {"303", "See Other"},
-            {"304", "Not Modified"},
-            {"305", "Use Proxy"},
-            {"307", "Temporary Redirect"},
-            {"400", "Bad Request"},
-            {"401", "Unauthorized"},
-            {"402", "Payment Required"},
-            {"403", "Forbidden"},
-            {"404", "Not Found"},
-            {"405", "Method Not Allowed"},
-            {"406", "Not Acceptable"},
-            {"407", "Proxy Authentication Required"},
-            {"408", "Request Time-out"},
-            {"409", "Conflict"},
-            {"410", "Gone"},
-            {"411", "Length Required"},
-            {"412", "Precondition Failed"},
-            {"413", "Request Entity Too Large"},
-            {"414", "Request-URI Too Large"},
-            {"415", "Unsupported Media Type"},
-            {"416", "Requested range not satisfiable"},
-            {"417", "Expectation Failed"},
-            {"426", "Upgrade Required"},
-            {"500", "Internal Server Error"},
-            {"501", "Not Implemented"},
-            {"502", "Bad Gateway"},
-            {"503", "Service Unavailable"},
-            {"504", "Gateway Time-out"},
-            {"505", "HTTP Version not supported"}};
-        return conversion_mapping.at(status_code);
+    inline std::string status_code_to_reason_phrase(uint16_t status_code) {
+        const static std::unordered_map<uint16_t, std::string> conversion_mapping = {
+            {100, "Continue"},
+            {101, "Switching Protocols"},
+            {200, "OK"},
+            {201, "Created"},
+            {202, "Accepted"},
+            {203, "Non-Authoritative Information"},
+            {204, "No Content"},
+            {205, "Reset Content"},
+            {206, "Partial Content"},
+            {300, "Multiple Choices"},
+            {301, "Moved Permanently"},
+            {302, "Found"},
+            {303, "See Other"},
+            {304, "Not Modified"},
+            {305, "Use Proxy"},
+            {307, "Temporary Redirect"},
+            {400, "Bad Request"},
+            {401, "Unauthorized"},
+            {402, "Payment Required"},
+            {403, "Forbidden"},
+            {404, "Not Found"},
+            {405, "Method Not Allowed"},
+            {406, "Not Acceptable"},
+            {407, "Proxy Authentication Required"},
+            {408, "Request Time-out"},
+            {409, "Conflict"},
+            {410, "Gone"},
+            {411, "Length Required"},
+            {412, "Precondition Failed"},
+            {413, "Request Entity Too Large"},
+            {414, "Request-URI Too Large"},
+            {415, "Unsupported Media Type"},
+            {416, "Requested range not satisfiable"},
+            {417, "Expectation Failed"},
+            {426, "Upgrade Required"},
+            {500, "Internal Server Error"},
+            {501, "Not Implemented"},
+            {502, "Bad Gateway"},
+            {503, "Service Unavailable"},
+            {504, "Gateway Time-out"},
+            {505, "HTTP Version not supported"},
+        };
+
+        decltype(conversion_mapping)::const_iterator ret_it;
+        if ((ret_it = conversion_mapping.find(status_code)) != conversion_mapping.end()) {
+            return ret_it->second;
+        } else if (status_code >= 100 && status_code < 600) {
+            return conversion_mapping.at(status_code / 100 * 100); // Zero out last two digits
+        } else {
+            throw std::invalid_argument("Invalid status code");
+        }
     }
 
     std::string build_date(time_t rawtime = time(nullptr));
@@ -307,33 +317,33 @@ namespace pw {
 
     class HTTPResponse {
     public:
-        std::string status_code;
+        uint16_t status_code;
         std::string reason_phrase;
         std::vector<char> body;
         HTTPHeaders headers;
         std::string http_version = "HTTP/1.1";
 
         HTTPResponse() = default;
-        HTTPResponse(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
+        HTTPResponse(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             headers(headers),
             http_version(http_version) {}
-        HTTPResponse(const std::string& status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
+        HTTPResponse(uint16_t status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body),
             headers(headers),
             http_version(http_version) {}
-        HTTPResponse(const std::string& status_code, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
+        HTTPResponse(uint16_t status_code, const std::string& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body.begin(), body.end()),
             headers(headers),
             http_version(http_version) {}
 
-        static inline HTTPResponse make_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
-            HTTPResponse resp(status_code, status_code + ' ' + status_code_to_reason_phrase(status_code), headers, http_version);
+        static inline HTTPResponse make_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
+            HTTPResponse resp(status_code, std::to_string(status_code) + ' ' + status_code_to_reason_phrase(status_code), headers, http_version);
             if (!resp.headers.count("Content-Type")) {
                 resp.headers["Content-Type"] = "text/plain";
             }
@@ -425,7 +435,7 @@ namespace pw {
             return result;
         }
 
-        inline auto send_basic(const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1", int flags = 0) {
+        inline auto send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1", int flags = 0) {
             return send(HTTPResponse::make_basic(status_code, headers, http_version), flags);
         }
 
@@ -475,7 +485,7 @@ namespace pw {
 
     class Server : public pn::tcp::Server {
     public:
-        std::function<HTTPResponse(const std::string&)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
+        std::function<HTTPResponse(uint16_t)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
         size_t buffer_size = 4'000;
         size_t header_climit = 100;
         size_t header_name_rlimit = 500;
@@ -522,8 +532,8 @@ namespace pw {
 
         int handle_ws_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver, WSRoute& route);
         int handle_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver);
-        int handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
-        int handle_error(Connection& conn, const std::string& status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
+        int handle_error(Connection& conn, uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
+        int handle_error(Connection& conn, uint16_t status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
     };
 } // namespace pw
 

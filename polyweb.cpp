@@ -430,7 +430,8 @@ namespace pw {
 
         ret.insert(ret.end(), this->http_version.begin(), this->http_version.end());
         ret.push_back(' ');
-        ret.insert(ret.end(), this->status_code.begin(), this->status_code.end());
+        std::string status_code_string = std::to_string(status_code);
+        ret.insert(ret.end(), status_code_string.begin(), status_code_string.end());
         ret.push_back(' ');
         ret.insert(ret.end(), this->reason_phrase.begin(), this->reason_phrase.end());
         ret.insert(ret.end(), {'\r', '\n'});
@@ -467,11 +468,17 @@ namespace pw {
             return PN_ERROR;
         }
 
-        status_code.clear();
-        if (detail::recv_until(conn, buf_receiver, std::back_inserter(status_code), ' ', misc_rlimit) == PN_ERROR) {
+        std::string status_code_string;
+        if (detail::recv_until(conn, buf_receiver, std::back_inserter(status_code_string), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
-        if (status_code.empty()) {
+        if (status_code_string.empty()) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+        try {
+            status_code = std::stoi(status_code_string);
+        } catch (...) {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
@@ -926,14 +933,14 @@ namespace pw {
         while (conn && keep_alive) {
             HTTPRequest req;
             if (req.parse(*conn, buf_receiver, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PN_ERROR) {
-                std::string resp_status_code;
+                uint16_t resp_status_code;
                 switch (get_last_error()) {
                 case PW_ENET:
-                    resp_status_code = "500";
+                    resp_status_code = 500;
                     break;
 
                 case PW_EWEB:
-                    resp_status_code = "400";
+                    resp_status_code = 400;
                     break;
                 }
                 handle_error(*conn, resp_status_code, false);
@@ -952,7 +959,7 @@ namespace pw {
                         if (std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
                             websocket = true;
                         } else {
-                            if (handle_error(*conn, "501", keep_alive, req.http_version) == PN_ERROR) {
+                            if (handle_error(*conn, 501, keep_alive, req.http_version) == PN_ERROR) {
                                 return PN_ERROR;
                             }
                             continue;
@@ -991,7 +998,7 @@ namespace pw {
                     try {
                         resp = ws_routes[ws_route_target].on_connect(*conn, req);
                     } catch (...) {
-                        if (handle_error(*conn, "500", keep_alive, req.http_version) == PN_ERROR) {
+                        if (handle_error(*conn, 500, keep_alive, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
                         }
                         continue;
@@ -1001,7 +1008,7 @@ namespace pw {
                         resp.headers["Server"] = PW_SERVER_NAME;
                     }
 
-                    if (resp.status_code == "101") {
+                    if (resp.status_code == 101) {
                         resp.headers.erase("Content-Type");
                         resp.body.clear();
 
@@ -1027,7 +1034,7 @@ namespace pw {
                             if (found_version) {
                                 resp.headers["Sec-WebSocket-Version"] = PW_WS_VERSION;
                             } else {
-                                if (handle_error(*conn, "501", keep_alive, req.http_version) == PN_ERROR) {
+                                if (handle_error(*conn, 501, keep_alive, req.http_version) == PN_ERROR) {
                                     return PN_ERROR;
                                 }
                                 continue;
@@ -1060,15 +1067,15 @@ namespace pw {
                         return PN_ERROR;
                     }
 
-                    if (resp.status_code == "101") {
+                    if (resp.status_code == 101) {
                         return handle_ws_connection(std::move(conn), buf_receiver, ws_routes[ws_route_target]);
                     }
                 } else if (!http_route_target.empty()) {
-                    if (handle_error(*conn, "400", keep_alive, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 400, keep_alive, req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 } else {
-                    if (handle_error(*conn, "404", keep_alive, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 404, keep_alive, req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 }
@@ -1078,7 +1085,7 @@ namespace pw {
                     try {
                         resp = routes[http_route_target].cb(*conn, req);
                     } catch (...) {
-                        if (handle_error(*conn, "500", keep_alive, req.http_version) == PN_ERROR) {
+                        if (handle_error(*conn, 500, keep_alive, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
                         }
                         continue;
@@ -1099,11 +1106,11 @@ namespace pw {
                         return PN_ERROR;
                     }
                 } else if (!ws_route_target.empty()) {
-                    if (handle_error(*conn, "426", {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 426, {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 } else {
-                    if (handle_error(*conn, "404", keep_alive, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 404, keep_alive, req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 }
@@ -1112,12 +1119,12 @@ namespace pw {
         return PN_OK;
     }
 
-    int Server::handle_error(Connection& conn, const std::string& status_code, const HTTPHeaders& headers, const std::string& http_version) {
+    int Server::handle_error(Connection& conn, uint16_t status_code, const HTTPHeaders& headers, const std::string& http_version) {
         HTTPResponse resp;
         try {
             resp = this->on_error(status_code);
         } catch (...) {
-            resp = HTTPResponse::make_basic("500");
+            resp = HTTPResponse::make_basic(500);
         }
 
         if (!resp.headers.count("Server")) {
@@ -1141,12 +1148,12 @@ namespace pw {
         return PN_OK;
     }
 
-    int Server::handle_error(Connection& conn, const std::string& status_code, bool keep_alive, const std::string& http_version) {
+    int Server::handle_error(Connection& conn, uint16_t status_code, bool keep_alive, const std::string& http_version) {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
         } catch (...) {
-            resp = HTTPResponse::make_basic("500");
+            resp = HTTPResponse::make_basic(500);
         }
 
         if (!resp.headers.count("Server")) {
