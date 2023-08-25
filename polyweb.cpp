@@ -942,6 +942,9 @@ namespace pw {
                 case PW_EWEB:
                     resp_status_code = 400;
                     break;
+
+                default:
+                    throw std::logic_error("Invalid error");
                 }
                 handle_error(*conn, resp_status_code, false);
                 return PN_ERROR;

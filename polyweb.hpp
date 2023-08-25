@@ -222,7 +222,7 @@ namespace pw {
         } else if (status_code >= 100 && status_code < 600) {
             return conversion_mapping.at(status_code / 100 * 100); // Zero out last two digits
         } else {
-            throw std::invalid_argument("Invalid status code");
+            throw std::out_of_range("Invalid status code");
         }
     }
 
