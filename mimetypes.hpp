@@ -1007,7 +1007,7 @@ namespace pw {
         std::vector<std::string> split_filename = string::split(filename, '.');
 
         decltype(mimetypes)::const_iterator ret_it;
-        if ((ret_it = mimetypes.find(split_filename.back())) != mimetypes.end()) {
+        if ((ret_it = mimetypes.find(string::to_lower_copy(split_filename.back()))) != mimetypes.end()) {
             return ret_it->second;
         } else {
             return "application/octet-stream";
