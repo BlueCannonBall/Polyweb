@@ -79,9 +79,9 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, char end, size_t rl = 1'000) {
+        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, char end, size_t rlimit = 1'000) {
             for (size_t i = 0;; ++i) {
-                if (i > rl) {
+                if (i >= rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
@@ -107,9 +107,9 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, size_t rl = 1'000) {
+        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, size_t rlimit = 1'000) {
             for (size_t i = 0, search_pos = 0;; i++) {
-                if (i > rl) {
+                if (i >= rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
@@ -144,8 +144,8 @@ namespace pw {
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::string& end_sequence, size_t rl = 1'000) {
-            return recv_until(conn, buf_receiver, ret, std::vector<char>(end_sequence.begin(), end_sequence.end()), rl);
+        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::string& end_sequence, size_t rlimit = 1'000) {
+            return recv_until(conn, buf_receiver, ret, std::vector<char>(end_sequence.begin(), end_sequence.end()), rlimit);
         }
 
         struct CaseInsensitiveComparer {
