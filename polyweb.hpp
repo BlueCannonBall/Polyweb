@@ -99,7 +99,7 @@ namespace pw {
                 if (c == end) {
                     break;
                 } else {
-                    ret = c;
+                    *ret++ = c;
                 }
             }
 
@@ -129,7 +129,7 @@ namespace pw {
                         break;
                     }
                 } else {
-                    ret = c;
+                    *ret++ = c;
                     search_pos = 0;
 
                     if (c == end_sequence[search_pos]) {
