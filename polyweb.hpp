@@ -236,6 +236,8 @@ namespace pw {
     std::string percent_decode(const std::string& str, bool plus_as_space = false);
 
     std::string escape_xml(const std::string& str);
+    std::string escape_html(const std::u32string& str);
+    std::string escape_html(const std::string& str); // Automatically converts std::string to std::u32string
 
     typedef std::unordered_map<std::string, std::string, detail::CaseInsensitiveHasher, detail::CaseInsensitiveComparer> HTTPHeaders;
 

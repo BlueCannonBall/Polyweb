@@ -2,8 +2,10 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
+#include <codecvt>
 #include <cstring>
 #include <iomanip>
+#include <locale>
 #include <openssl/sha.h>
 #include <random>
 #include <sstream>
@@ -248,7 +250,23 @@ namespace pw {
         return ret;
     }
 
-    std::string escape_xml(const std::u32string& str) {
+    std::string escape_xml(const std::string& str) {
+        std::string ret;
+        ret.reserve(str.size());
+        for (char c : str) {
+            switch (c) {
+            default: ret.push_back(c); break;
+            case '&': ret += "&amp;"; break;
+            case '<': ret += "&lt;"; break;
+            case '>': ret += "&gt;"; break;
+            case '"': ret += "&quot;"; break;
+            case '\'': ret += "&apos;"; break;
+            }
+        }
+        return ret;
+    }
+
+    std::string escape_html(const std::u32string& str) {
         std::string ret;
         ret.reserve(str.size());
         for (char32_t c : str) {
@@ -272,6 +290,11 @@ namespace pw {
             }
         }
         return ret;
+    }
+
+    std::string escape_html(const std::string& str) {
+        static thread_local std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+        return escape_html(converter.from_bytes(str));
     }
 
     std::string QueryParameters::build() const {
