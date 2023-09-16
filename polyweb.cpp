@@ -251,10 +251,10 @@ namespace pw {
         return ret;
     }
 
-    std::wstring escape_xml(const std::wstring& str) {
+    std::wstring escape_xml(const std::wstring& wstr) {
         std::wstring ret;
-        ret.reserve(str.size() + (str.size() / 10));
-        for (wchar_t wc : str) {
+        ret.reserve(wstr.size() + (wstr.size() / 10));
+        for (wchar_t wc : wstr) {
             static constexpr wchar_t allowed_characters[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
             if (wcschr(allowed_characters, wc)) {
                 ret.push_back(wc);
