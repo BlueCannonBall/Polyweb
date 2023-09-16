@@ -254,7 +254,7 @@ namespace pw {
         std::u32string ret;
         ret.reserve(str.size() + (str.size() / 10));
         for (char32_t c : str) {
-            static constexpr char32_t allowed_characters[] = U"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            static constexpr char32_t allowed_characters[] = U"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
             if (std::find(std::begin(allowed_characters), std::end(allowed_characters), c) != std::end(allowed_characters)) {
                 ret.push_back(c);
             } else {
