@@ -4,6 +4,7 @@
 #include <cmath>
 #include <codecvt>
 #include <cstring>
+#include <cwchar>
 #include <iomanip>
 #include <locale>
 #include <openssl/sha.h>
@@ -250,16 +251,16 @@ namespace pw {
         return ret;
     }
 
-    std::u32string escape_xml(const std::u32string& str) {
-        std::u32string ret;
+    std::wstring escape_xml(const std::wstring& str) {
+        std::wstring ret;
         ret.reserve(str.size() + (str.size() / 10));
-        for (char32_t c : str) {
-            static constexpr char32_t allowed_characters[] = U"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
-            if (std::find(std::begin(allowed_characters), std::end(allowed_characters), c) != std::end(allowed_characters)) {
-                ret.push_back(c);
+        for (wchar_t wc : str) {
+            static constexpr wchar_t allowed_characters[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+            if (wcschr(allowed_characters, wc)) {
+                ret.push_back(wc);
             } else {
-                std::basic_stringstream<char32_t> ss;
-                ss << U"&#" << +c << U';';
+                std::wostringstream ss;
+                ss << L"&#" << +wc << L';';
                 ret += ss.str();
             }
         }
@@ -267,7 +268,7 @@ namespace pw {
     }
 
     std::string escape_xml(const std::string& str) {
-        static thread_local std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+        static thread_local std::wstring_convert<std::codecvt<wchar_t, char, mbstate_t>> converter;
         return converter.to_bytes(escape_xml(converter.from_bytes(str)));
     }
 
