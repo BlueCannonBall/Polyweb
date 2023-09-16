@@ -268,7 +268,11 @@ namespace pw {
     }
 
     std::string escape_xml(const std::string& str) {
-        static thread_local std::wstring_convert<std::codecvt<wchar_t, char, mbstate_t>> converter;
+#ifdef _WIN32
+        static thread_local std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+#else
+        static thread_local std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+#endif
         return converter.to_bytes(escape_xml(converter.from_bytes(str)));
     }
 
