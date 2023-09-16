@@ -248,6 +248,32 @@ namespace pw {
         return ret;
     }
 
+    std::string escape_xml(const std::u32string& str) {
+        std::string ret;
+        ret.reserve(str.size());
+        for (char32_t c : str) {
+            switch (c) {
+            default: ret.push_back(c); break;
+            case U'&': ret += "&amp;"; break;
+            case U'<': ret += "&lt;"; break;
+            case U'>': ret += "&gt;"; break;
+            case U'"': ret += "&quot;"; break;
+            case U' ': ret += "&nbsp;"; break;
+            case U'–': ret += "&ndash;"; break;
+            case U'—': ret += "&mdash;"; break;
+            case U'©': ret += "&copy;"; break;
+            case U'®': ret += "&reg;"; break;
+            case U'™': ret += "&trade;"; break;
+            case U'≈': ret += "&asymp;"; break;
+            case U'≠': ret += "&ne;"; break;
+            case U'£': ret += "&pound;"; break;
+            case U'€': ret += "&euro;"; break;
+            case U'°': ret += "&deg;"; break;
+            }
+        }
+        return ret;
+    }
+
     std::string QueryParameters::build() const {
         std::string ret;
         bool first = true;
