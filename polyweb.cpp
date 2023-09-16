@@ -250,51 +250,25 @@ namespace pw {
         return ret;
     }
 
-    std::string escape_xml(const std::string& str) {
-        std::string ret;
-        ret.reserve(str.size());
-        for (char c : str) {
-            switch (c) {
-            default: ret.push_back(c); break;
-            case '&': ret += "&amp;"; break;
-            case '<': ret += "&lt;"; break;
-            case '>': ret += "&gt;"; break;
-            case '"': ret += "&quot;"; break;
-            case '\'': ret += "&apos;"; break;
-            }
-        }
-        return ret;
-    }
-
-    std::string escape_html(const std::u32string& str) {
-        std::string ret;
-        ret.reserve(str.size());
+    std::u32string escape_xml(const std::u32string& str) {
+        std::u32string ret;
+        ret.reserve(str.size() + (str.size() / 10));
         for (char32_t c : str) {
-            switch (c) {
-            default: ret.push_back(c); break;
-            case U'&': ret += "&amp;"; break;
-            case U'<': ret += "&lt;"; break;
-            case U'>': ret += "&gt;"; break;
-            case U'"': ret += "&quot;"; break;
-            case U' ': ret += "&nbsp;"; break;
-            case U'–': ret += "&ndash;"; break;
-            case U'—': ret += "&mdash;"; break;
-            case U'©': ret += "&copy;"; break;
-            case U'®': ret += "&reg;"; break;
-            case U'™': ret += "&trade;"; break;
-            case U'≈': ret += "&asymp;"; break;
-            case U'≠': ret += "&ne;"; break;
-            case U'£': ret += "&pound;"; break;
-            case U'€': ret += "&euro;"; break;
-            case U'°': ret += "&deg;"; break;
+            static constexpr char32_t allowed_characters[] = U"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            if (std::find(std::begin(allowed_characters), std::end(allowed_characters), c) != std::end(allowed_characters)) {
+                ret.push_back(c);
+            } else {
+                std::basic_stringstream<char32_t> ss;
+                ss << U"&#" << +c << U';';
+                ret += ss.str();
             }
         }
         return ret;
     }
 
-    std::string escape_html(const std::string& str) {
+    std::string escape_xml(const std::string& str) {
         static thread_local std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
-        return escape_html(converter.from_bytes(str));
+        return converter.to_bytes(escape_xml(converter.from_bytes(str)));
     }
 
     std::string QueryParameters::build() const {
