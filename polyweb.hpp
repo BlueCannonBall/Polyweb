@@ -237,7 +237,7 @@ namespace pw {
 
     std::string escape_xml(const std::string& str);
     std::string escape_html(const std::u32string& str);
-    std::string escape_html(const std::string& str); // Automatically converts std::string to std::u32string
+    std::string escape_html(const std::string& str); // Automatically converts std::string to std::u32string and calls the former function
 
     typedef std::unordered_map<std::string, std::string, detail::CaseInsensitiveHasher, detail::CaseInsensitiveComparer> HTTPHeaders;
 
