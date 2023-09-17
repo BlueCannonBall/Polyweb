@@ -268,11 +268,7 @@ namespace pw {
     }
 
     std::string escape_xml(const std::string& str) {
-#if WCHAR_WIDTH == 16
-        static thread_local std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-#else
         static thread_local std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-#endif
         return converter.to_bytes(escape_xml(converter.from_bytes(str)));
     }
 
