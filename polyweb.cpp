@@ -1,6 +1,7 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <bitset>
+#include <clocale>
 #include <cmath>
 #include <codecvt>
 #include <cstring>
