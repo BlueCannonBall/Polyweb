@@ -886,16 +886,16 @@ namespace pw {
     }
 
     int Server::handle_ws_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver, WSRoute& route) {
-        route.on_open(*conn);
+        route.on_open(*conn, route.data);
         for (;;) {
             if (!conn) {
-                route.on_close(*conn, 0, {}, false);
+                route.on_close(*conn, 0, {}, false, route.data);
                 break;
             }
 
             WSMessage message;
             if (message.parse(*conn, buf_receiver, this->ws_frame_rlimit, this->ws_message_rlimit) == PN_ERROR) {
-                route.on_close(*conn, 0, {}, false);
+                route.on_close(*conn, 0, {}, false, route.data);
                 return PN_ERROR;
             }
 
@@ -903,12 +903,12 @@ namespace pw {
             case 0x1:
             case 0x2:
             case 0xA:
-                route.on_message(*conn, std::move(message));
+                route.on_message(*conn, std::move(message), route.data);
                 break;
 
             case 0x8:
                 if (conn->ws_closed) {
-                    route.on_close(*conn, 0, {}, true);
+                    route.on_close(*conn, 0, {}, true, route.data);
                     if (conn->close(true, false) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
@@ -928,7 +928,7 @@ namespace pw {
                         reason.assign(message.data.begin() + 2, message.data.end());
                     }
 
-                    route.on_close(*conn, status_code, reason, true);
+                    route.on_close(*conn, status_code, reason, true, route.data);
 
                     ssize_t result;
                     if ((result = conn->send(WSMessage(std::move(message.data), 0x8))) == 0) {
@@ -1024,7 +1024,7 @@ namespace pw {
                 if (!ws_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = ws_routes[ws_route_target].on_connect(*conn, req);
+                        resp = ws_routes[ws_route_target].on_connect(*conn, req, ws_routes[ws_route_target].data);
                     } catch (...) {
                         if (handle_error(*conn, 500, keep_alive, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
@@ -1111,7 +1111,7 @@ namespace pw {
                 if (!http_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = routes[http_route_target].cb(*conn, req);
+                        resp = routes[http_route_target].cb(*conn, req, routes[http_route_target].data);
                     } catch (...) {
                         if (handle_error(*conn, 500, keep_alive, req.http_version) == PN_ERROR) {
                             return PN_ERROR;

@@ -27,11 +27,11 @@
 #define PW_EWEB     2
 
 // Default callback macros
-#define PW_DEFAULT_WS_ROUTE_ON_CONNECT [](const pw::Connection&, const pw::HTTPRequest&) { \
-    return pw::HTTPResponse(101);                                                          \
+#define PW_DEFAULT_WS_ROUTE_ON_CONNECT [](const pw::Connection&, const pw::HTTPRequest&, void*) -> pw::HTTPResponse { \
+    return pw::HTTPResponse(101);                                                                                     \
 }
-#define PW_DEFAULT_SERVER_ON_ERROR [](uint16_t status_code) { \
-    return pw::HTTPResponse::make_basic(status_code);         \
+#define PW_DEFAULT_SERVER_ON_ERROR [](uint16_t status_code) -> pw::HTTPResponse { \
+    return pw::HTTPResponse::make_basic(status_code);                             \
 }
 
 // WebSocket macros
@@ -445,13 +445,15 @@ namespace pw {
         int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
     };
 
-    typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&)> RouteCallback;
+    typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&, void*)> RouteCallback;
 
     class Route {
     public:
+        void* data = nullptr; // User data
         bool wildcard = false;
 
-        Route(bool wildcard = false):
+        Route(void* data = nullptr, bool wildcard = false):
+            data(data),
             wildcard(wildcard) {}
     };
 
@@ -460,26 +462,26 @@ namespace pw {
         RouteCallback cb;
 
         HTTPRoute() = default;
-        HTTPRoute(RouteCallback cb, bool wildcard = false):
-            Route(wildcard),
+        HTTPRoute(RouteCallback cb, void* data = nullptr, bool wildcard = false):
+            Route(data, wildcard),
             cb(cb) {}
     };
 
     class WSRoute : public Route {
     public:
         RouteCallback on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
-        std::function<void(Connection&)> on_open;
-        std::function<void(Connection&, WSMessage)> on_message;
-        std::function<void(Connection&, uint16_t, const std::string&, bool clean)> on_close;
+        std::function<void(Connection&, void*)> on_open;
+        std::function<void(Connection&, WSMessage, void*)> on_message;
+        std::function<void(Connection&, uint16_t, const std::string&, bool clean, void*)> on_close;
 
         WSRoute() = default;
-        WSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false):
-            Route(wildcard),
+        WSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
+            Route(data, wildcard),
             on_open(on_open),
             on_message(on_message),
             on_close(on_close) {}
-        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false):
-            Route(wildcard),
+        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
+            Route(data, wildcard),
             on_connect(on_connect),
             on_open(on_open),
             on_message(on_message),
