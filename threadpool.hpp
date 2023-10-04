@@ -4,7 +4,6 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
-#include <iostream>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -60,7 +59,7 @@ namespace tp {
             std::unique_lock<std::mutex> lock(mutex);
             ++thread_count;
             for (;; cv.wait(lock)) {
-                if (!queue.empty()) {
+                while (!queue.empty()) {
                     ++busy_count;
                     std::shared_ptr<Task> task = std::move(queue.front());
                     queue.pop();
@@ -70,7 +69,8 @@ namespace tp {
                     lock.lock();
 
                     --busy_count;
-                } else if (target_thread_count < thread_count) {
+                }
+                if (target_thread_count < thread_count) {
                     --thread_count;
                     return;
                 }
