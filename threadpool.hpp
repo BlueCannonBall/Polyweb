@@ -72,6 +72,8 @@ namespace tp {
                 }
                 if (target_thread_count < thread_count) {
                     --thread_count;
+                    lock.unlock();
+                    cv.notify_all();
                     return;
                 }
             }
