@@ -57,7 +57,6 @@ namespace tp {
     protected:
         void runner() {
             std::unique_lock<std::mutex> lock(mutex);
-            ++thread_count;
             for (; target_thread_count >= thread_count; cv.wait(lock)) {
                 while (!queue.empty()) {
                     std::shared_ptr<Task> task = std::move(queue.front());
@@ -130,10 +129,10 @@ namespace tp {
                 lock.unlock();
                 cv.notify_all();
             } else if (size > target_thread_count) {
-                for (unsigned int i = 0; i < size - target_thread_count; ++i) {
+                target_thread_count = size;
+                for (; thread_count < target_thread_count; ++thread_count) {
                     std::thread(&ThreadPool::runner, this).detach();
                 }
-                target_thread_count = size;
             }
         }
 
