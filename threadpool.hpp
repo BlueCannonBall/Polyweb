@@ -37,8 +37,8 @@ namespace tp {
                 func(arg);
                 status = TASK_STATUS_SUCCESS;
             } catch (const std::exception& e) {
-                status = TASK_STATUS_FAILURE;
                 error = e;
+                status = TASK_STATUS_FAILURE;
             }
             mutex.unlock();
             cv.notify_all();
@@ -58,9 +58,8 @@ namespace tp {
         void runner() {
             std::unique_lock<std::mutex> lock(mutex);
             ++thread_count;
-            for (;; cv.wait(lock)) {
+            for (; target_thread_count >= thread_count; cv.wait(lock)) {
                 while (!queue.empty()) {
-                    ++busy_count;
                     std::shared_ptr<Task> task = std::move(queue.front());
                     queue.pop();
 
@@ -70,13 +69,10 @@ namespace tp {
 
                     --busy_count;
                 }
-                if (target_thread_count < thread_count) {
-                    --thread_count;
-                    lock.unlock();
-                    cv.notify_all();
-                    return;
-                }
             }
+            --thread_count;
+            lock.unlock();
+            cv.notify_all();
         }
 
         std::mutex mutex;
@@ -112,7 +108,7 @@ namespace tp {
 
             if (launch_if_busy) {
                 std::unique_lock<std::mutex> lock(mutex);
-                if (busy_count >= thread_count) {
+                if (busy_count >= target_thread_count) {
                     lock.unlock();
                     std::thread(&Task::execute, task).detach();
                     return task;
@@ -121,6 +117,7 @@ namespace tp {
 
             mutex.lock();
             queue.push(task);
+            ++busy_count;
             mutex.unlock();
             cv.notify_one();
             return task;
