@@ -12,6 +12,7 @@
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 #if __has_include(<endian.h>)
     #include <endian.h>
 #elif __has_include(<machine/endian.h>)
