@@ -1,9 +1,10 @@
 #ifndef _THREADPOOL_HPP
 #define _THREADPOOL_HPP
 
-#include <atomic>
 #include <condition_variable>
+#include <exception>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -46,9 +47,9 @@ namespace tp {
 
         TaskStatus await() {
             std::unique_lock<std::mutex> lock(mutex);
-            while (status == TASK_STATUS_RUNNING) {
-                cv.wait(lock);
-            }
+            cv.wait(lock, [this]() {
+                return status != TASK_STATUS_RUNNING;
+            });
             return status;
         }
     };
@@ -56,9 +57,14 @@ namespace tp {
     class ThreadPool {
     protected:
         void runner() {
-            std::unique_lock<std::mutex> lock(mutex);
+            mutex.lock();
             ++thread_count;
-            for (; target_thread_count >= thread_count; cv.wait(lock)) {
+            mutex.unlock();
+            cv.notify_all();
+
+            std::unique_lock<std::mutex> lock(mutex);
+
+            for (;; cv.wait(lock)) {
                 while (!queue.empty()) {
                     std::shared_ptr<Task> task = std::move(queue.front());
                     queue.pop();
@@ -69,9 +75,12 @@ namespace tp {
 
                     --busy_count;
                 }
+                if (target_thread_count < thread_count) {
+                    break;
+                }
             }
+
             --thread_count;
-            lock.unlock();
             cv.notify_all();
         }
 
@@ -90,6 +99,11 @@ namespace tp {
             for (unsigned int i = 0; i < target_thread_count; ++i) {
                 std::thread(&ThreadPool::runner, this).detach();
             }
+
+            std::unique_lock<std::mutex> lock(mutex);
+            cv.wait(lock, [this]() {
+                return thread_count == target_thread_count;
+            });
         }
 
         ~ThreadPool() {
@@ -98,9 +112,9 @@ namespace tp {
             lock.unlock();
             cv.notify_all();
             lock.lock();
-            while (thread_count) {
-                cv.wait(lock);
-            }
+            cv.wait(lock, [this]() {
+                return !thread_count;
+            });
         }
 
         std::shared_ptr<Task> schedule(std::function<void(void*)> func, void* arg = nullptr, bool launch_if_busy = false) {
@@ -108,7 +122,7 @@ namespace tp {
 
             if (launch_if_busy) {
                 std::unique_lock<std::mutex> lock(mutex);
-                if (busy_count >= target_thread_count) {
+                if (busy_count >= thread_count) {
                     lock.unlock();
                     std::thread(&Task::execute, task).detach();
                     return task;
@@ -125,9 +139,9 @@ namespace tp {
 
         void resize(unsigned int size) {
             std::unique_lock<std::mutex> lock(mutex);
+
             if (size < target_thread_count) {
                 target_thread_count = size;
-                lock.unlock();
                 cv.notify_all();
             } else if (size > target_thread_count) {
                 for (unsigned int i = 0; i < size - target_thread_count; ++i) {
@@ -135,9 +149,15 @@ namespace tp {
                 }
                 target_thread_count = size;
             }
+
+            cv.wait(lock, [this]() {
+                return thread_count == target_thread_count;
+            });
         }
 
-        unsigned int size() const {
+        // This function cannot be const due to its locking of the mutex
+        unsigned int size() {
+            std::lock_guard<std::mutex> lock(mutex);
             return target_thread_count;
         }
     };
