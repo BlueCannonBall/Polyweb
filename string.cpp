@@ -103,18 +103,15 @@ namespace pw {
         std::vector<std::string> split(const std::string& str, char delimiter) {
             std::vector<std::string> ret;
             std::istringstream ss(str);
-            for (std::string element; std::getline(ss, element, delimiter);) {
-                ret.push_back(std::move(element));
-            }
+            for (std::string element; std::getline(ss, element, delimiter); ret.push_back(std::move(element))) {}
             return ret;
         }
 
         std::vector<std::string> split_and_trim(const std::string& str, char delimiter) {
             std::vector<std::string> ret;
             std::istringstream ss(str);
-            for (std::string element; std::getline(ss, element, delimiter);) {
+            for (std::string element; std::getline(ss, element, delimiter); ret.push_back(std::move(element))) {
                 trim(element);
-                ret.push_back(std::move(element));
             }
             return ret;
         }
