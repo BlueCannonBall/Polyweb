@@ -1,6 +1,7 @@
 #include "string.hpp"
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <sstream>
 #include <utility>
 
