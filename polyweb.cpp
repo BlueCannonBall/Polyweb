@@ -9,7 +9,6 @@
 #include <iomanip>
 #include <locale>
 #include <openssl/sha.h>
-#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -693,18 +692,10 @@ namespace pw {
             PW_SET_WS_FRAME_MASKED(ret);
             size_t end = ret.size();
             ret.resize(end + 4 + data.size());
-
-            unsigned char random_bits[4];
-            if (!masking_key) {
-                const static std::independent_bits_engine<std::default_random_engine, 8, unsigned char> generator;
-                std::generate(std::begin(random_bits), std::end(random_bits), generator);
-                masking_key = (const char*) random_bits;
-            }
+            memcpy(&ret[end], masking_key, 4);
 
             int32_t masking_key_integer;
             memcpy(&masking_key_integer, masking_key, 4);
-            memcpy(&ret[end], masking_key, 4);
-
             size_t i = 0;
 #ifdef POLYWEB_SIMD
             for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= data.size(); i += 32) {
