@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cwchar>
 #include <iomanip>
+#include <iterator>
 #include <locale>
 #include <openssl/sha.h>
 #include <sstream>
