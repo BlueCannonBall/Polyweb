@@ -1,7 +1,6 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <bitset>
-#include <clocale>
 #include <cmath>
 #include <codecvt>
 #include <cstring>
@@ -86,7 +85,7 @@ namespace pw {
         gmtime_r(&rawtime, &timeinfo);
 #endif
         std::ostringstream ss;
-        ss.imbue(std::locale(setlocale(LC_ALL, "C")));
+        ss.imbue(std::locale("C"));
         ss << std::put_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
         return ss.str();
     }
@@ -94,7 +93,7 @@ namespace pw {
     time_t parse_date(const std::string& date) {
         struct tm timeinfo = {0};
         std::istringstream ss(date);
-        ss.imbue(std::locale(setlocale(LC_ALL, "C")));
+        ss.imbue(std::locale("C"));
         ss >> std::get_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
         return timegm(&timeinfo);
     }
