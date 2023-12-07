@@ -275,8 +275,8 @@ namespace pw {
 
     std::string QueryParameters::build() const {
         std::string ret;
-        for (auto it = map.cbegin(); it != map.cend(); ++it) {
-            if (it != map.cbegin()) ret.push_back('&');
+        for (auto it = map.begin(); it != map.end(); ++it) {
+            if (it != map.begin()) ret.push_back('&');
             std::string encoded_key = percent_encode(it->first, false, false);
             std::string encoded_value = percent_encode(it->second, false, false);
             ret.insert(ret.end(), encoded_key.begin(), encoded_key.end());
