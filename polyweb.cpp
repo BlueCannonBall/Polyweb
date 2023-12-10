@@ -98,12 +98,12 @@ namespace pw {
         return timegm(&timeinfo);
     }
 
-    std::string base64_encode(const std::vector<char>& data) {
+    std::string base64_encode(const unsigned char* data, size_t size) {
         std::string ret;
-        ret.reserve(data.size() + (data.size() / 3));
+        ret.reserve(size + (size / 3));
 
         size_t i = 0;
-        for (; i + 3 <= data.size(); i += 3) {
+        for (; i + 3 <= size; i += 3) {
             std::bitset<24> bits((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
             ret.insert(ret.end(),
                 {
@@ -113,7 +113,7 @@ namespace pw {
                     detail::base64_alphabet[(bits & std::bitset<24>(0x3F)).to_ulong()],
                 });
         }
-        if (size_t leftover = data.size() - i) {
+        if (size_t leftover = size - i) {
             switch (leftover) {
             case 1: {
                 std::bitset<12> bits(data[i] << 4);
@@ -1064,9 +1064,9 @@ namespace pw {
                         if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                            std::vector<char> hashed(20);
-                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) hashed.data());
-                            resp.headers["Sec-WebSocket-Accept"] = base64_encode(hashed);
+                            unsigned char hashed[SHA_DIGEST_LENGTH];
+                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), hashed);
+                            resp.headers["Sec-WebSocket-Accept"] = base64_encode(hashed, sizeof hashed);
                         }
 
                         HTTPHeaders::const_iterator websocket_protocol_it;
