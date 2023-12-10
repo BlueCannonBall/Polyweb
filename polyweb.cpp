@@ -16,6 +16,11 @@
     #include <endian.h>
 #elif __has_include(<machine/endian.h>)
     #include <machine/endian.h>
+#else
+    #define LITTLE_ENDIAN 1234
+    #define BIG_ENDIAN    4321
+    #define PDP_ENDIAN    3412
+    #define BYTE_ORDER    LITTLE_ENDIAN
 #endif
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>
@@ -670,7 +675,7 @@ namespace pw {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 126);
             ret.resize(4);
             uint16_t size_16 = data.size();
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
             memcpy(ret.data() + 2, &size_16, 2);
 #else
             reverse_memcpy(ret.data() + 2, &size_16, 2);
@@ -679,7 +684,7 @@ namespace pw {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 127);
             ret.resize(10);
             uint64_t size_64 = data.size();
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
             memcpy(ret.data() + 2, &size_64, 8);
 #else
             reverse_memcpy(ret.data() + 2, &size_64, 8);
@@ -831,7 +836,7 @@ namespace pw {
         WSMessage message(8);
         message.data.resize(2 + reason.size());
 
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
         memcpy(message.data.data(), &status_code, 2);
 #else
         reverse_memcpy(message.data.data(), &status_code, 2);
@@ -909,7 +914,7 @@ namespace pw {
                     std::string reason;
 
                     if (message.data.size() >= 2) {
-#if __BYTE_ORDER__ == __BIG_ENDIAN
+#if BYTE_ORDER__ == BIG_ENDIAN
                         memcpy(&status_code, message.data.data(), 2);
 #else
                         reverse_memcpy(&status_code, message.data.data(), 2);
