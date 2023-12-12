@@ -146,18 +146,6 @@ namespace pw {
         int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::string& end_sequence, size_t rlimit = 1'000) {
             return recv_until(conn, buf_receiver, ret, std::vector<char>(end_sequence.begin(), end_sequence.end()), rlimit);
         }
-
-        struct CaseInsensitiveComparer {
-            bool operator()(const std::string& a, const std::string& b) const {
-                return string::iequals(a, b);
-            }
-        };
-
-        struct CaseInsensitiveHasher {
-            size_t operator()(const std::string& str) const {
-                return std::hash<std::string>()(string::to_lower_copy(str));
-            }
-        };
     } // namespace detail
 
     void reverse_memcpy(void* dest, const void* src, size_t size);
@@ -237,7 +225,7 @@ namespace pw {
     std::wstring escape_xml(const std::wstring& str);
     std::string escape_xml(const std::string& str); // Automatically converts std::string to std::wstring and calls the former function
 
-    typedef std::unordered_map<std::string, std::string, detail::CaseInsensitiveHasher, detail::CaseInsensitiveComparer> HTTPHeaders;
+    typedef std::unordered_map<std::string, std::string, string::CaseInsensitiveHasher, string::CaseInsensitiveComparer> HTTPHeaders;
 
     class QueryParameters {
     private:
@@ -246,23 +234,23 @@ namespace pw {
     public:
         typedef decltype(map) map_type;
 
-        operator map_type() const {
+        inline operator map_type() const {
             return map;
         }
 
-        const map_type& operator*() const {
+        inline const map_type& operator*() const {
             return map;
         }
 
-        map_type& operator*() {
+        inline map_type& operator*() {
             return map;
         }
 
-        const map_type* operator->() const {
+        inline const map_type* operator->() const {
             return &map;
         }
 
-        map_type* operator->() {
+        inline map_type* operator->() {
             return &map;
         }
 

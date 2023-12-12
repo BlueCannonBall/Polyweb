@@ -8,7 +8,7 @@
 
 namespace pw {
     inline std::string filename_to_mimetype(const std::string& filename) {
-        const static std::unordered_map<std::string, std::string> mimetypes = {
+        const static std::unordered_map<std::string, std::string, string::CaseInsensitiveHasher, string::CaseInsensitiveComparer> mimetypes = {
             {"123", "application/vnd.lotus-1-2-3"},
             {"3dml", "text/vnd.in3d.3dml"},
             {"3ds", "image/x-3ds"},
@@ -1007,7 +1007,7 @@ namespace pw {
         std::vector<std::string> split_filename = string::split(filename, '.');
 
         decltype(mimetypes)::const_iterator ret_it;
-        if ((ret_it = mimetypes.find(string::to_lower_copy(split_filename.back()))) != mimetypes.end()) {
+        if (!split_filename.empty() && (ret_it = mimetypes.find(split_filename.back())) != mimetypes.end()) {
             return ret_it->second;
         } else {
             return "application/octet-stream";

@@ -293,12 +293,11 @@ namespace pw {
 
     void QueryParameters::parse(const std::string& query_string) {
         std::vector<std::string> split_query_string = string::split(query_string, '&');
-
         for (const auto& parameter : split_query_string) {
             std::vector<std::string> split_parameter = string::split(parameter, '=');
-            if (split_parameter.size() > 1) {
+            if (split_parameter.size() >= 2) {
                 map[percent_decode(split_parameter[0], true)] = percent_decode(split_parameter[1], true);
-            } else if (!split_parameter[0].empty()) {
+            } else if (!split_parameter.empty()) {
                 map[percent_decode(split_parameter[0], true)]; // Create key with empty value
             }
         }
@@ -1077,7 +1076,9 @@ namespace pw {
                         HTTPHeaders::const_iterator websocket_protocol_it;
                         if (!resp.headers.count("Sec-WebSocket-Protocol") && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
                             std::vector<std::string> split_websocket_protocol = string::split(websocket_protocol_it->second, ',');
-                            resp.headers["Sec-WebSocket-Protocol"] = string::trim_copy(split_websocket_protocol.back());
+                            if (!split_websocket_protocol.empty()) {
+                                resp.headers["Sec-WebSocket-Protocol"] = string::trim_copy(split_websocket_protocol.back());
+                            }
                         }
                     } else if (!resp.headers.count("Connection")) {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
