@@ -1068,9 +1068,9 @@ namespace pw {
                         if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                            unsigned char hashed[SHA_DIGEST_LENGTH];
-                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), hashed);
-                            resp.headers["Sec-WebSocket-Accept"] = base64_encode(hashed, sizeof hashed);
+                            unsigned char digest[SHA_DIGEST_LENGTH];
+                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), digest);
+                            resp.headers["Sec-WebSocket-Accept"] = base64_encode(digest, SHA_DIGEST_LENGTH);
                         }
 
                         HTTPHeaders::const_iterator websocket_protocol_it;
