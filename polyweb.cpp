@@ -103,13 +103,13 @@ namespace pw {
         return timegm(&timeinfo);
     }
 
-    std::string base64_encode(const unsigned char* data, size_t size) {
+    std::string base64_encode(const char* data, size_t size) {
         std::string ret;
         ret.reserve(size + (size / 3));
 
         size_t i = 0;
         for (; i + 3 <= size; i += 3) {
-            std::bitset<24> bits((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+            std::bitset<24> bits((((uint32_t) data[i]) << 16) | (((uint32_t) data[i + 1]) << 8) | data[i + 2]);
             ret.insert(ret.end(),
                 {
                     detail::base64_alphabet[(bits >> 18).to_ulong()],
@@ -121,7 +121,7 @@ namespace pw {
         if (size_t leftover = size - i) {
             switch (leftover) {
             case 1: {
-                std::bitset<12> bits(data[i] << 4);
+                std::bitset<12> bits(((uint32_t) data[i]) << 4);
                 ret.insert(ret.end(),
                     {
                         detail::base64_alphabet[(bits >> 6).to_ulong()],
@@ -133,7 +133,7 @@ namespace pw {
             }
 
             case 2: {
-                std::bitset<18> bits((data[i] << 10) | (data[i + 1] << 2));
+                std::bitset<18> bits((((uint32_t) data[i]) << 10) | (((uint32_t) data[i + 1]) << 2));
                 ret.insert(ret.end(),
                     {
                         detail::base64_alphabet[(bits >> 12).to_ulong()],
@@ -166,7 +166,7 @@ namespace pw {
 
         size_t i = 0;
         for (; i + 4 <= indices.size(); i += 4) {
-            std::bitset<24> bits((indices[i] << 18) | (indices[i + 1] << 12) | (indices[i + 2] << 6) | indices[i + 3]);
+            std::bitset<24> bits((((uint32_t) indices[i]) << 18) | (((uint32_t) indices[i + 1]) << 12) | (((uint32_t) indices[i + 2]) << 6) | indices[i + 3]);
             ret.insert(ret.end(),
                 {
                     (char) (bits >> 16).to_ulong(),
@@ -177,13 +177,13 @@ namespace pw {
         if (size_t leftover = indices.size() - i) {
             switch (leftover) {
             case 2: {
-                std::bitset<12> bits((indices[i] << 6) | indices[i + 1]);
+                std::bitset<12> bits((((uint32_t) indices[i]) << 6) | indices[i + 1]);
                 ret.push_back((bits >> 4).to_ulong());
                 break;
             }
 
             case 3: {
-                std::bitset<18> bits((indices[i] << 12) | (indices[i + 1] << 6) | indices[i + 2]);
+                std::bitset<18> bits((((uint32_t) indices[i]) << 12) | (((uint32_t) indices[i + 1]) << 6) | indices[i + 2]);
                 ret.insert(ret.end(),
                     {
                         (char) (bits >> 10).to_ulong(),
@@ -222,7 +222,7 @@ namespace pw {
         std::string ret;
         ret.reserve(str.size());
 
-        uint8_t reading_percent = 0;
+        int reading_percent = 0;
         char current_character;
         for (char c : str) {
             if (!reading_percent) {
@@ -235,20 +235,16 @@ namespace pw {
                     ret.push_back(c);
                 }
             } else {
-                unsigned char nibble;
+                char nibble;
                 if (c >= '0' && c <= '9') {
                     nibble = c - '0';
                 } else {
-                    nibble = toupper(c) - 55;
+                    nibble = toupper(c) - 'A' + 10;
                 }
 
-                if (reading_percent == 2) {
-                    current_character |= nibble << 4;
-                } else if (reading_percent == 1) {
-                    current_character |= nibble;
-                }
+                current_character |= nibble << ((reading_percent - 1) * 4);
 
-                if (--reading_percent == 0) {
+                if (!--reading_percent) {
                     ret.push_back(current_character);
                 }
             }
@@ -392,7 +388,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            this->headers[std::move(header_name)] = std::move(header_value);
+            this->headers[header_name] = header_value;
 
             char end_check_buf[2];
             ssize_t result;
@@ -544,7 +540,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            this->headers[std::move(header_name)] = std::move(header_value);
+            this->headers[header_name] = header_value;
 
             char end_check_buf[2];
             ssize_t result;
@@ -696,10 +692,10 @@ namespace pw {
             ret.resize(end + 4 + data.size());
             memcpy(&ret[end], masking_key, 4);
 
-            int32_t masking_key_integer;
-            memcpy(&masking_key_integer, masking_key, 4);
             size_t i = 0;
 #ifdef POLYWEB_SIMD
+            int32_t masking_key_integer;
+            memcpy(&masking_key_integer, masking_key, 4);
             for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= data.size(); i += 32) {
                 __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &data[i]);
                 __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
@@ -769,10 +765,7 @@ namespace pw {
                 payload_length = payload_length_7;
             }
 
-            union {
-                char bytes[4];
-                int32_t integer;
-            } masking_key;
+            char masking_key[4];
             if (masked) {
                 ssize_t result;
                 if ((result = buf_receiver.recv(conn, &masking_key, 4, MSG_WAITALL)) == PN_ERROR) {
@@ -806,19 +799,21 @@ namespace pw {
                 if (masked) {
                     size_t i = 0;
 #ifdef POLYWEB_SIMD
-                    for (__m256i mask_vec = _mm256_set1_epi32(masking_key.integer); i + 32 <= payload_length; i += 32) {
+                    int32_t masking_key_integer;
+                    memcpy(&masking_key_integer, masking_key, 4);
+                    for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= payload_length; i += 32) {
                         __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &this->data[end + i]);
                         __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                         _mm256_storeu_si256((__m256i_u*) &this->data[end + i], masked_vec);
                     }
-                    for (__m128i mask_vec = _mm_set1_epi32(masking_key.integer); i + 16 <= payload_length; i += 16) {
+                    for (__m128i mask_vec = _mm_set1_epi32(masking_key_integer); i + 16 <= payload_length; i += 16) {
                         __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &this->data[end + i]);
                         __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                         _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
                     }
 #endif
                     for (; i < payload_length; ++i) {
-                        this->data[end + i] ^= masking_key.bytes[i % 4];
+                        this->data[end + i] ^= masking_key[i % 4];
                     }
                 }
             }
@@ -1068,8 +1063,8 @@ namespace pw {
                         if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                            unsigned char digest[SHA_DIGEST_LENGTH];
-                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), digest);
+                            char digest[SHA_DIGEST_LENGTH];
+                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), (unsigned char*) digest);
                             resp.headers["Sec-WebSocket-Accept"] = base64_encode(digest, SHA_DIGEST_LENGTH);
                         }
 
@@ -1156,9 +1151,9 @@ namespace pw {
             resp.headers["Server"] = PW_SERVER_NAME;
         }
 
-        for (auto& header : headers) {
+        for (const auto& header : headers) {
             if (!resp.headers.count(header.first)) {
-                resp.headers.insert(std::move(header));
+                resp.headers.insert(header);
             }
         }
 

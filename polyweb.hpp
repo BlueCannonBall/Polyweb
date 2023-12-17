@@ -216,7 +216,7 @@ namespace pw {
     std::string build_date(time_t rawtime = time(nullptr));
     time_t parse_date(const std::string& date);
 
-    std::string base64_encode(const unsigned char* data, size_t size);
+    std::string base64_encode(const char* data, size_t size);
     std::vector<char> base64_decode(const std::string& str);
 
     std::string percent_encode(const std::string& str, bool plus_as_space = false, bool allow_slash = true);
