@@ -2,8 +2,8 @@
 #define _POLYWEB_HPP
 
 #include "Polynet/polynet.hpp"
-#include "Polynet/smart_sockets.hpp"
 #include "Polynet/secure_sockets.hpp"
+#include "Polynet/smart_sockets.hpp"
 #include "string.hpp"
 #include "threadpool.hpp"
 #include <cstddef>
@@ -72,7 +72,7 @@
 
 namespace pw {
     extern tp::ThreadPool threadpool;
-    
+
     namespace detail {
         extern thread_local int last_error;
 
@@ -383,7 +383,7 @@ namespace pw {
         std::vector<char> build(const char* masking_key = nullptr) const;
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
-    
+
     template <typename Base>
     class BasicConnection : public Base {
     public:
@@ -397,14 +397,14 @@ namespace pw {
             *this = conn;
         }
 
-        inline BasicConnection& operator=(const Base& conn) {
-            if (this != &conn) {
-                this->fd = conn.fd;
-                this->addr = conn.addr;
-                this->addrlen = conn.addrlen;
-            }
-            return *this;
-        }
+        BasicConnection<Base>& operator=(const Base& conn);
+
+        // inline BasicConnection<pn::tcp::SecureConnection>& operator=(const Base& conn) {
+        //     if (this != &conn) {
+        //         *this = (BasicConnection) conn;
+        //     }
+        //     return *this;
+        // }
 
         using pn::tcp::Connection::send;
 

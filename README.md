@@ -42,6 +42,7 @@ if (server.listen() == PN_ERROR) {
     exit(EXIT_FAILURE);
 }
 
+server.close();
 pn::quit();
 ```
 Note that Polyweb functions/methods throw Polyweb errors while methods inherited from Polynet throw Polynet errors. Do not do anything with the `conn` argument unless you know what you are doing. The `data` argument can be used to pass user data to the callbacks, avoiding the use of lambda captures. See `polyweb.h` to check out more ways to use Polyweb.

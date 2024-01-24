@@ -660,6 +660,27 @@ namespace pw {
         return PN_OK;
     }
 
+    template <>
+    Connection& Connection::operator=(const pn::tcp::Connection& conn) {
+        if (this != &conn) {
+            this->fd = conn.fd;
+            this->addr = conn.addr;
+            this->addrlen = conn.addrlen;
+        }
+        return *this;
+    }
+
+    template <>
+    SecureConnection& SecureConnection::operator=(const pn::tcp::SecureConnection& conn) {
+        if (this != &conn) {
+            this->fd = conn.fd;
+            this->addr = conn.addr;
+            this->addrlen = conn.addrlen;
+            this->ssl = conn.ssl;
+        }
+        return *this;
+    }
+
     template <typename Base>
     int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&, void*)> filter, void* filter_data, int backlog) {
         if (Base::listen([filter = std::move(filter), filter_data](typename Base::connection_type& conn, void* data) -> bool {
