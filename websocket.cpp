@@ -1,4 +1,9 @@
 #include "polyweb.hpp"
+#include <cstring>
+#include <utility>
+#ifdef POLYWEB_SIMD
+    #include <x86intrin.h>
+#endif
 
 namespace pw {
     std::vector<char> WSMessage::build(const char* masking_key) const {

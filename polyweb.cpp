@@ -12,16 +12,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
-#if __has_include(<endian.h>)
-    #include <endian.h>
-#elif __has_include(<machine/endian.h>)
-    #include <machine/endian.h>
-#else
-    #define LITTLE_ENDIAN 1234
-    #define BIG_ENDIAN    4321
-    #define PDP_ENDIAN    3412
-    #define BYTE_ORDER    LITTLE_ENDIAN
-#endif
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>
 #endif
