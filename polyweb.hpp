@@ -2,6 +2,8 @@
 #define _POLYWEB_HPP
 
 #include "Polynet/polynet.hpp"
+#include "Polynet/smart_sockets.hpp"
+#include "Polynet/secure_sockets.hpp"
 #include "string.hpp"
 #include "threadpool.hpp"
 #include <cstddef>
@@ -70,6 +72,7 @@
 
 namespace pw {
     extern tp::ThreadPool threadpool;
+    
     namespace detail {
         extern thread_local int last_error;
 
@@ -86,7 +89,7 @@ namespace pw {
                 }
 
                 char c;
-                ssize_t result;
+                long result;
                 if ((result = buf_receiver.recv(conn, &c, 1)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
@@ -114,7 +117,7 @@ namespace pw {
                 }
 
                 char c;
-                ssize_t result;
+                long result;
                 if ((result = buf_receiver.recv(conn, &c, 1)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
@@ -380,24 +383,21 @@ namespace pw {
         std::vector<char> build(const char* masking_key = nullptr) const;
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
-
-    class Connection : public pn::tcp::Connection {
+    
+    template <typename Base>
+    class BasicConnection : public Base {
     public:
         bool ws_closed = false;
         void* data = nullptr; // User data
 
-        Connection() = default;
-        Connection(const pn::tcp::Connection& conn) {
+        template <typename... Ts>
+        BasicConnection(Ts... args):
+            Base(args...) {}
+        BasicConnection(const Base& conn) {
             *this = conn;
         }
-        Connection(pn::sockfd_t fd):
-            pn::tcp::Connection(fd) {}
-        Connection(struct sockaddr addr, socklen_t addrlen):
-            pn::tcp::Connection(addr, addrlen) {}
-        Connection(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen):
-            pn::tcp::Connection(fd, addr, addrlen) {}
 
-        inline Connection& operator=(const pn::tcp::Connection& conn) {
+        inline BasicConnection& operator=(const Base& conn) {
             if (this != &conn) {
                 this->fd = conn.fd;
                 this->addr = conn.addr;
@@ -408,32 +408,41 @@ namespace pw {
 
         using pn::tcp::Connection::send;
 
-        inline ssize_t send(const HTTPResponse& resp, int flags = 0) {
+        inline int send(const HTTPResponse& resp) {
             auto data = resp.build();
-            ssize_t result;
-            if ((result = send(data.data(), data.size(), flags)) == PN_ERROR) {
+            long result;
+            if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            } else if (result != data.size()) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
             }
-            return result;
+            return PN_OK;
         }
 
-        inline ssize_t send(const WSMessage& message, const char* masking_key = nullptr, int flags = 0) {
+        inline int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
-            ssize_t result;
-            if ((result = send(data.data(), data.size(), flags)) == PN_ERROR) {
+            long result;
+            if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            } else if (result != data.size()) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
             }
-            return result;
+            return PN_OK;
         }
 
-        inline auto send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1", int flags = 0) {
-            return send(HTTPResponse::make_basic(status_code, headers, http_version), flags);
+        inline auto send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
+            return send(HTTPResponse::make_basic(status_code, headers, http_version));
         }
 
         int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
     };
 
-    typedef std::function<HTTPResponse(const Connection&, const HTTPRequest&, void*)> RouteCallback;
+    using Connection = BasicConnection<pn::tcp::Connection>;
+    using SecureConnection = BasicConnection<pn::tcp::SecureConnection>;
 
     class Route {
     public:
@@ -445,30 +454,35 @@ namespace pw {
             wildcard(wildcard) {}
     };
 
-    class HTTPRoute : public Route {
+    template <typename T>
+    class BasicHTTPRoute : public Route {
     public:
-        RouteCallback cb;
+        std::function<HTTPResponse(const T&, const HTTPRequest&, void*)> cb;
 
-        HTTPRoute() = default;
-        HTTPRoute(RouteCallback cb, void* data = nullptr, bool wildcard = false):
+        BasicHTTPRoute() = default;
+        BasicHTTPRoute(decltype(cb) cb, void* data = nullptr, bool wildcard = false):
             Route(data, wildcard),
             cb(cb) {}
     };
 
-    class WSRoute : public Route {
-    public:
-        RouteCallback on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
-        std::function<void(Connection&, void*)> on_open;
-        std::function<void(Connection&, WSMessage, void*)> on_message;
-        std::function<void(Connection&, uint16_t, const std::string&, bool clean, void*)> on_close;
+    using HTTPRoute = BasicHTTPRoute<Connection>;
+    using SecureHTTPRoute = BasicHTTPRoute<SecureConnection>;
 
-        WSRoute() = default;
-        WSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
+    template <typename T>
+    class BasicWSRoute : public Route {
+    public:
+        std::function<HTTPResponse(const Connection&, const HTTPRequest&, void*)> on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
+        std::function<void(T&, void*)> on_open;
+        std::function<void(T&, WSMessage, void*)> on_message;
+        std::function<void(T&, uint16_t, const std::string&, bool clean, void*)> on_close;
+
+        BasicWSRoute() = default;
+        BasicWSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
             Route(data, wildcard),
             on_open(on_open),
             on_message(on_message),
             on_close(on_close) {}
-        WSRoute(RouteCallback on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
+        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
             Route(data, wildcard),
             on_connect(on_connect),
             on_open(on_open),
@@ -476,7 +490,11 @@ namespace pw {
             on_close(on_close) {}
     };
 
-    class Server : public pn::tcp::Server {
+    using WSRoute = BasicWSRoute<Connection>;
+    using SecureWSRoute = BasicWSRoute<SecureConnection>;
+
+    template <typename Base>
+    class BasicServer : public Base {
     public:
         std::function<HTTPResponse(uint16_t)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
         size_t buffer_size = 4'000;
@@ -488,15 +506,15 @@ namespace pw {
         size_t ws_message_rlimit = 32'000'000;
         size_t misc_rlimit = 1'000;
 
-        Server() = default;
-        Server(pn::sockfd_t fd):
-            pn::tcp::Server(fd) {}
-        Server(struct sockaddr addr, socklen_t addrlen):
-            pn::tcp::Server(addr, addrlen) {}
-        Server(pn::sockfd_t fd, struct sockaddr addr, socklen_t addrlen):
-            pn::tcp::Server(fd, addr, addrlen) {}
+        typedef BasicConnection<typename Base::connection_type> connection_type;
+        typedef BasicHTTPRoute<connection_type> http_route_type;
+        typedef BasicWSRoute<connection_type> ws_route_type;
 
-        inline void route(const std::string& target, HTTPRoute route) {
+        template <typename... Ts>
+        BasicServer(Ts... args):
+            Base(args...) {}
+
+        inline void route(const std::string& target, const http_route_type& route) {
             routes[target] = route;
         }
 
@@ -504,7 +522,7 @@ namespace pw {
             routes.erase(target);
         }
 
-        inline void route_ws(const std::string& target, const WSRoute& route) {
+        inline void route_ws(const std::string& target, const ws_route_type& route) {
             ws_routes[target] = route;
         }
 
@@ -513,21 +531,24 @@ namespace pw {
         }
 
         int listen(
-            std::function<bool(pn::tcp::Connection&, void*)> filter = [](pn::tcp::Connection&, void*) {
+            std::function<bool(typename Base::connection_type&, void*)> filter = [](typename Base::connection_type&, void*) {
                 return false;
             },
             void* filter_data = nullptr,
             int backlog = 128);
 
     protected:
-        std::unordered_map<std::string, HTTPRoute> routes;
-        std::unordered_map<std::string, WSRoute> ws_routes;
+        std::unordered_map<std::string, http_route_type> routes;
+        std::unordered_map<std::string, ws_route_type> ws_routes;
 
-        int handle_ws_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver, WSRoute& route);
-        int handle_connection(pn::UniqueSock<Connection> conn, pn::tcp::BufReceiver& buf_receiver);
-        int handle_error(Connection& conn, uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
-        int handle_error(Connection& conn, uint16_t status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
+        int handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, ws_route_type& route);
+        int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver);
+        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
+        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
     };
+
+    using Server = BasicServer<pn::tcp::Server>;
+    using SecureServer = BasicServer<pn::tcp::SecureServer>;
 } // namespace pw
 
 #endif
