@@ -202,10 +202,11 @@ namespace pw {
             } else if (allow_slash && c == '/') {
                 ret.push_back('/');
             } else if (c == '\0' || strchr(allowed_characters, c) == nullptr) {
-                std::ostringstream ss;
-                ss << std::hex << +c;
+                unsigned char upper_nibble = (unsigned char) (c & 0xF0) >> 4;
+                unsigned char lower_nibble = c & 0xF;
                 ret.push_back('%');
-                ret += string::to_upper_copy(ss.str());
+                ret.push_back(upper_nibble < 10 ? '0' + upper_nibble : 'A' + upper_nibble - 10);
+                ret.push_back(lower_nibble < 10 ? '0' + lower_nibble : 'A' + lower_nibble - 10);
             } else {
                 ret.push_back(c);
             }
@@ -292,6 +293,45 @@ namespace pw {
                 map[percent_decode(split_parameter[0], true)]; // Create key with empty value
             }
         }
+    }
+
+    std::string URLInfo::build() const {
+        std::string ret = scheme + "://" + host;
+        if (!path.empty() || !query_parameters->empty()) {
+            ret += path.empty() ? "/" : path;
+            if (!query_parameters->empty()) {
+                ret += '?' + query_parameters.build();
+            }
+        }
+        return ret;
+    }
+
+    int URLInfo::parse(const std::string& url) {
+        size_t scheme_host_delimiter_pos;
+        if ((scheme_host_delimiter_pos = url.find("://")) == std::string::npos) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+        this->scheme = url.substr(0, scheme_host_delimiter_pos);
+
+        size_t path_pos;
+        if ((path_pos = url.find('/', scheme_host_delimiter_pos + 3)) == scheme_host_delimiter_pos + 3) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+        this->host = url.substr(scheme_host_delimiter_pos + 3, path_pos - (scheme_host_delimiter_pos + 3));
+
+        if (path_pos != std::string::npos) {
+            size_t path_query_string_delimiter_pos = url.find('?', path_pos + 1);
+            this->path = url.substr(path_pos, path_query_string_delimiter_pos - path_pos);
+
+            if (path_query_string_delimiter_pos != std::string::npos) {
+                size_t query_parameters_fragment_delimiter_pos = url.find('#', path_query_string_delimiter_pos + 1);
+                this->query_parameters.parse(url.substr(path_query_string_delimiter_pos + 1, query_parameters_fragment_delimiter_pos - (path_query_string_delimiter_pos + 1)));
+            }
+        }
+
+        return PN_OK;
     }
 
     std::vector<char> HTTPRequest::build() const {
@@ -935,6 +975,31 @@ namespace pw {
 
         return PN_OK;
     }
+
+    // int fetch(const std::string& url, HTTPResponse& resp) {
+    //     if (string::starts_with(url, "http://")) {
+    //         std::string hostname;
+    //         uint16_t port;
+    //         std::string target;
+    //         QueryParameters query_parameters;
+    //         {
+    //             std::string host = url.substr(7, url.find('/', 7));
+    //             size_t colon_pos = host.find(':');
+    //             if (colon_pos == std::string::npos) {
+    //                 hostname = host;
+    //                 port = 80;
+    //             }
+    //         }
+
+    //         // pw::Connection conn;
+
+    //         // if (conn.connect())
+    //     } else if (string::starts_with(url, "https://")) {
+    //     } else {
+    //         detail::set_last_error(PW_EWEB);
+    //         return PN_ERROR;
+    //     }
+    // }
 
     template class BasicConnection<pn::tcp::Connection>;
     template class BasicConnection<pn::tcp::SecureConnection>;

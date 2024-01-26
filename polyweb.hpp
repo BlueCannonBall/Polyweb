@@ -262,6 +262,24 @@ namespace pw {
         void parse(const std::string& query_string);
     };
 
+    class URLInfo {
+    public:
+        std::string scheme;
+        std::string host;
+        std::string path;
+        QueryParameters query_parameters;
+
+        URLInfo() = default;
+        URLInfo(const std::string& url) { // Avoid using this constructor unless you're certain that the URL is valid!
+            if (this->parse(url) == PN_ERROR) {
+                throw std::runtime_error("Invalid URL passed to pw::URLInfo constructor");
+            }
+        }
+
+        std::string build() const;
+        int parse(const std::string& url);
+    };
+
     class HTTPRequest {
     public:
         std::string method;
@@ -549,6 +567,8 @@ namespace pw {
 
     using Server = BasicServer<pn::tcp::Server>;
     using SecureServer = BasicServer<pn::tcp::SecureServer>;
+
+    int fetch(const std::string& url, HTTPResponse& resp);
 } // namespace pw
 
 #endif

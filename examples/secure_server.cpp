@@ -1,5 +1,4 @@
 #include "../polyweb.hpp"
-#include <openssl/ssl.h>
 
 int main() {
     pn::init();
