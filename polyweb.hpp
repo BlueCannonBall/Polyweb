@@ -293,10 +293,11 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPRequest() = default;
-        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}):
+        HTTPRequest(const std::string& method, const std::string& target, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             method(method),
             target(target),
-            headers(headers) {}
+            headers(headers),
+            http_version(http_version) {}
         HTTPRequest(const std::string& method, const std::string& target, const std::vector<char>& body, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1"):
             method(method),
             target(target),
@@ -580,7 +581,11 @@ namespace pw {
     using Server = BasicServer<pn::tcp::Server>;
     using SecureServer = BasicServer<pn::tcp::SecureServer>;
 
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp);
+    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, unsigned int max_redirects = 3);
+    int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, unsigned int max_redirects = 3);
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body = {}, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body = {}, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
 } // namespace pw
 
 #endif

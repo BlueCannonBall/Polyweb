@@ -341,7 +341,7 @@ namespace pw {
     unsigned short URLInfo::port() const {
         size_t hostname_port_delimiter_pos;
         if ((hostname_port_delimiter_pos = host.find(':')) == std::string::npos) {
-            return this->scheme == "https" ? 443 : 80;
+            return this->scheme == "https" || this->scheme == "wss" ? 443 : 80;
         } else {
             std::string port = host.substr(hostname_port_delimiter_pos + 1);
             try {
@@ -1015,20 +1015,15 @@ namespace pw {
         return PN_OK;
     }
 
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp) {
-        URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
-        }
-
-        if (url_info.scheme == "https") {
+    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, unsigned int max_redirects) {
+        if (secure) {
             pn::UniqueSocket<pw::SecureClient> client;
             pn::tcp::BufReceiver buf_receiver;
-            if (client->connect(url_info.hostname(), url_info.port()) == PN_ERROR) {
+            if (client->connect(hostname, port) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
-            if (client->ssl_init(url_info.hostname()) == PN_ERROR) {
+            if (client->ssl_init(hostname) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
@@ -1037,7 +1032,13 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            HTTPRequest req(method, url_info.path, {{"Host", url_info.host}});
+            if (!req.headers.count("Host")) {
+                resp.headers["Host"] = hostname + ':' + std::to_string(port);
+            }
+            if (!req.headers.count("Connection")) {
+                resp.headers["Connection"] = "close";
+            }
+
             if (client->send(req) == PN_ERROR) {
                 return PN_ERROR;
             }
@@ -1048,12 +1049,18 @@ namespace pw {
         } else {
             pn::UniqueSocket<pw::Client> client;
             pn::tcp::BufReceiver buf_receiver;
-            if (client->connect(url_info.hostname(), url_info.port()) == PN_ERROR) {
+            if (client->connect(hostname, port) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
 
-            HTTPRequest req(method, url_info.path, {{"Host", url_info.host}});
+            if (!req.headers.count("Host")) {
+                resp.headers["Host"] = hostname + ':' + std::to_string(port);
+            }
+            if (!req.headers.count("Connection")) {
+                resp.headers["Connection"] = "close";
+            }
+
             if (client->send(req) == PN_ERROR) {
                 return PN_ERROR;
             }
@@ -1063,7 +1070,35 @@ namespace pw {
             }
         }
 
-        return PN_OK;
+        return PN_ERROR;
+    }
+
+    int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, unsigned int max_redirects) {
+        return fetch(hostname, secure ? 443 : 80, secure, req, resp, max_redirects);
+    }
+
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
+        URLInfo url_info;
+        if (url_info.parse(url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path, headers, http_version), resp, max_redirects);
+    }
+
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
+        URLInfo url_info;
+        if (url_info.parse(url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path, body, headers, http_version), resp, max_redirects);
+    }
+
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
+        URLInfo url_info;
+        if (url_info.parse(url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path, body, headers, http_version), resp, max_redirects);
     }
 
     template class BasicConnection<pn::tcp::Connection>;
