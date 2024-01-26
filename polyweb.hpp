@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
-#define PW_SERVER_NAME "Polyweb"
+#define PW_SERVER_CLIENT_NAME "Polyweb"
 
 // Bridged
 #ifdef _WIN32
@@ -279,8 +279,19 @@ namespace pw {
         std::string build() const;
         int parse(const std::string& url);
 
-        std::string hostname() const;
+        inline std::string hostname() const {
+            return host.substr(0, host.find(':'));
+        }
+
         unsigned short port() const;
+
+        inline std::string path_with_query_parameters() const {
+            if (query_parameters->empty()) {
+                return path;
+            } else {
+                return path + '?' + query_parameters.build();
+            }
+        }
     };
 
     class HTTPRequest {

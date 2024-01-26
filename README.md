@@ -1,5 +1,5 @@
 # Polyweb
-A backend web framework utilizing Polynet.
+A web framework utilizing Polynet.
 
 ## Quick Examples
 ```cpp

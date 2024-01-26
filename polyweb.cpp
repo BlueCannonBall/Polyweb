@@ -336,10 +336,6 @@ namespace pw {
         return PN_OK;
     }
 
-    std::string URLInfo::hostname() const {
-        return host.substr(0, host.find(':'));
-    }
-
     unsigned short URLInfo::port() const {
         size_t hostname_port_delimiter_pos;
         if ((hostname_port_delimiter_pos = host.find(':')) == std::string::npos) {
@@ -860,7 +856,7 @@ namespace pw {
                     }
 
                     if (!resp.headers.count("Server")) {
-                        resp.headers["Server"] = PW_SERVER_NAME;
+                        resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
                     }
 
                     if (resp.status_code == 101) {
@@ -945,7 +941,7 @@ namespace pw {
                     }
 
                     if (!resp.headers.count("Server")) {
-                        resp.headers["Server"] = PW_SERVER_NAME;
+                        resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
                     }
                     if (!resp.headers.count("Connection")) {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
@@ -978,7 +974,7 @@ namespace pw {
         }
 
         if (!resp.headers.count("Server")) {
-            resp.headers["Server"] = PW_SERVER_NAME;
+            resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
         }
 
         for (const auto& header : headers) {
@@ -1004,7 +1000,7 @@ namespace pw {
         }
 
         if (!resp.headers.count("Server")) {
-            resp.headers["Server"] = PW_SERVER_NAME;
+            resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
         }
         if (!resp.headers.count("Connection")) {
             resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
@@ -1018,6 +1014,9 @@ namespace pw {
     }
 
     int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, unsigned int max_redirects) {
+        if (!req.headers.count("User-Agent")) {
+            req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
+        }
         if (!req.headers.count("Host")) {
             unsigned short default_port[2] = {80, 443};
             if (port == default_port[secure]) {
@@ -1091,7 +1090,7 @@ namespace pw {
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
-        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path, headers, http_version), resp, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path_with_query_parameters(), headers, http_version), resp, max_redirects);
     }
 
     int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
@@ -1099,7 +1098,7 @@ namespace pw {
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
-        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path, body, headers, http_version), resp, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path_with_query_parameters(), body, headers, http_version), resp, max_redirects);
     }
 
     int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
@@ -1107,7 +1106,7 @@ namespace pw {
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
-        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path, body, headers, http_version), resp, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path_with_query_parameters(), body, headers, http_version), resp, max_redirects);
     }
 
     template class BasicConnection<pn::tcp::Connection>;
