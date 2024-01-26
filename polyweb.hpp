@@ -420,13 +420,6 @@ namespace pw {
 
         BasicConnection<Base>& operator=(const Base& conn);
 
-        // inline BasicConnection<pn::tcp::SecureConnection>& operator=(const Base& conn) {
-        //     if (this != &conn) {
-        //         *this = (BasicConnection) conn;
-        //     }
-        //     return *this;
-        // }
-
         using pn::tcp::Connection::send;
 
         inline int send(const HTTPRequest& req) {
