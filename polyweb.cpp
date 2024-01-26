@@ -950,7 +950,7 @@ namespace pw {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
                     }
 
-                    if (conn->send(resp) == PN_ERROR) {
+                    if (conn->send(resp, req.method == "HEAD") == PN_ERROR) {
                         return PN_ERROR;
                     }
                 } else if (!ws_route_target.empty()) {
