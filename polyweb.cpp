@@ -499,7 +499,7 @@ namespace pw {
         return PN_OK;
     }
 
-    std::vector<char> HTTPResponse::build() const {
+    std::vector<char> HTTPResponse::build(bool head_only) const {
         std::vector<char> ret;
 
         ret.insert(ret.end(), this->http_version.begin(), this->http_version.end());
@@ -527,12 +527,12 @@ namespace pw {
             ret.insert(ret.end(), header.begin(), header.end());
         }
         ret.insert(ret.end(), {'\r', '\n'});
-        ret.insert(ret.end(), this->body.begin(), this->body.end());
+        if (!head_only) ret.insert(ret.end(), this->body.begin(), this->body.end());
 
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         http_version.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -610,27 +610,58 @@ namespace pw {
             }
         }
 
-        HTTPHeaders::const_iterator transfer_encoding_it;
-        HTTPHeaders::const_iterator content_length_it;
-        if ((transfer_encoding_it = headers.find("Transfer-Encoding")) != headers.end()) {
-            if (string::iequals(transfer_encoding_it->second, "chunked")) {
-                for (;;) {
-                    std::string chunk_size_string;
-                    if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-                    if (chunk_size_string.empty()) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
-                    }
+        if (!head_only) {
+            HTTPHeaders::const_iterator transfer_encoding_it;
+            HTTPHeaders::const_iterator content_length_it;
+            if ((transfer_encoding_it = headers.find("Transfer-Encoding")) != headers.end()) {
+                if (string::iequals(transfer_encoding_it->second, "chunked")) {
+                    for (;;) {
+                        std::string chunk_size_string;
+                        if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PN_ERROR) {
+                            return PN_ERROR;
+                        }
+                        if (chunk_size_string.empty()) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
 
-                    unsigned long long chunk_size;
-                    {
-                        std::istringstream ss(chunk_size_string);
-                        ss >> std::hex >> chunk_size;
-                    }
+                        unsigned long long chunk_size;
+                        {
+                            std::istringstream ss(chunk_size_string);
+                            ss >> std::hex >> chunk_size;
+                        }
 
-                    if (!chunk_size) {
+                        if (!chunk_size) {
+                            char end_buf[2];
+                            long result;
+                            if ((result = buf_receiver.recvall(conn, end_buf, 2)) == PN_ERROR) {
+                                detail::set_last_error(PW_ENET);
+                                return PN_ERROR;
+                            } else if (result != 2) {
+                                detail::set_last_error(PW_EWEB);
+                                return PN_ERROR;
+                            }
+                            break;
+                        }
+
+                        size_t end = body.size();
+
+                        if (chunk_size > body_chunk_rlimit || end + chunk_size > body_rlimit) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        } else {
+                            body.resize(end + chunk_size);
+                            long result;
+                            if ((result = buf_receiver.recvall(conn, &body[end], chunk_size)) == PN_ERROR) {
+                                detail::set_last_error(PW_ENET);
+                                return PN_ERROR;
+                            } else if ((unsigned long long) result != chunk_size) {
+                                detail::set_last_error(PW_EWEB);
+                                body.resize(end + result);
+                                return PN_ERROR;
+                            }
+                        }
+
                         char end_buf[2];
                         long result;
                         if ((result = buf_receiver.recvall(conn, end_buf, 2)) == PN_ERROR) {
@@ -640,65 +671,36 @@ namespace pw {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
-                        break;
                     }
+                } else { // Only chunked transfer encoding is supported atm
+                    detail::set_last_error(PW_EWEB);
+                    return PN_ERROR;
+                }
+            } else if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
+                unsigned long long content_length;
+                try {
+                    content_length = std::stoull(content_length_it->second);
+                } catch (...) {
+                    detail::set_last_error(PW_EWEB);
+                    return PN_ERROR;
+                }
 
-                    size_t end = body.size();
-
-                    if (chunk_size > body_chunk_rlimit || end + chunk_size > body_rlimit) {
+                if (content_length) {
+                    if (content_length > body_rlimit) {
                         detail::set_last_error(PW_EWEB);
                         return PN_ERROR;
-                    } else {
-                        body.resize(end + chunk_size);
-                        long result;
-                        if ((result = buf_receiver.recvall(conn, &body[end], chunk_size)) == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != chunk_size) {
-                            detail::set_last_error(PW_EWEB);
-                            body.resize(end + result);
-                            return PN_ERROR;
-                        }
                     }
 
-                    char end_buf[2];
+                    this->body.resize(content_length);
                     long result;
-                    if ((result = buf_receiver.recvall(conn, end_buf, 2)) == PN_ERROR) {
+                    if ((result = buf_receiver.recvall(conn, body.data(), body.size())) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
-                    } else if (result != 2) {
+                    } else if ((size_t) result != body.size()) {
                         detail::set_last_error(PW_EWEB);
+                        body.resize(result);
                         return PN_ERROR;
                     }
-                }
-            } else { // Only chunked transfer encoding is supported atm
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-        } else if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
-            unsigned long long content_length;
-            try {
-                content_length = std::stoull(content_length_it->second);
-            } catch (...) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-
-            if (content_length) {
-                if (content_length > body_rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                }
-
-                this->body.resize(content_length);
-                long result;
-                if ((result = buf_receiver.recvall(conn, body.data(), body.size())) == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if ((size_t) result != body.size()) {
-                    detail::set_last_error(PW_EWEB);
-                    body.resize(result);
-                    return PN_ERROR;
                 }
             }
         }
@@ -777,7 +779,8 @@ namespace pw {
 
     template <typename Base>
     int BasicServer<Base>::handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) {
-        bool keep_alive = true, websocket = false;
+        bool keep_alive = true;
+        bool websocket = false;
         while (conn && keep_alive) {
             HTTPRequest req;
             if (req.parse(*conn, buf_receiver, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PN_ERROR) {
@@ -807,10 +810,10 @@ namespace pw {
                     HTTPHeaders::const_iterator upgrade_it;
                     if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
-                        if (std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
+                        if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
                             websocket = true;
                         } else {
-                            if (handle_error(*conn, 501, keep_alive, req.http_version) == PN_ERROR) {
+                            if (handle_error(*conn, 501, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                                 return PN_ERROR;
                             }
                             continue;
@@ -849,7 +852,7 @@ namespace pw {
                     try {
                         resp = ws_routes[ws_route_target].on_connect(*conn, req, ws_routes[ws_route_target].data);
                     } catch (...) {
-                        if (handle_error(*conn, 500, keep_alive, req.http_version) == PN_ERROR) {
+                        if (handle_error(*conn, 500, keep_alive, false, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
                         }
                         continue;
@@ -885,7 +888,7 @@ namespace pw {
                             if (found_version) {
                                 resp.headers["Sec-WebSocket-Version"] = PW_WS_VERSION;
                             } else {
-                                if (handle_error(*conn, 501, keep_alive, req.http_version) == PN_ERROR) {
+                                if (handle_error(*conn, 501, keep_alive, false, req.http_version) == PN_ERROR) {
                                     return PN_ERROR;
                                 }
                                 continue;
@@ -920,11 +923,11 @@ namespace pw {
                         return handle_ws_connection(std::move(conn), buf_receiver, ws_routes[ws_route_target]);
                     }
                 } else if (!http_route_target.empty()) {
-                    if (handle_error(*conn, 400, keep_alive, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 400, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 } else {
-                    if (handle_error(*conn, 404, keep_alive, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 404, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 }
@@ -934,7 +937,7 @@ namespace pw {
                     try {
                         resp = routes[http_route_target].cb(*conn, req, routes[http_route_target].data);
                     } catch (...) {
-                        if (handle_error(*conn, 500, keep_alive, req.http_version) == PN_ERROR) {
+                        if (handle_error(*conn, 500, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                             return PN_ERROR;
                         }
                         continue;
@@ -951,11 +954,11 @@ namespace pw {
                         return PN_ERROR;
                     }
                 } else if (!ws_route_target.empty()) {
-                    if (handle_error(*conn, 426, {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 426, {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.method == "HEAD", req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 } else {
-                    if (handle_error(*conn, 404, keep_alive, req.http_version) == PN_ERROR) {
+                    if (handle_error(*conn, 404, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                         return PN_ERROR;
                     }
                 }
@@ -965,7 +968,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, const std::string& http_version) {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, const std::string& http_version) {
         HTTPResponse resp;
         try {
             resp = this->on_error(status_code);
@@ -983,7 +986,7 @@ namespace pw {
             }
         }
 
-        if (conn.send(resp) == PN_ERROR) {
+        if (conn.send(resp, head_only) == PN_ERROR) {
             return PN_ERROR;
         }
 
@@ -991,7 +994,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, const std::string& http_version) {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, const std::string& http_version) {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
@@ -1006,7 +1009,7 @@ namespace pw {
             resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
         }
 
-        if (conn.send(resp) == PN_ERROR) {
+        if (conn.send(resp, head_only) == PN_ERROR) {
             return PN_ERROR;
         }
 
@@ -1049,7 +1052,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver) == PN_ERROR) {
+            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
                 return PN_ERROR;
             }
         } else {
@@ -1064,7 +1067,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver) == PN_ERROR) {
+            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
                 return PN_ERROR;
             }
         }

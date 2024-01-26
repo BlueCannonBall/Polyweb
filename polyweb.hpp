@@ -377,14 +377,14 @@ namespace pw {
             return resp;
         }
 
-        std::vector<char> build() const;
+        std::vector<char> build(bool head_only = false) const;
 
-        inline std::string build_str() const {
-            std::vector<char> ret = build();
+        inline std::string build_str(bool head_only = false) const {
+            std::vector<char> ret = build(head_only);
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only = false, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         inline std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -447,8 +447,8 @@ namespace pw {
             return PN_OK;
         }
 
-        inline int send(const HTTPResponse& resp) {
-            auto data = resp.build();
+        inline int send(const HTTPResponse& resp, bool head_only = false) {
+            auto data = resp.build(head_only);
             long result;
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
@@ -585,8 +585,8 @@ namespace pw {
 
         int handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, ws_route_type& route);
         int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver);
-        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1");
-        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, const std::string& http_version = "HTTP/1.1");
+        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, const std::string& http_version = "HTTP/1.1");
+        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, const std::string& http_version = "HTTP/1.1");
     };
 
     using Server = BasicServer<pn::tcp::Server>;
