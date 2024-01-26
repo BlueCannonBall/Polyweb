@@ -729,6 +729,27 @@ namespace pw {
         return *this;
     }
 
+    template <>
+    Client& Client::operator=(const pn::tcp::Client& conn) {
+        if (this != &conn) {
+            this->fd = conn.fd;
+            this->addr = conn.addr;
+            this->addrlen = conn.addrlen;
+        }
+        return *this;
+    }
+
+    template <>
+    SecureClient& SecureClient::operator=(const pn::tcp::SecureClient& conn) {
+        if (this != &conn) {
+            this->fd = conn.fd;
+            this->addr = conn.addr;
+            this->addrlen = conn.addrlen;
+            this->ssl = conn.ssl;
+        }
+        return *this;
+    }
+
     template <typename Base>
     int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&, void*)> filter, void* filter_data, int backlog) {
         if (Base::listen([filter = std::move(filter), filter_data](typename Base::connection_type& conn, void* data) -> bool {
@@ -994,33 +1015,62 @@ namespace pw {
         return PN_OK;
     }
 
-    int fetch(const std::string& url, HTTPResponse& resp) {
-        if (string::starts_with(url, "http://")) {
-            std::string hostname;
-            uint16_t port;
-            std::string target;
-            QueryParameters query_parameters;
-            {
-                std::string host = url.substr(7, url.find('/', 7));
-                size_t colon_pos = host.find(':');
-                if (colon_pos == std::string::npos) {
-                    hostname = host;
-                    port = 80;
-                }
-            }
-
-            // pw::Connection conn;
-
-            // if (conn.connect())
-        } else if (string::starts_with(url, "https://")) {
-        } else {
-            detail::set_last_error(PW_EWEB);
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp) {
+        URLInfo url_info;
+        if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
+
+        if (url_info.scheme == "https") {
+            pn::UniqueSocket<pw::SecureClient> client;
+            pn::tcp::BufReceiver buf_receiver;
+            if (client->connect(url_info.hostname(), url_info.port()) == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            }
+            if (client->ssl_init(url_info.hostname()) == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            }
+            if (client->ssl_connect() == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            }
+
+            HTTPRequest req(method, url_info.path, {{"Host", url_info.host}});
+            if (client->send(req) == PN_ERROR) {
+                return PN_ERROR;
+            }
+
+            if (resp.parse(*client, buf_receiver) == PN_ERROR) {
+                return PN_ERROR;
+            }
+        } else {
+            pn::UniqueSocket<pw::Client> client;
+            pn::tcp::BufReceiver buf_receiver;
+            if (client->connect(url_info.hostname(), url_info.port()) == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            }
+
+            HTTPRequest req(method, url_info.path, {{"Host", url_info.host}});
+            if (client->send(req) == PN_ERROR) {
+                return PN_ERROR;
+            }
+
+            if (resp.parse(*client, buf_receiver) == PN_ERROR) {
+                return PN_ERROR;
+            }
+        }
+
+        return PN_OK;
     }
 
     template class BasicConnection<pn::tcp::Connection>;
     template class BasicConnection<pn::tcp::SecureConnection>;
+
+    template class BasicConnection<pn::tcp::Client>;
+    template class BasicConnection<pn::tcp::SecureClient>;
 
     template class BasicServer<pn::tcp::Server>;
     template class BasicServer<pn::tcp::SecureServer>;

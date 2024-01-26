@@ -263,6 +263,12 @@ namespace pw {
         return PN_OK;
     }
 
+    template class BasicConnection<pn::tcp::Connection>;
+    template class BasicConnection<pn::tcp::SecureConnection>;
+
+    template class BasicConnection<pn::tcp::Client>;
+    template class BasicConnection<pn::tcp::SecureClient>;
+
     template class BasicServer<pn::tcp::Server>;
     template class BasicServer<pn::tcp::SecureServer>;
 } // namespace pw

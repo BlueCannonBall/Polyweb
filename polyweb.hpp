@@ -429,6 +429,19 @@ namespace pw {
 
         using pn::tcp::Connection::send;
 
+        inline int send(const HTTPRequest& req) {
+            auto data = req.build();
+            long result;
+            if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            } else if (result != data.size()) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
+            }
+            return PN_OK;
+        }
+
         inline int send(const HTTPResponse& resp) {
             auto data = resp.build();
             long result;
@@ -464,6 +477,9 @@ namespace pw {
 
     using Connection = BasicConnection<pn::tcp::Connection>;
     using SecureConnection = BasicConnection<pn::tcp::SecureConnection>;
+
+    using Client = BasicConnection<pn::tcp::Client>;
+    using SecureClient = BasicConnection<pn::tcp::SecureClient>;
 
     class Route {
     public:
@@ -571,7 +587,7 @@ namespace pw {
     using Server = BasicServer<pn::tcp::Server>;
     using SecureServer = BasicServer<pn::tcp::SecureServer>;
 
-    int fetch(const std::string& url, HTTPResponse& resp);
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp);
 } // namespace pw
 
 #endif
