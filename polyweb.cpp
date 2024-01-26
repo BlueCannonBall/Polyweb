@@ -334,6 +334,24 @@ namespace pw {
         return PN_OK;
     }
 
+    std::string URLInfo::hostname() const {
+        return host.substr(0, host.find(':'));
+    }
+
+    unsigned short URLInfo::port() const {
+        size_t hostname_port_delimiter_pos;
+        if ((hostname_port_delimiter_pos = host.find(':')) == std::string::npos) {
+            return this->scheme == "https" ? 443 : 80;
+        } else {
+            std::string port = host.substr(hostname_port_delimiter_pos + 1);
+            try {
+                return std::stoi(port);
+            } catch (...) {
+                return 80;
+            }
+        }
+    }
+
     std::vector<char> HTTPRequest::build() const {
         std::vector<char> ret;
 
@@ -976,30 +994,30 @@ namespace pw {
         return PN_OK;
     }
 
-    // int fetch(const std::string& url, HTTPResponse& resp) {
-    //     if (string::starts_with(url, "http://")) {
-    //         std::string hostname;
-    //         uint16_t port;
-    //         std::string target;
-    //         QueryParameters query_parameters;
-    //         {
-    //             std::string host = url.substr(7, url.find('/', 7));
-    //             size_t colon_pos = host.find(':');
-    //             if (colon_pos == std::string::npos) {
-    //                 hostname = host;
-    //                 port = 80;
-    //             }
-    //         }
+    int fetch(const std::string& url, HTTPResponse& resp) {
+        if (string::starts_with(url, "http://")) {
+            std::string hostname;
+            uint16_t port;
+            std::string target;
+            QueryParameters query_parameters;
+            {
+                std::string host = url.substr(7, url.find('/', 7));
+                size_t colon_pos = host.find(':');
+                if (colon_pos == std::string::npos) {
+                    hostname = host;
+                    port = 80;
+                }
+            }
 
-    //         // pw::Connection conn;
+            // pw::Connection conn;
 
-    //         // if (conn.connect())
-    //     } else if (string::starts_with(url, "https://")) {
-    //     } else {
-    //         detail::set_last_error(PW_EWEB);
-    //         return PN_ERROR;
-    //     }
-    // }
+            // if (conn.connect())
+        } else if (string::starts_with(url, "https://")) {
+        } else {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+    }
 
     template class BasicConnection<pn::tcp::Connection>;
     template class BasicConnection<pn::tcp::SecureConnection>;

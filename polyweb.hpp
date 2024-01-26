@@ -278,6 +278,9 @@ namespace pw {
 
         std::string build() const;
         int parse(const std::string& url);
+
+        std::string hostname() const;
+        unsigned short port() const;
     };
 
     class HTTPRequest {
