@@ -584,8 +584,8 @@ namespace pw {
     int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, unsigned int max_redirects = 3);
     int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, unsigned int max_redirects = 3);
     int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body = {}, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body = {}, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
 } // namespace pw
 
 #endif
