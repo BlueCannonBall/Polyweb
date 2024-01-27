@@ -29,13 +29,13 @@ namespace pw {
         std::vector<std::string> split_and_trim(const std::string& str, char delimiter);
 
         struct CaseInsensitiveComparer {
-            inline bool operator()(const std::string& a, const std::string& b) const {
+            bool operator()(const std::string& a, const std::string& b) const {
                 return string::iequals(a, b);
             }
         };
 
         struct CaseInsensitiveHasher {
-            inline size_t operator()(const std::string& str) const {
+            size_t operator()(const std::string& str) const {
                 return std::hash<std::string>()(string::to_lower_copy(str));
             }
         };

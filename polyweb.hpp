@@ -238,23 +238,23 @@ namespace pw {
     public:
         typedef decltype(map) map_type;
 
-        inline operator map_type() const {
+        operator map_type() const {
             return map;
         }
 
-        inline const map_type& operator*() const {
+        const map_type& operator*() const {
             return map;
         }
 
-        inline map_type& operator*() {
+        map_type& operator*() {
             return map;
         }
 
-        inline const map_type* operator->() const {
+        const map_type* operator->() const {
             return &map;
         }
 
-        inline map_type* operator->() {
+        map_type* operator->() {
             return &map;
         }
 
@@ -279,13 +279,13 @@ namespace pw {
         std::string build() const;
         int parse(const std::string& url);
 
-        inline std::string hostname() const {
+        std::string hostname() const {
             return host.substr(0, host.find(':'));
         }
 
         unsigned short port() const;
 
-        inline std::string path_with_query_parameters() const {
+        std::string path_with_query_parameters() const {
             if (query_parameters->empty()) {
                 return path;
             } else {
@@ -330,14 +330,14 @@ namespace pw {
 
         std::vector<char> build() const;
 
-        inline std::string build_str() const {
+        std::string build_str() const {
             std::vector<char> ret = build();
             return std::string(ret.begin(), ret.end());
         }
 
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
-        inline std::string body_to_string() const {
+        std::string body_to_string() const {
             return std::string(body.begin(), body.end());
         }
     };
@@ -369,7 +369,7 @@ namespace pw {
             headers(headers),
             http_version(http_version) {}
 
-        static inline HTTPResponse make_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
+        static HTTPResponse make_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
             HTTPResponse resp(status_code, std::to_string(status_code) + ' ' + status_code_to_reason_phrase(status_code), headers, http_version);
             if (!resp.headers.count("Content-Type")) {
                 resp.headers["Content-Type"] = "text/plain";
@@ -379,14 +379,14 @@ namespace pw {
 
         std::vector<char> build(bool head_only = false) const;
 
-        inline std::string build_str(bool head_only = false) const {
+        std::string build_str(bool head_only = false) const {
             std::vector<char> ret = build(head_only);
             return std::string(ret.begin(), ret.end());
         }
 
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only = false, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
-        inline std::string body_to_string() const {
+        std::string body_to_string() const {
             return std::string(body.begin(), body.end());
         }
     };
@@ -409,7 +409,7 @@ namespace pw {
         WSMessage(uint8_t opcode):
             opcode(opcode) {}
 
-        inline std::string to_string() const {
+        std::string to_string() const {
             return std::string(data.begin(), data.end());
         }
 
@@ -434,7 +434,7 @@ namespace pw {
 
         using pn::tcp::Connection::send;
 
-        inline int send(const HTTPRequest& req) {
+        int send(const HTTPRequest& req) {
             auto data = req.build();
             long result;
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
@@ -447,7 +447,7 @@ namespace pw {
             return PN_OK;
         }
 
-        inline int send(const HTTPResponse& resp, bool head_only = false) {
+        int send(const HTTPResponse& resp, bool head_only = false) {
             auto data = resp.build(head_only);
             long result;
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
@@ -460,7 +460,7 @@ namespace pw {
             return PN_OK;
         }
 
-        inline int send(const WSMessage& message, const char* masking_key = nullptr) {
+        int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
             long result;
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
@@ -473,7 +473,7 @@ namespace pw {
             return PN_OK;
         }
 
-        inline auto send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
+        int send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
             return send(HTTPResponse::make_basic(status_code, headers, http_version));
         }
 
@@ -556,19 +556,19 @@ namespace pw {
         BasicServer(Ts... args):
             Base(args...) {}
 
-        inline void route(const std::string& target, const http_route_type& route) {
+        void route(const std::string& target, const http_route_type& route) {
             routes[target] = route;
         }
 
-        inline void unroute(const std::string& target) {
+        void unroute(const std::string& target) {
             routes.erase(target);
         }
 
-        inline void route_ws(const std::string& target, const ws_route_type& route) {
+        void route_ws(const std::string& target, const ws_route_type& route) {
             ws_routes[target] = route;
         }
 
-        inline void unroute_ws(const std::string& target) {
+        void unroute_ws(const std::string& target) {
             ws_routes.erase(target);
         }
 
