@@ -8,7 +8,7 @@ int main() {
         std::cerr << "Error: " << pw::universal_strerror() << std::endl;
         return 1;
     }
-    std::cout << resp.build_str() << std::endl;
+    std::cout << resp.body_string() << std::endl;
 
     pn::quit();
 }
