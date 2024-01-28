@@ -340,7 +340,7 @@ namespace pw {
 
         std::vector<char> build() const;
 
-        std::string build_str() const {
+        std::string build_string() const {
             std::vector<char> ret = build();
             return std::string(ret.begin(), ret.end());
         }
