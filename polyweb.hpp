@@ -454,7 +454,7 @@ namespace pw {
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
-            } else if (result != data.size()) {
+            } else if (result != (long) data.size()) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
             }
@@ -467,7 +467,7 @@ namespace pw {
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
-            } else if (result != data.size()) {
+            } else if (result != (long) data.size()) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
             }
@@ -480,7 +480,7 @@ namespace pw {
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
-            } else if (result != data.size()) {
+            } else if (result != (long) data.size()) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
             }
