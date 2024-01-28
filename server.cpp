@@ -37,7 +37,7 @@ namespace pw {
     int BasicServer<Base>::handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) {
         bool keep_alive = true;
         bool websocket = false;
-        while (conn && keep_alive) {
+        do {
             HTTPRequest req;
             if (req.parse(*conn, buf_receiver, header_climit, header_name_rlimit, header_value_rlimit) == PN_ERROR) {
                 uint16_t resp_status_code;
@@ -219,7 +219,7 @@ namespace pw {
                     }
                 }
             }
-        }
+        } while (conn && keep_alive);
         return PN_OK;
     }
 
