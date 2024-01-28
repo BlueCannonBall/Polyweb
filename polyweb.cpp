@@ -350,10 +350,12 @@ namespace pw {
                 path = '/' + url.substr(offset, path_query_string_delimiter_pos - offset);
             }
             offset = path_query_string_delimiter_pos + 1;
+        } else {
+            path = '/' + url.substr(offset, url.find('#', offset));
+            return PN_OK;
         }
 
         query_parameters.parse(url.substr(offset, url.find('#', offset)));
-
         return PN_OK;
     }
 
