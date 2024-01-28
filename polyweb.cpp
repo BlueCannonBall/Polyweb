@@ -8,10 +8,7 @@
 #include <iomanip>
 #include <iterator>
 #include <locale>
-#include <openssl/sha.h>
 #include <sstream>
-#include <stdexcept>
-#include <utility>
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>
 #endif
@@ -296,9 +293,13 @@ namespace pw {
     }
 
     std::string URLInfo::build() const {
-        std::string ret = scheme + "://" + host;
-        if (!path.empty() || !query_parameters->empty()) {
-            ret += path.empty() ? "/" : path;
+        std::string ret = scheme + "://";
+        if (!credentials.empty()) {
+            ret += credentials + '@';
+        }
+        ret += host;
+        if (path != "/" || !query_parameters->empty()) {
+            ret += path;
             if (!query_parameters->empty()) {
                 ret += '?' + query_parameters.build();
             }
@@ -307,31 +308,51 @@ namespace pw {
     }
 
     int URLInfo::parse(const std::string& url) {
+        size_t offset = 0;
+
         size_t scheme_host_delimiter_pos;
-        if ((scheme_host_delimiter_pos = url.find("://")) == std::string::npos) {
+        if ((scheme_host_delimiter_pos = url.find("://", offset)) == std::string::npos || scheme_host_delimiter_pos == offset) {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
-        this->scheme = url.substr(0, scheme_host_delimiter_pos);
+        scheme = url.substr(offset, scheme_host_delimiter_pos - offset);
+        offset = scheme_host_delimiter_pos + 3;
+
+        size_t credentials_host_delimiter_pos;
+        if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos) {
+            if (credentials_host_delimiter_pos == offset) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
+            }
+            credentials = url.substr(offset, credentials_host_delimiter_pos - offset);
+            offset = credentials_host_delimiter_pos + 1;
+        }
 
         size_t path_pos;
-        if ((path_pos = url.find('/', scheme_host_delimiter_pos + 3)) == scheme_host_delimiter_pos + 3) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
-        }
-        this->host = url.substr(scheme_host_delimiter_pos + 3, path_pos - (scheme_host_delimiter_pos + 3));
-
-        if (path_pos != std::string::npos) {
-            size_t path_query_string_delimiter_pos = url.find('?', path_pos + 1);
-            this->path = url.substr(path_pos, path_query_string_delimiter_pos - path_pos);
-
-            if (path_query_string_delimiter_pos != std::string::npos) {
-                size_t query_parameters_fragment_delimiter_pos = url.find('#', path_query_string_delimiter_pos + 1);
-                this->query_parameters.parse(url.substr(path_query_string_delimiter_pos + 1, query_parameters_fragment_delimiter_pos - (path_query_string_delimiter_pos + 1)));
+        if ((path_pos = url.find('/', offset)) != std::string::npos) {
+            if (path_pos == offset) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
             }
+            host = url.substr(offset, path_pos - offset);
+            offset = path_pos + 1;
         } else {
-            this->path = '/';
+            host = url.substr(offset);
+            path = '/';
+            return PN_OK;
         }
+
+        size_t path_query_string_delimiter_pos;
+        if ((path_query_string_delimiter_pos = url.find('?', offset)) != std::string::npos) {
+            if (path_query_string_delimiter_pos == offset) {
+                path = '/';
+            } else {
+                path = '/' + url.substr(offset, path_query_string_delimiter_pos - offset);
+            }
+            offset = path_query_string_delimiter_pos + 1;
+        }
+
+        query_parameters.parse(url.substr(offset, url.find('#', offset)));
 
         return PN_OK;
     }
@@ -339,7 +360,7 @@ namespace pw {
     unsigned short URLInfo::port() const {
         size_t hostname_port_delimiter_pos;
         if ((hostname_port_delimiter_pos = host.find(':')) == std::string::npos) {
-            return this->scheme == "https" || this->scheme == "wss" ? 443 : 80;
+            return scheme == "https" || scheme == "wss" ? 443 : 80;
         } else {
             std::string port = host.substr(hostname_port_delimiter_pos + 1);
             try {
@@ -353,10 +374,10 @@ namespace pw {
     std::vector<char> HTTPRequest::build() const {
         std::vector<char> ret;
 
-        ret.insert(ret.end(), this->method.begin(), this->method.end());
+        ret.insert(ret.end(), method.begin(), method.end());
         ret.push_back(' ');
 
-        std::string encoded_target = percent_encode(this->target);
+        std::string encoded_target = percent_encode(target);
         ret.insert(ret.end(), encoded_target.begin(), encoded_target.end());
         if (!query_parameters->empty()) {
             ret.push_back('?');
@@ -365,22 +386,22 @@ namespace pw {
         }
         ret.push_back(' ');
 
-        ret.insert(ret.end(), this->http_version.begin(), this->http_version.end());
+        ret.insert(ret.end(), http_version.begin(), http_version.end());
         ret.insert(ret.end(), {'\r', '\n'});
 
-        for (const auto& header : this->headers) {
+        for (const auto& header : headers) {
             ret.insert(ret.end(), header.first.begin(), header.first.end());
             ret.insert(ret.end(), {':', ' '});
             ret.insert(ret.end(), header.second.begin(), header.second.end());
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!headers.count("Content-Length") && !this->body.empty()) {
-            std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
+        if (!headers.count("Content-Length") && !body.empty()) {
+            std::string header = "Content-Length: " + std::to_string(body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
         ret.insert(ret.end(), {'\r', '\n'});
-        ret.insert(ret.end(), this->body.begin(), this->body.end());
+        ret.insert(ret.end(), body.begin(), body.end());
 
         return ret;
     }
@@ -439,7 +460,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            this->headers[header_name] = header_value;
+            headers[header_name] = header_value;
 
             char end_check_buf[2];
             long result;
@@ -474,12 +495,12 @@ namespace pw {
                     return PN_ERROR;
                 }
 
-                this->body.resize(content_length);
+                body.resize(content_length);
                 long result;
-                if ((result = buf_receiver.recvall(conn, body.data(), body.size())) == PN_ERROR) {
+                if ((result = buf_receiver.recvall(conn, body.data(), content_length)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
-                } else if ((size_t) result != body.size()) {
+                } else if ((size_t) result != content_length) {
                     detail::set_last_error(PW_EWEB);
                     body.resize(result);
                     return PN_ERROR;
@@ -502,15 +523,15 @@ namespace pw {
     std::vector<char> HTTPResponse::build(bool head_only) const {
         std::vector<char> ret;
 
-        ret.insert(ret.end(), this->http_version.begin(), this->http_version.end());
+        ret.insert(ret.end(), http_version.begin(), http_version.end());
         ret.push_back(' ');
         std::string status_code_string = std::to_string(status_code);
         ret.insert(ret.end(), status_code_string.begin(), status_code_string.end());
         ret.push_back(' ');
-        ret.insert(ret.end(), this->reason_phrase.begin(), this->reason_phrase.end());
+        ret.insert(ret.end(), reason_phrase.begin(), reason_phrase.end());
         ret.insert(ret.end(), {'\r', '\n'});
 
-        for (const auto& header : this->headers) {
+        for (const auto& header : headers) {
             ret.insert(ret.end(), header.first.begin(), header.first.end());
             ret.insert(ret.end(), {':', ' '});
             ret.insert(ret.end(), header.second.begin(), header.second.end());
@@ -523,11 +544,11 @@ namespace pw {
         }
 
         if (!headers.count("Content-Length")) {
-            std::string header = "Content-Length: " + std::to_string(this->body.size()) + "\r\n";
+            std::string header = "Content-Length: " + std::to_string(body.size()) + "\r\n";
             ret.insert(ret.end(), header.begin(), header.end());
         }
         ret.insert(ret.end(), {'\r', '\n'});
-        if (!head_only) ret.insert(ret.end(), this->body.begin(), this->body.end());
+        if (!head_only) ret.insert(ret.end(), body.begin(), body.end());
 
         return ret;
     }
@@ -591,7 +612,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            this->headers[header_name] = header_value;
+            headers[header_name] = header_value;
 
             char end_check_buf[2];
             long result;
@@ -691,12 +712,12 @@ namespace pw {
                         return PN_ERROR;
                     }
 
-                    this->body.resize(content_length);
+                    body.resize(content_length);
                     long result;
-                    if ((result = buf_receiver.recvall(conn, body.data(), body.size())) == PN_ERROR) {
+                    if ((result = buf_receiver.recvall(conn, body.data(), content_length)) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
-                    } else if ((size_t) result != body.size()) {
+                    } else if ((size_t) result != content_length) {
                         detail::set_last_error(PW_EWEB);
                         body.resize(result);
                         return PN_ERROR;
@@ -711,9 +732,9 @@ namespace pw {
     template <>
     Connection& Connection::operator=(const pn::tcp::Connection& conn) {
         if (this != &conn) {
-            this->fd = conn.fd;
-            this->addr = conn.addr;
-            this->addrlen = conn.addrlen;
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
         }
         return *this;
     }
@@ -721,10 +742,10 @@ namespace pw {
     template <>
     SecureConnection& SecureConnection::operator=(const pn::tcp::SecureConnection& conn) {
         if (this != &conn) {
-            this->fd = conn.fd;
-            this->addr = conn.addr;
-            this->addrlen = conn.addrlen;
-            this->ssl = conn.ssl;
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
+            ssl = conn.ssl;
         }
         return *this;
     }
@@ -732,9 +753,9 @@ namespace pw {
     template <>
     Client& Client::operator=(const pn::tcp::Client& conn) {
         if (this != &conn) {
-            this->fd = conn.fd;
-            this->addr = conn.addr;
-            this->addrlen = conn.addrlen;
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
         }
         return *this;
     }
@@ -742,374 +763,12 @@ namespace pw {
     template <>
     SecureClient& SecureClient::operator=(const pn::tcp::SecureClient& conn) {
         if (this != &conn) {
-            this->fd = conn.fd;
-            this->addr = conn.addr;
-            this->addrlen = conn.addrlen;
-            this->ssl = conn.ssl;
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
+            ssl = conn.ssl;
         }
         return *this;
-    }
-
-    template <typename Base>
-    int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&, void*)> filter, void* filter_data, int backlog) {
-        if (Base::listen([filter = std::move(filter), filter_data](typename Base::connection_type& conn, void* data) -> bool {
-                if (filter(conn, filter_data)) {
-                    conn.close(true, false);
-                } else {
-                    auto server = (BasicServer<Base>*) data;
-                    threadpool.schedule([conn](void* data) {
-                        auto server = (BasicServer<Base>*) data;
-                        pn::tcp::BufReceiver buf_receiver(server->buffer_size);
-                        server->handle_connection(pn::UniqueSocket<connection_type>(conn), buf_receiver);
-                    },
-                        server,
-                        true);
-                }
-                return true;
-            },
-                backlog,
-                this) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
-        } else {
-            throw std::logic_error("Base::listen returned without an error");
-        }
-        return PN_OK;
-    }
-
-    template <typename Base>
-    int BasicServer<Base>::handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) {
-        bool keep_alive = true;
-        bool websocket = false;
-        while (conn && keep_alive) {
-            HTTPRequest req;
-            if (req.parse(*conn, buf_receiver, this->header_climit, this->header_name_rlimit, this->header_value_rlimit) == PN_ERROR) {
-                uint16_t resp_status_code;
-                switch (get_last_error()) {
-                case PW_ENET:
-                    resp_status_code = 500;
-                    break;
-
-                case PW_EWEB:
-                    resp_status_code = 400;
-                    break;
-
-                default:
-                    throw std::logic_error("Invalid error");
-                }
-                handle_error(*conn, resp_status_code, false);
-                return PN_ERROR;
-            }
-
-            HTTPHeaders::const_iterator connection_it;
-            if ((connection_it = req.headers.find("Connection")) != req.headers.end()) {
-                std::vector<std::string> split_connection = string::split_and_trim(string::to_lower_copy(connection_it->second), ',');
-                if (req.http_version == "HTTP/1.1") {
-                    keep_alive = std::find(split_connection.begin(), split_connection.end(), "close") == split_connection.end();
-
-                    HTTPHeaders::const_iterator upgrade_it;
-                    if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
-                        std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
-                        if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
-                            websocket = true;
-                        } else {
-                            if (handle_error(*conn, 501, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
-                                return PN_ERROR;
-                            }
-                            continue;
-                        }
-                    }
-                } else {
-                    keep_alive = std::find(split_connection.begin(), split_connection.end(), "keep-alive") != split_connection.end();
-                }
-            } else {
-                keep_alive = req.http_version == "HTTP/1.1";
-            }
-
-            std::string ws_route_target;
-            for (const auto& route : ws_routes) {
-                if (route.first == req.target) {
-                    ws_route_target = route.first;
-                    break;
-                } else if (route.second.wildcard && string::starts_with(req.target, route.first) && route.first.size() > ws_route_target.size()) {
-                    ws_route_target = route.first;
-                }
-            }
-
-            std::string http_route_target;
-            for (const auto& route : routes) {
-                if (route.first == req.target) {
-                    http_route_target = route.first;
-                    break;
-                } else if (route.second.wildcard && string::starts_with(req.target, route.first) && route.first.size() > http_route_target.size()) {
-                    http_route_target = route.first;
-                }
-            }
-
-            if (websocket) {
-                if (!ws_route_target.empty()) {
-                    HTTPResponse resp;
-                    try {
-                        resp = ws_routes[ws_route_target].on_connect(*conn, req, ws_routes[ws_route_target].data);
-                    } catch (...) {
-                        if (handle_error(*conn, 500, keep_alive, false, req.http_version) == PN_ERROR) {
-                            return PN_ERROR;
-                        }
-                        continue;
-                    }
-
-                    if (!resp.headers.count("Server")) {
-                        resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
-                    }
-
-                    if (resp.status_code == 101) {
-                        resp.headers.erase("Content-Type");
-                        resp.body.clear();
-
-                        if (!resp.headers.count("Connection")) {
-                            resp.headers["Connection"] = "upgrade";
-                        }
-                        if (!resp.headers.count("Upgrade")) {
-                            resp.headers["Upgrade"] = "websocket";
-                        }
-
-                        HTTPHeaders::const_iterator websocket_version_it;
-                        if ((websocket_version_it = req.headers.find("Sec-WebSocket-Version")) != req.headers.end()) {
-                            std::vector<std::string> split_websocket_version = string::split_and_trim(websocket_version_it->second, ',');
-
-                            bool found_version = false;
-                            for (auto& version : split_websocket_version) {
-                                if (version == PW_WS_VERSION) {
-                                    found_version = true;
-                                    break;
-                                }
-                            }
-
-                            if (found_version) {
-                                resp.headers["Sec-WebSocket-Version"] = PW_WS_VERSION;
-                            } else {
-                                if (handle_error(*conn, 501, keep_alive, false, req.http_version) == PN_ERROR) {
-                                    return PN_ERROR;
-                                }
-                                continue;
-                            }
-                        }
-
-                        HTTPHeaders::const_iterator websocket_key_it;
-                        if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
-                            std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
-                            websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-                            unsigned char digest[SHA_DIGEST_LENGTH];
-                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), digest);
-                            resp.headers["Sec-WebSocket-Accept"] = base64_encode(digest, SHA_DIGEST_LENGTH);
-                        }
-
-                        HTTPHeaders::const_iterator websocket_protocol_it;
-                        if (!resp.headers.count("Sec-WebSocket-Protocol") && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
-                            std::vector<std::string> split_websocket_protocol = string::split(websocket_protocol_it->second, ',');
-                            if (!split_websocket_protocol.empty()) {
-                                resp.headers["Sec-WebSocket-Protocol"] = string::trim_copy(split_websocket_protocol.back());
-                            }
-                        }
-                    } else if (!resp.headers.count("Connection")) {
-                        resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-                    }
-
-                    if (conn->send(resp) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-
-                    if (resp.status_code == 101) {
-                        return handle_ws_connection(std::move(conn), buf_receiver, ws_routes[ws_route_target]);
-                    }
-                } else if (!http_route_target.empty()) {
-                    if (handle_error(*conn, 400, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-                } else {
-                    if (handle_error(*conn, 404, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-                }
-            } else {
-                if (!http_route_target.empty()) {
-                    HTTPResponse resp;
-                    try {
-                        resp = routes[http_route_target].cb(*conn, req, routes[http_route_target].data);
-                    } catch (...) {
-                        if (handle_error(*conn, 500, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
-                            return PN_ERROR;
-                        }
-                        continue;
-                    }
-
-                    if (!resp.headers.count("Server")) {
-                        resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
-                    }
-                    if (!resp.headers.count("Connection")) {
-                        resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-                    }
-
-                    if (conn->send(resp, req.method == "HEAD") == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-                } else if (!ws_route_target.empty()) {
-                    if (handle_error(*conn, 426, {{"Connection", keep_alive ? "keep-alive, upgrade" : "close, upgrade"}, {"Upgrade", "websocket"}}, req.method == "HEAD", req.http_version) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-                } else {
-                    if (handle_error(*conn, 404, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-                }
-            }
-        }
-        return PN_OK;
-    }
-
-    template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, const std::string& http_version) {
-        HTTPResponse resp;
-        try {
-            resp = this->on_error(status_code);
-        } catch (...) {
-            resp = HTTPResponse::make_basic(500);
-        }
-
-        if (!resp.headers.count("Server")) {
-            resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
-        }
-
-        for (const auto& header : headers) {
-            if (!resp.headers.count(header.first)) {
-                resp.headers.insert(header);
-            }
-        }
-
-        if (conn.send(resp, head_only) == PN_ERROR) {
-            return PN_ERROR;
-        }
-
-        return PN_OK;
-    }
-
-    template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, const std::string& http_version) {
-        HTTPResponse resp;
-        try {
-            resp = on_error(status_code);
-        } catch (...) {
-            resp = HTTPResponse::make_basic(500);
-        }
-
-        if (!resp.headers.count("Server")) {
-            resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
-        }
-        if (!resp.headers.count("Connection")) {
-            resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
-        }
-
-        if (conn.send(resp, head_only) == PN_ERROR) {
-            return PN_ERROR;
-        }
-
-        return PN_OK;
-    }
-
-    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, unsigned int max_redirects) {
-        if (!req.headers.count("User-Agent")) {
-            req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
-        }
-        if (!req.headers.count("Host")) {
-            unsigned short default_port[2] = {80, 443};
-            if (port == default_port[secure]) {
-                req.headers["Host"] = hostname;
-            } else {
-                req.headers["Host"] = hostname + ':' + std::to_string(port);
-            }
-        }
-        if (!req.headers.count("Connection")) {
-            req.headers["Connection"] = "close";
-        }
-
-        if (secure) {
-            pn::UniqueSocket<pw::SecureClient> client;
-            pn::tcp::BufReceiver buf_receiver;
-            if (client->connect(hostname, port) == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            }
-            if (client->ssl_init(hostname) == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            }
-            if (client->ssl_connect() == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            }
-
-            if (client->send(req) == PN_ERROR) {
-                return PN_ERROR;
-            }
-
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
-                return PN_ERROR;
-            }
-        } else {
-            pn::UniqueSocket<pw::Client> client;
-            pn::tcp::BufReceiver buf_receiver;
-            if (client->connect(hostname, port) == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            }
-
-            if (client->send(req) == PN_ERROR) {
-                return PN_ERROR;
-            }
-
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
-                return PN_ERROR;
-            }
-        }
-
-        HTTPHeaders::const_iterator location_it;
-        if (max_redirects && resp.status_code / 100 * 100 == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
-            URLInfo url_info;
-            if (url_info.parse(location_it->second) == PN_ERROR) {
-                return PN_ERROR;
-            }
-            return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", std::move(req), resp, max_redirects - 1);
-        }
-
-        return PN_OK;
-    }
-
-    int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, unsigned int max_redirects) {
-        return fetch(hostname, secure ? 443 : 80, secure, req, resp, max_redirects);
-    }
-
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
-        URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
-        }
-        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path_with_query_parameters(), headers, http_version), resp, max_redirects);
-    }
-
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
-        URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
-        }
-        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path_with_query_parameters(), body, headers, http_version), resp, max_redirects);
-    }
-
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, unsigned int max_redirects, const std::string& http_version) {
-        URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
-        }
-        return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", HTTPRequest(method, url_info.path_with_query_parameters(), body, headers, http_version), resp, max_redirects);
     }
 
     template class BasicConnection<pn::tcp::Connection>;
@@ -1117,7 +776,4 @@ namespace pw {
 
     template class BasicConnection<pn::tcp::Client>;
     template class BasicConnection<pn::tcp::SecureClient>;
-
-    template class BasicServer<pn::tcp::Server>;
-    template class BasicServer<pn::tcp::SecureServer>;
 } // namespace pw

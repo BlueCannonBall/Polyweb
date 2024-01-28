@@ -13,7 +13,7 @@ namespace pw {
         PW_CLEAR_WS_FRAME_RSV1(ret);
         PW_CLEAR_WS_FRAME_RSV2(ret);
         PW_CLEAR_WS_FRAME_RSV3(ret);
-        PW_SET_WS_FRAME_OPCODE(ret, this->opcode);
+        PW_SET_WS_FRAME_OPCODE(ret, opcode);
 
         if (data.size() < 126) {
             PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, data.size());
@@ -85,7 +85,7 @@ namespace pw {
             }
 
             fin = PW_GET_WS_FRAME_FIN(frame_header);
-            if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) this->opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
+            if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
             bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
 
             unsigned long long payload_length;
@@ -129,20 +129,20 @@ namespace pw {
             }
 
             if (payload_length) {
-                size_t end = this->data.size();
+                size_t end = data.size();
 
                 if (payload_length > frame_rlimit || end + payload_length > message_rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else {
-                    this->data.resize(end + payload_length);
+                    data.resize(end + payload_length);
                     long result;
-                    if ((result = buf_receiver.recvall(conn, &this->data[end], payload_length)) == PN_ERROR) {
+                    if ((result = buf_receiver.recvall(conn, &data[end], payload_length)) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     } else if ((unsigned long long) result != payload_length) {
                         detail::set_last_error(PW_EWEB);
-                        this->data.resize(end + result);
+                        data.resize(end + result);
                         return PN_ERROR;
                     }
                 }
@@ -153,18 +153,18 @@ namespace pw {
                     int32_t masking_key_integer;
                     memcpy(&masking_key_integer, masking_key, 4);
                     for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= payload_length; i += 32) {
-                        __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &this->data[end + i]);
+                        __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &data[end + i]);
                         __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
-                        _mm256_storeu_si256((__m256i_u*) &this->data[end + i], masked_vec);
+                        _mm256_storeu_si256((__m256i_u*) &data[end + i], masked_vec);
                     }
                     for (__m128i mask_vec = _mm_set1_epi32(masking_key_integer); i + 16 <= payload_length; i += 16) {
-                        __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &this->data[end + i]);
+                        __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &data[end + i]);
                         __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
-                        _mm_storeu_si128((__m128i_u*) &this->data[end + i], masked_vec);
+                        _mm_storeu_si128((__m128i_u*) &data[end + i], masked_vec);
                     }
 #endif
                     for (; i < payload_length; ++i) {
-                        this->data[end + i] ^= masking_key[i % 4];
+                        data[end + i] ^= masking_key[i % 4];
                     }
                 }
             }
@@ -175,7 +175,7 @@ namespace pw {
     template <typename Base>
     int BasicConnection<Base>::close_ws(uint16_t status_code, const std::string& reason, const char* masking_key, bool validity_check) {
         if (validity_check && !this->is_valid()) {
-            this->ws_closed = true;
+            ws_closed = true;
             return PN_OK;
         }
 
@@ -189,11 +189,11 @@ namespace pw {
 #endif
         memcpy(message.data.data() + 2, reason.data(), reason.size());
 
-        if (this->send(message, masking_key) == PN_ERROR) {
+        if (send(message, masking_key) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        this->ws_closed = true;
+        ws_closed = true;
         return PN_OK;
     }
 
@@ -207,7 +207,7 @@ namespace pw {
             }
 
             WSMessage message;
-            if (message.parse(*conn, buf_receiver, this->ws_frame_rlimit, this->ws_message_rlimit) == PN_ERROR) {
+            if (message.parse(*conn, buf_receiver, ws_frame_rlimit, ws_message_rlimit) == PN_ERROR) {
                 route.on_close(*conn, 0, {}, false, route.data);
                 return PN_ERROR;
             }
@@ -222,7 +222,7 @@ namespace pw {
             case 0x8:
                 if (conn->ws_closed) {
                     route.on_close(*conn, 0, {}, true, route.data);
-                    if (conn->close(true, false) == PN_ERROR) {
+                    if (conn->close() == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     }
@@ -246,7 +246,7 @@ namespace pw {
                         return PN_ERROR;
                     }
 
-                    if (conn->close(true, false) == PN_ERROR) {
+                    if (conn->close() == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     }

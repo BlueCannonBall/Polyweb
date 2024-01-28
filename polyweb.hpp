@@ -6,6 +6,7 @@
 #include "Polynet/smart_sockets.hpp"
 #include "string.hpp"
 #include "threadpool.hpp"
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
@@ -265,13 +266,14 @@ namespace pw {
     class URLInfo {
     public:
         std::string scheme;
+        std::string credentials;
         std::string host;
-        std::string path;
+        std::string path = "/";
         QueryParameters query_parameters;
 
         URLInfo() = default;
         URLInfo(const std::string& url) { // Avoid using this constructor unless you're certain that the URL is valid!
-            if (this->parse(url) == PN_ERROR) {
+            if (parse(url) == PN_ERROR) {
                 throw std::runtime_error("Invalid URL passed to pw::URLInfo constructor");
             }
         }
@@ -291,6 +293,14 @@ namespace pw {
             } else {
                 return path + '?' + query_parameters.build();
             }
+        }
+
+        std::string username() const {
+            return credentials.substr(0, host.find(':'));
+        }
+
+        std::string password() const {
+            return credentials.substr(host.find(':') + 1);
         }
     };
 
@@ -386,8 +396,12 @@ namespace pw {
 
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only = false, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
-        std::string body_to_string() const {
+        std::string body_string() const {
             return std::string(body.begin(), body.end());
+        }
+
+        uint16_t status_code_category() const {
+            return status_code / 100 * 100;
         }
     };
 
@@ -592,11 +606,33 @@ namespace pw {
     using Server = BasicServer<pn::tcp::Server>;
     using SecureServer = BasicServer<pn::tcp::SecureServer>;
 
-    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, unsigned int max_redirects = 3);
-    int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, unsigned int max_redirects = 3);
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    class FetchConfig {
+    public:
+        std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
+        std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
+        bool tcp_keep_alive = true;
+
+        int verify_mode = SSL_VERIFY_PEER;
+        std::string ca_file;
+        std::string ca_path;
+
+        int configure_sockopts(pn::tcp::Connection& conn) const;
+        int configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const;
+    };
+
+    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
+    int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
+    int fetch(const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+
+    int proxied_fetch(const std::string& hostname, unsigned short port, bool secure, const std::string& proxy_url, HTTPRequest req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
+    int proxied_fetch(const std::string& hostname, bool secure, const std::string& proxy_url, const HTTPRequest& req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
+    int proxied_fetch(const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
 } // namespace pw
 
 #endif
