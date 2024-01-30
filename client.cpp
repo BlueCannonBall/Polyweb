@@ -6,14 +6,12 @@ namespace pw {
         DWORD send_timeout = config.send_timeout.count();
         DWORD recv_timeout = config.send_timeout.count();
 #else
-        struct timeval send_timeout {
-            .tv_sec = this->send_timeout.count() / 1000,
-            .tv_usec = (this->send_timeout.count() % 1000) * 1000,
-        };
-        struct timeval recv_timeout {
-            .tv_sec = this->recv_timeout.count() / 1000,
-            .tv_usec = (this->recv_timeout.count() % 1000) * 1000,
-        };
+        struct timeval send_timeout;
+        send_timeout.tv_sec = this->send_timeout.count() / 1000;
+        send_timeout.tv_usec = (this->send_timeout.count() % 1000) * 1000;
+        struct timeval recv_timeout;
+        recv_timeout.tv_sec = this->recv_timeout.count() / 1000;
+        recv_timeout.tv_usec = (this->recv_timeout.count() % 1000) * 1000;
 #endif
         if (conn.setsockopt(SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof send_timeout) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
