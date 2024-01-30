@@ -57,7 +57,7 @@ namespace pw {
 
         if (secure) {
             pn::UniqueSocket<SecureClient> client;
-            pn::tcp::BufReceiver buf_receiver;
+            pn::tcp::BufReceiver buf_receiver(config.buffer_size);
             if (client->connect(hostname, port) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
@@ -77,7 +77,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
+            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         } else {
@@ -95,7 +95,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
+            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         }
@@ -219,7 +219,7 @@ namespace pw {
             }
 
             HTTPResponse connect_resp;
-            if (connect_resp.parse(*client, buf_receiver) == PN_ERROR) {
+            if (connect_resp.parse(*client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             } else if (connect_resp.status_code_category() != 200) {
                 detail::set_last_error(PW_EWEB);
@@ -241,7 +241,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
+            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         } else if (proxy_url_info.scheme == "http") {
@@ -250,7 +250,7 @@ namespace pw {
             }
 
             HTTPResponse connect_resp;
-            if (connect_resp.parse(*client, buf_receiver) == PN_ERROR) {
+            if (connect_resp.parse(*client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             } else if (connect_resp.status_code_category() != 200) {
                 detail::set_last_error(PW_EWEB);
@@ -271,7 +271,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD") == PN_ERROR) {
+            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         }

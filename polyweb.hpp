@@ -608,6 +608,16 @@ namespace pw {
 
     class FetchConfig {
     public:
+        size_t buffer_size = 4'000;
+        size_t header_climit = 100;
+        size_t header_name_rlimit = 500;
+        size_t header_value_rlimit = 4'000'000;
+        size_t body_chunk_rlimit = 16'000'000;
+        size_t body_rlimit = 32'000'000;
+        size_t ws_frame_rlimit = 16'000'000;
+        size_t ws_message_rlimit = 32'000'000;
+        size_t misc_rlimit = 1'000;
+
         std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
         std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
         bool tcp_keep_alive = true;
