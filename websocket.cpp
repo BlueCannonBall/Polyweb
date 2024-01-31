@@ -255,6 +255,7 @@ namespace pw {
 
             case 0x9:
                 if (conn->send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
+                    route.on_close(*conn, 0, {}, false, route.data);
                     return PN_ERROR;
                 }
                 break;
