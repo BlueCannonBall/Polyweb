@@ -437,8 +437,8 @@ namespace pw {
         bool ws_closed = false;
         void* data = nullptr; // User data
 
-        template <typename... Ts>
-        BasicConnection(Ts... args):
+        template <typename... Args>
+        BasicConnection(Args&&... args):
             Base(args...) {}
         BasicConnection(const Base& conn) {
             *this = conn;
@@ -566,8 +566,8 @@ namespace pw {
         typedef BasicHTTPRoute<connection_type> http_route_type;
         typedef BasicWSRoute<connection_type> ws_route_type;
 
-        template <typename... Ts>
-        BasicServer(Ts... args):
+        template <typename... Args>
+        BasicServer(Args&&... args):
             Base(args...) {}
 
         void route(const std::string& target, const http_route_type& route) {
