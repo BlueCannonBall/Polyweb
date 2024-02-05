@@ -457,10 +457,6 @@ namespace pw {
                 return PN_ERROR;
             }
             string::trim(header_value);
-            if (header_value.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
 
             headers[header_name] = header_value;
 
@@ -609,10 +605,6 @@ namespace pw {
                 return PN_ERROR;
             }
             string::trim(header_value);
-            if (header_value.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
 
             headers[header_name] = header_value;
 
