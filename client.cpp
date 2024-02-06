@@ -129,7 +129,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path_with_query_parameters(), headers, http_version);
+        HTTPRequest req(method, url_info.path, url_info.query_parameters, headers, http_version);
         if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
             req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -143,7 +143,8 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path_with_query_parameters(), body, headers, http_version);
+        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
             req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -157,7 +158,8 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path_with_query_parameters(), body, headers, http_version);
+        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
             req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -183,7 +185,7 @@ namespace pw {
             });
         if (!proxy_url_info.credentials.empty() && !connect_req.headers.count("Proxy-Authorization")) {
             connect_req.headers["Proxy-Authorization"] = "basic " + base64_encode(proxy_url_info.credentials.data(), proxy_url_info.credentials.size());
-        }        
+        }
 
         if (!req.headers.count("User-Agent")) {
             req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
@@ -209,7 +211,7 @@ namespace pw {
         if (config.configure_sockopts(*client) == PN_ERROR) {
             return PN_ERROR;
         }
-        
+
         if (client->send(connect_req) == PN_ERROR) {
             return PN_ERROR;
         }
@@ -269,7 +271,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path_with_query_parameters(), headers, http_version);
+        HTTPRequest req(method, url_info.path, url_info.query_parameters, headers, http_version);
         if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
             req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -283,7 +285,8 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path_with_query_parameters(), body, headers, http_version);
+        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
             req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -297,7 +300,8 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path_with_query_parameters(), body, headers, http_version);
+        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
             req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
