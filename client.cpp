@@ -166,6 +166,25 @@ namespace pw {
     }
 
     int proxied_fetch(const std::string& hostname, unsigned short port, bool secure, const std::string& proxy_url, HTTPRequest req, HTTPResponse& resp, const FetchConfig& config, unsigned int max_redirects) {
+        URLInfo proxy_url_info;
+        if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+        if (proxy_url_info.scheme != "http") {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        HTTPRequest connect_req("CONNECT",
+            hostname + ':' + std::to_string(port),
+            {
+                {"Host", hostname + ':' + std::to_string(port)},
+                {"Connection", "close"},
+            });
+        if (!proxy_url_info.credentials.empty() && !connect_req.headers.count("Proxy-Authorization")) {
+            connect_req.headers["Proxy-Authorization"] = "basic " + base64_encode(proxy_url_info.credentials.data(), proxy_url_info.credentials.size());
+        }        
+
         if (!req.headers.count("User-Agent")) {
             req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
         }
@@ -181,21 +200,6 @@ namespace pw {
             req.headers["Connection"] = "close";
         }
 
-        URLInfo proxy_url_info;
-        if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
-            return PN_ERROR;
-        }
-
-        HTTPRequest connect_req("CONNECT",
-            hostname + ':' + std::to_string(port),
-            {
-                {"Host", hostname + ':' + std::to_string(port)},
-                {"Connection", "close"},
-            });
-        if (!proxy_url_info.credentials.empty() && !connect_req.headers.count("Proxy-Authorization")) {
-            connect_req.headers["Proxy-Authorization"] = "basic " + base64_encode(proxy_url_info.credentials.data(), proxy_url_info.credentials.size());
-        }
-
         pn::UniqueSocket<SecureClient> client;
         pn::tcp::BufReceiver buf_receiver;
         if (client->connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
@@ -205,75 +209,35 @@ namespace pw {
         if (config.configure_sockopts(*client) == PN_ERROR) {
             return PN_ERROR;
         }
-        if (proxy_url_info.scheme == "https") {
-            if (config.configure_ssl(*client, proxy_url_info.hostname()) == PN_ERROR) {
+        
+        if (client->send(connect_req) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        HTTPResponse connect_resp;
+        if (connect_resp.parse(*client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            return PN_ERROR;
+        } else if (connect_resp.status_code_category() != 200) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        if (secure) {
+            if (config.configure_ssl(*client, hostname) == PN_ERROR) {
                 return PN_ERROR;
             }
             if (client->ssl_connect() == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
+        }
 
-            if (client->send(connect_req) == PN_ERROR) {
-                return PN_ERROR;
-            }
+        if (client->send(req) == PN_ERROR) {
+            return PN_ERROR;
+        }
 
-            HTTPResponse connect_resp;
-            if (connect_resp.parse(*client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
-            } else if (connect_resp.status_code_category() != 200) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-
-            client->ssl_reset(true, false);
-            if (secure) {
-                if (config.configure_ssl(*client, hostname) == PN_ERROR) {
-                    return PN_ERROR;
-                }
-                if (client->ssl_connect() == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                }
-            }
-
-            if (client->send(req) == PN_ERROR) {
-                return PN_ERROR;
-            }
-
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
-            }
-        } else if (proxy_url_info.scheme == "http") {
-            if (client->send(connect_req) == PN_ERROR) {
-                return PN_ERROR;
-            }
-
-            HTTPResponse connect_resp;
-            if (connect_resp.parse(*client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
-            } else if (connect_resp.status_code_category() != 200) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-
-            if (secure) {
-                if (config.configure_ssl(*client, hostname) == PN_ERROR) {
-                    return PN_ERROR;
-                }
-                if (client->ssl_connect() == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                }
-            }
-
-            if (client->send(req) == PN_ERROR) {
-                return PN_ERROR;
-            }
-
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
-            }
+        if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            return PN_ERROR;
         }
 
         HTTPHeaders::const_iterator location_it;
