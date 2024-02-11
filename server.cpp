@@ -10,7 +10,7 @@ namespace pw {
     int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&, void*)> filter, void* filter_data, int backlog) {
         if (Base::listen([filter = std::move(filter), filter_data](typename Base::connection_type& conn, void* data) -> bool {
                 if (filter(conn, filter_data)) {
-                    conn.close(true, false);
+                    conn.close();
                 } else {
                     auto server = (BasicServer<Base>*) data;
                     threadpool.schedule([conn](void* data) {
