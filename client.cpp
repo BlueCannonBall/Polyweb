@@ -3,8 +3,8 @@
 namespace pw {
     int FetchConfig::configure_sockopts(pn::tcp::Connection& conn) const {
 #ifdef _WIN32
-        DWORD send_timeout = config.send_timeout.count();
-        DWORD recv_timeout = config.send_timeout.count();
+        DWORD send_timeout = this->send_timeout.count();
+        DWORD recv_timeout = this->recv_timeout.count();
 #else
         struct timeval send_timeout;
         send_timeout.tv_sec = this->send_timeout.count() / 1000;
