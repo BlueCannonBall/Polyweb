@@ -282,6 +282,7 @@ namespace pw {
 
     void QueryParameters::parse(const std::string& query_string) {
         std::vector<std::string> split_query_string = string::split(query_string, '&');
+        map.clear();
         for (const auto& parameter : split_query_string) {
             std::vector<std::string> split_parameter = string::split(parameter, '=');
             if (split_parameter.size() >= 2) {
@@ -318,6 +319,7 @@ namespace pw {
         scheme = url.substr(offset, scheme_host_delimiter_pos - offset);
         offset = scheme_host_delimiter_pos + 3;
 
+        credentials.clear();
         size_t credentials_host_delimiter_pos;
         if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos) {
             if (credentials_host_delimiter_pos == offset) {
@@ -436,6 +438,7 @@ namespace pw {
             return PN_ERROR;
         }
 
+        headers.clear();
         for (size_t i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
@@ -477,6 +480,7 @@ namespace pw {
             }
         }
 
+        body.clear();
         HTTPHeaders::const_iterator content_length_it;
         if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
             unsigned long long content_length;
@@ -506,6 +510,7 @@ namespace pw {
             }
         }
 
+        query_parameters->clear();
         std::string::iterator query_string_begin;
         if ((query_string_begin = std::find(target.begin(), target.end(), '?')) != target.end()) {
             if (std::next(query_string_begin) != target.end()) {
@@ -585,6 +590,7 @@ namespace pw {
             return PN_ERROR;
         }
 
+        headers.clear();
         for (size_t i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
@@ -625,6 +631,7 @@ namespace pw {
             }
         }
 
+        body.clear();
         if (!head_only) {
             HTTPHeaders::const_iterator transfer_encoding_it;
             HTTPHeaders::const_iterator content_length_it;
