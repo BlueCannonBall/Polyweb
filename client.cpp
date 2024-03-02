@@ -82,7 +82,7 @@ namespace pw {
             }
         } else {
             pn::UniqueSocket<Client> client;
-            pn::tcp::BufReceiver buf_receiver;
+            pn::tcp::BufReceiver buf_receiver(config.buffer_size);
             if (client->connect(hostname, port) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
@@ -203,7 +203,7 @@ namespace pw {
         }
 
         pn::UniqueSocket<SecureClient> client;
-        pn::tcp::BufReceiver buf_receiver;
+        pn::tcp::BufReceiver buf_receiver(config.buffer_size);
         if (client->connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
