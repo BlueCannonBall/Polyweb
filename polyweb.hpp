@@ -350,6 +350,14 @@ namespace pw {
         std::string body_to_string() const {
             return std::string(body.begin(), body.end());
         }
+
+        std::string target_with_query_parameters() const {
+            if (query_parameters->empty()) {
+                return target;
+            } else {
+                return target + '?' + query_parameters.build();
+            }
+        }
     };
 
     class HTTPResponse {
