@@ -321,7 +321,8 @@ namespace pw {
 
         credentials.clear();
         size_t credentials_host_delimiter_pos;
-        if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos) {
+        if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos &&
+            url.find('/', offset) > credentials_host_delimiter_pos) {
             if (credentials_host_delimiter_pos == offset) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
