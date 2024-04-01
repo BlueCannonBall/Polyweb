@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <ctime>
 #include <functional>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -263,6 +264,17 @@ namespace pw {
         void parse(const std::string& query_string);
     };
 
+    inline std::ostream& operator<<(std::ostream& os, const QueryParameters& query_parameters) {
+        return os << query_parameters.build();
+    }
+
+    inline std::istream& operator>>(std::istream& is, QueryParameters& query_parameters) {
+        std::string query_string;
+        is >> query_string;
+        query_parameters.parse(query_string);
+        return is;
+    }
+
     class URLInfo {
     public:
         std::string scheme;
@@ -303,6 +315,18 @@ namespace pw {
             return credentials.substr(host.find(':') + 1);
         }
     };
+
+    inline std::ostream& operator<<(std::ostream& os, const URLInfo& url_info) {
+        return os << url_info.build();
+    }
+
+    inline std::istream& operator>>(std::istream& is, URLInfo& url_info) {
+        std::string url;
+        if (is >> url && url_info.parse(url) == PN_ERROR) {
+            is.setstate(std::istream::failbit);
+        }
+        return is;
+    }
 
     class HTTPRequest {
     public:
