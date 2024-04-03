@@ -172,7 +172,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicConnection<Base>::close_ws(uint16_t status_code, const std::string& reason, const char* masking_key, bool validity_check) {
+    int BasicConnection<Base>::ws_close(uint16_t status_code, const std::string& reason, const char* masking_key, bool validity_check) {
         if (validity_check && !this->is_valid()) {
             ws_closed = true;
             return PN_OK;

@@ -524,7 +524,7 @@ namespace pw {
             return send(HTTPResponse::make_basic(status_code, headers, http_version));
         }
 
-        virtual int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
+        virtual int ws_close(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
     };
 
     using Connection = BasicConnection<pn::tcp::Connection>;
@@ -712,12 +712,12 @@ namespace pw {
         // If this returns 0, no messages were handled because the connection was closed
         int recv(WSMessage& message, bool handle_pings = true);
 
-        int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true) override {
+        int ws_close(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true) override {
             if (masking_key) {
-                return BasicConnection<Base>::close_ws(status_code, reason, masking_key, validity_check);
+                return BasicConnection<Base>::ws_close(status_code, reason, masking_key, validity_check);
             } else {
                 static constexpr char masking_key[4] = {0};
-                return BasicConnection<Base>::close_ws(status_code, reason, masking_key, validity_check);
+                return BasicConnection<Base>::ws_close(status_code, reason, masking_key, validity_check);
             }
         }
     };
