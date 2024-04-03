@@ -59,7 +59,7 @@ namespace pw {
             }
 #endif
             for (; i < data.size(); ++i) {
-                ret[end + 4 + i] ^= masking_key[i % 4];
+                ret[end + 4 + i] = data[i] ^ masking_key[i % 4];
             }
         } else {
             PW_CLEAR_WS_FRAME_MASKED(ret);
@@ -70,8 +70,7 @@ namespace pw {
     }
 
     int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit, size_t message_rlimit) {
-        bool fin = false;
-        while (!fin) {
+        for (bool fin = false; !fin;) {
             char frame_header[2];
             {
                 long result;
@@ -264,6 +263,109 @@ namespace pw {
         return PN_OK;
     }
 
+    template <typename Base>
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers) {
+        HTTPRequest req("GET", target, query_parameters, headers);
+
+        if (!req.headers.count("User-Agent")) {
+            req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
+        }
+        if (!req.headers.count("Host")) {
+            unsigned short default_port[2] = {80, 443};
+            if (port == default_port[this->is_secure()]) {
+                req.headers["Host"] = hostname;
+            } else {
+                req.headers["Host"] = hostname + ':' + std::to_string(port);
+            }
+        }
+        if (!req.headers.count("Connection")) {
+            req.headers["Connection"] = "upgrade";
+        }
+        if (!req.headers.count("Upgrade")) {
+            req.headers["Upgrade"] = "websocket";
+        }
+        if (!req.headers.count("Sec-WebSocket-Version")) {
+            req.headers["Sec-WebSocket-Version"] = PW_WS_VERSION;
+        }
+        if (!req.headers.count("Sec-WebSocket-Key")) {
+            req.headers["Sec-WebSocket-Key"] = PW_WS_KEY;
+        }
+
+        if (send(req) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        HTTPResponse resp;
+        if (resp.parse(*this, buf_receiver) == PN_ERROR) {
+            return PN_ERROR;
+        }
+        if (resp.status_code != 101) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        return PN_OK;
+    }
+
+    template <typename Base>
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers) {
+        URLInfo url_info;
+        if (url_info.parse(url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        if (!url_info.credentials.empty() && !headers.count("WWW-Authenticate")) {
+            headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        }
+
+        return ws_connect(url_info.hostname(), url_info.port(), url_info.path, url_info.query_parameters, headers);
+    }
+
+    template <typename Base>
+    int BasicWebSocketClient<Base>::recv(WSMessage& message, bool handle_pings) {
+        for (int i = 0;;) {
+            if (message.parse(*this, buf_receiver) == PN_ERROR) {
+                return this->ws_closed ? i : PN_ERROR;
+            }
+
+            if (message.opcode == 0x8) {
+                if (on_close) {
+                    if (this->ws_closed) {
+                        on_close(*this, 0, {}, true, this->data);
+                    } else {
+                        uint16_t status_code = 0;
+                        std::string reason;
+
+                        if (message.data.size() >= 2) {
+#if BYTE_ORDER__ == BIG_ENDIAN
+                            memcpy(&status_code, message.data.data(), 2);
+#else
+                            reverse_memcpy(&status_code, message.data.data(), 2);
+#endif
+                        }
+                        if (message.data.size() > 2) {
+                            reason.assign(message.data.begin() + 2, message.data.end());
+                        }
+
+                        on_close(*this, status_code, reason, true, this->data);
+                        if (send(WSMessage(std::move(message.data), 0x8)) == PN_ERROR) {
+                            return PN_ERROR;
+                        }
+                    }
+                }
+
+                return i;
+            } else if (handle_pings && message.opcode == 0x9) {
+                if (send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
+                    return this->ws_closed ? i : PN_ERROR;
+                }
+                continue;
+            }
+
+            return ++i;
+        }
+    }
+
     template class BasicConnection<pn::tcp::Connection>;
     template class BasicConnection<pn::tcp::SecureConnection>;
 
@@ -272,4 +374,7 @@ namespace pw {
 
     template class BasicServer<pn::tcp::Server>;
     template class BasicServer<pn::tcp::SecureServer>;
+
+    template class BasicWebSocketClient<pn::tcp::Client>;
+    template class BasicWebSocketClient<pn::tcp::SecureClient>;
 } // namespace pw

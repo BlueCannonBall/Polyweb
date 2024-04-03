@@ -47,4 +47,5 @@ int main() {
 
     server.close();
     pn::quit();
+    return 0;
 }

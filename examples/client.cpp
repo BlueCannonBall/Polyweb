@@ -11,4 +11,5 @@ int main() {
     std::cout << resp.body_string() << std::endl;
 
     pn::quit();
+    return 0;
 }

@@ -1,6 +1,5 @@
 #include "polyweb.hpp"
 #include <algorithm>
-#include <cstring>
 #include <openssl/sha.h>
 #include <stdexcept>
 #include <utility>

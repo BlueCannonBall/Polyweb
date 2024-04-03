@@ -39,6 +39,7 @@
 
 // WebSocket macros
 #define PW_WS_VERSION "13"
+#define PW_WS_KEY     "cG9seXdlYiBpcyBncmVhdA==" // polyweb is great
 
 #define PW_GET_WS_FRAME_FIN(frame_header)            (frame_header[0] & 0b10000000)
 #define PW_GET_WS_FRAME_RSV1(frame_header)           (frame_header[0] & 0b01000000)
@@ -421,7 +422,7 @@ namespace pw {
 
         std::vector<char> build(bool head_only = false) const;
 
-        std::string build_str(bool head_only = false) const {
+        std::string build_string(bool head_only = false) const {
             std::vector<char> ret = build(head_only);
             return std::string(ret.begin(), ret.end());
         }
@@ -506,7 +507,7 @@ namespace pw {
             return PN_OK;
         }
 
-        int send(const WSMessage& message, const char* masking_key = nullptr) {
+        virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
             long result;
             if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
@@ -523,7 +524,7 @@ namespace pw {
             return send(HTTPResponse::make_basic(status_code, headers, http_version));
         }
 
-        int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
+        virtual int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
     };
 
     using Connection = BasicConnection<pn::tcp::Connection>;
@@ -675,6 +676,52 @@ namespace pw {
     int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
     int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
     int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+
+    template <typename Base>
+    class BasicWebSocketClient : public BasicConnection<Base> {
+    public:
+        pn::tcp::BufReceiver buf_receiver;
+        std::function<void(BasicWebSocketClient&, uint16_t, const std::string&, bool clean, void*)> on_close;
+
+        template <typename... Args>
+        BasicWebSocketClient(Args&&... args):
+            BasicConnection<Base>(args...) {}
+        BasicWebSocketClient(const Base& conn) {
+            *this = conn;
+        }
+
+        int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {});
+        int ws_connect(const std::string& url, HTTPHeaders headers = {});
+
+        using BasicConnection<Base>::send;
+
+        int send(const WSMessage& message, const char* masking_key = nullptr) override {
+            if (masking_key) {
+                return BasicConnection<Base>::send(message, masking_key);
+            } else {
+                static constexpr char masking_key[4] = {0};
+                return BasicConnection<Base>::send(message, masking_key);
+            }
+        }
+
+        using BasicConnection<Base>::recv;
+
+        // Returns the number of messages handled, including the one returned
+        // If this returns 0, no messages were handled because the connection was closed
+        int recv(WSMessage& message, bool handle_pings = true);
+
+        int close_ws(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true) override {
+            if (masking_key) {
+                return BasicConnection<Base>::close_ws(status_code, reason, masking_key, validity_check);
+            } else {
+                static constexpr char masking_key[4] = {0};
+                return BasicConnection<Base>::close_ws(status_code, reason, masking_key, validity_check);
+            }
+        }
+    };
+
+    using WebSocketClient = BasicWebSocketClient<pn::tcp::Client>;
+    using SecureWebSocketClient = BasicWebSocketClient<pn::tcp::SecureClient>;
 } // namespace pw
 
 #endif
