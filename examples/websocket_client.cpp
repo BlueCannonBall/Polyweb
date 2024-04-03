@@ -8,19 +8,7 @@ int main() {
     pn::init();
 
     pw::SecureWebSocketClient client;
-    if (client.connect("ws.postman-echo.com", 443) == PN_ERROR) {
-        std::cerr << "Error: " << pn::universal_strerror() << std::endl;
-        return 1;
-    }
-    if (client.ssl_init("ws.postman-echo.com") == PN_ERROR) {
-        std::cerr << "Error: " << pn::universal_strerror() << std::endl;
-        return 1;
-    }
-    if (client.ssl_connect() == PN_ERROR) {
-        std::cerr << "Error: " << pn::universal_strerror() << std::endl;
-        return 1;
-    }
-    if (client.ws_connect("wss://ws.postman-echo.com/raw") == PN_ERROR) {
+    if (pw::make_websocket_client(client, "wss://ws.postman-echo.com/raw") == PN_ERROR) {
         std::cerr << "Error: " << pw::universal_strerror() << std::endl;
         return 1;
     }
@@ -50,7 +38,7 @@ int main() {
     }
 
     client.ws_close(1000, ""); // Send a WebSocket close frame
-    client.close(); // Forcefully close the actual socket
+    client.close();            // Forcefully close the actual socket
     pn::quit();
     return 0;
 }
