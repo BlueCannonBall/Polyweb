@@ -264,7 +264,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers) {
         HTTPRequest req("GET", target, query_parameters, headers);
 
         if (!req.headers.count("User-Agent")) {
@@ -295,7 +295,6 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPResponse resp;
         if (resp.parse(*this, buf_receiver) == PN_ERROR) {
             return PN_ERROR;
         }
@@ -308,7 +307,13 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers) {
+        HTTPResponse resp;
+        return ws_connect(hostname, port, target, resp, query_parameters, headers);
+    }
+
+    template <typename Base>
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -318,7 +323,13 @@ namespace pw {
             headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return ws_connect(url_info.hostname(), url_info.port(), url_info.path, url_info.query_parameters, headers);
+        return ws_connect(url_info.hostname(), url_info.port(), url_info.path, resp, url_info.query_parameters, headers);
+    }
+
+    template <typename Base>
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers) {
+        HTTPResponse resp;
+        return ws_connect(url, resp, headers);
     }
 
     template <typename Base>

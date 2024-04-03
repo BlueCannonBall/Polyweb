@@ -690,8 +690,10 @@ namespace pw {
             *this = conn;
         }
 
+        int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {});
         int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {});
         int ws_connect(const std::string& url, HTTPHeaders headers = {});
+        int ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers = {});
 
         using BasicConnection<Base>::send;
 
