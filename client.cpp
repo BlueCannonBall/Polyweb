@@ -1,7 +1,7 @@
 #include "polyweb.hpp"
 
 namespace pw {
-    int FetchConfig::configure_sockopts(pn::tcp::Connection& conn) const {
+    int ClientConfig::configure_sockopts(pn::tcp::Connection& conn) const {
 #ifdef _WIN32
         DWORD send_timeout = this->send_timeout.count();
         DWORD recv_timeout = this->recv_timeout.count();
@@ -31,7 +31,7 @@ namespace pw {
         return PN_OK;
     }
 
-    int FetchConfig::configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const {
+    int ClientConfig::configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const {
         if (client.ssl_init(hostname, verify_mode, ca_file, ca_path) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;

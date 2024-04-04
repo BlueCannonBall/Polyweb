@@ -639,16 +639,8 @@ namespace pw {
     using Server = BasicServer<pn::tcp::Server>;
     using SecureServer = BasicServer<pn::tcp::SecureServer>;
 
-    class FetchConfig {
+    class ClientConfig {
     public:
-        size_t buffer_size = 4'000;
-        size_t header_climit = 100;
-        size_t header_name_rlimit = 500;
-        size_t header_value_rlimit = 4'000'000;
-        size_t body_chunk_rlimit = 16'000'000;
-        size_t body_rlimit = 32'000'000;
-        size_t misc_rlimit = 1'000;
-
         std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
         std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
         bool tcp_keep_alive = true;
@@ -659,6 +651,17 @@ namespace pw {
 
         int configure_sockopts(pn::tcp::Connection& conn) const;
         int configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const;
+    };
+
+    class FetchConfig : public ClientConfig {
+    public:
+        size_t buffer_size = 4'000;
+        size_t header_climit = 100;
+        size_t header_name_rlimit = 500;
+        size_t header_value_rlimit = 4'000'000;
+        size_t body_chunk_rlimit = 16'000'000;
+        size_t body_rlimit = 32'000'000;
+        size_t misc_rlimit = 1'000;
     };
 
     int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
@@ -723,19 +726,10 @@ namespace pw {
     using WebSocketClient = BasicWebSocketClient<pn::tcp::Client>;
     using SecureWebSocketClient = BasicWebSocketClient<pn::tcp::SecureClient>;
 
-    class WebSocketClientConfig {
-    public:
-        int verify_mode = SSL_VERIFY_PEER;
-        std::string ca_file;
-        std::string ca_path;
-
-        int configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const;
-    };
-
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const WebSocketClientConfig& config = {});
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const WebSocketClientConfig& config = {});
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPHeaders headers = {}, const WebSocketClientConfig& config = {});
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPResponse& resp, HTTPHeaders headers = {}, const WebSocketClientConfig& config = {});
+    int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
+    int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
+    int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw
 
 #endif
