@@ -649,12 +649,6 @@ namespace pw {
         std::string ca_file;
         std::string ca_path;
 
-        int configure_sockopts(pn::tcp::Connection& conn) const;
-        int configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const;
-    };
-
-    class FetchConfig : public ClientConfig {
-    public:
         size_t buffer_size = 4'000;
         size_t header_climit = 100;
         size_t header_name_rlimit = 500;
@@ -662,21 +656,22 @@ namespace pw {
         size_t body_chunk_rlimit = 16'000'000;
         size_t body_rlimit = 32'000'000;
         size_t misc_rlimit = 1'000;
+
+        int configure_sockopts(pn::tcp::Connection& conn) const;
+        int configure_ssl(pn::tcp::SecureClient& client, const std::string& hostname) const;
     };
 
-    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
-    int fetch(const std::string& hostname, bool secure, const HTTPRequest& req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
-    int fetch(const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned int max_redirects = 3);
+    int fetch(const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
 
-    int proxied_fetch(const std::string& hostname, unsigned short port, bool secure, const std::string& proxy_url, HTTPRequest req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
-    int proxied_fetch(const std::string& hostname, bool secure, const std::string& proxy_url, const HTTPRequest& req, HTTPResponse& resp, const FetchConfig& = {}, unsigned int max_redirects = 3);
-    int proxied_fetch(const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
-    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const FetchConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& hostname, unsigned short port, bool secure, const std::string& proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned int max_redirects = 3);
+    int proxied_fetch(const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned int max_redirects = 3, const std::string& http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWebSocketClient : public BasicConnection<Base> {
@@ -691,10 +686,10 @@ namespace pw {
             *this = conn;
         }
 
-        int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {});
-        int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {});
-        int ws_connect(const std::string& url, HTTPHeaders headers = {});
-        int ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers = {});
+        int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int ws_connect(const std::string& url, HTTPHeaders headers = {}, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        int ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers = {}, size_t header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         using BasicConnection<Base>::send;
 
@@ -730,6 +725,11 @@ namespace pw {
     int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
     int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPHeaders headers = {}, const ClientConfig& config = {});
     int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const std::string& proxy_url, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const std::string& proxy_url, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& url, const std::string& proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw
 
 #endif

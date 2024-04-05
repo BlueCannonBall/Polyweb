@@ -264,7 +264,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         HTTPRequest req("GET", target, query_parameters, headers);
 
         if (!req.headers.count("User-Agent")) {
@@ -295,7 +295,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        if (resp.parse(*this, buf_receiver) == PN_ERROR) {
+        if (resp.parse(*this, buf_receiver, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
         if (resp.status_code != 101) {
@@ -307,13 +307,13 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         HTTPResponse resp;
-        return ws_connect(hostname, port, target, resp, query_parameters, headers);
+        return ws_connect(hostname, port, target, resp, query_parameters, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -323,13 +323,13 @@ namespace pw {
             headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return ws_connect(url_info.hostname(), url_info.port(), url_info.path, resp, url_info.query_parameters, headers);
+        return ws_connect(url_info.hostname(), url_info.port(), url_info.path, resp, url_info.query_parameters, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         HTTPResponse resp;
-        return ws_connect(url, resp, headers);
+        return ws_connect(url, resp, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
@@ -382,9 +382,11 @@ namespace pw {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
         }
+
         if (config.configure_sockopts(client) == PN_ERROR) {
             return PN_ERROR;
         }
+
         if (secure) {
             if (config.configure_ssl(client, hostname) == PN_ERROR) {
                 return PN_ERROR;
@@ -394,9 +396,11 @@ namespace pw {
                 return PN_ERROR;
             }
         }
-        if (client.ws_connect(hostname, port, target, resp, query_parameters, headers) == PN_ERROR) {
+
+        if (client.ws_connect(hostname, port, target, resp, query_parameters, headers, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
+
         return PN_OK;
     }
 
@@ -421,6 +425,87 @@ namespace pw {
     int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_websocket_client(client, url, resp, headers, config);
+    }
+
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const std::string& proxy_url, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
+        URLInfo proxy_url_info;
+        if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+        if (proxy_url_info.scheme != "http") {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        HTTPRequest connect_req("CONNECT",
+            hostname + ':' + std::to_string(port),
+            {
+                {"Host", hostname + ':' + std::to_string(port)},
+                {"Connection", "close"},
+            });
+        if (!proxy_url_info.credentials.empty() && !connect_req.headers.count("Proxy-Authorization")) {
+            connect_req.headers["Proxy-Authorization"] = "basic " + base64_encode(proxy_url_info.credentials.data(), proxy_url_info.credentials.size());
+        }
+
+        if (client.connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
+            detail::set_last_error(PW_ENET);
+            return PN_ERROR;
+        }
+
+        if (config.configure_sockopts(client) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        if (client.send(connect_req) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        HTTPResponse connect_resp;
+        if (connect_resp.parse(client, client.buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            return PN_ERROR;
+        } else if (connect_resp.status_code_category() != 200) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        if (secure) {
+            if (config.configure_ssl(client, hostname) == PN_ERROR) {
+                return PN_ERROR;
+            }
+            if (client.ssl_connect() == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            }
+        }
+
+        if (client.ws_connect(hostname, port, target, resp, query_parameters, headers, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        return PN_OK;
+    }
+
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const std::string& proxy_url, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
+        HTTPResponse resp;
+        return make_proxied_websocket_client(client, hostname, port, secure, target, proxy_url, resp, query_parameters, headers, config);
+    }
+
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+        URLInfo url_info;
+        if (url_info.parse(url) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        if (!url_info.credentials.empty() && !headers.count("WWW-Authenticate")) {
+            headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        }
+
+        return make_proxied_websocket_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", url_info.path, proxy_url, resp, url_info.query_parameters, headers, config);
+    }
+
+    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& url, const std::string& proxy_url, HTTPHeaders headers, const ClientConfig& config) {
+        HTTPResponse resp;
+        return make_proxied_websocket_client(client, url, proxy_url, resp, headers, config);
     }
 
     template class BasicConnection<pn::tcp::Connection>;

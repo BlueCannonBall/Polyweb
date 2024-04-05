@@ -296,7 +296,7 @@ namespace pw {
     std::string URLInfo::build() const {
         std::string ret = scheme + "://";
         if (!credentials.empty()) {
-            ret += credentials + '@';
+            ret += percent_encode(username()) + ':' + percent_encode(password()) + '@';
         }
         ret += host;
         if (path != "/" || !query_parameters->empty()) {
@@ -327,7 +327,7 @@ namespace pw {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
             }
-            credentials = url.substr(offset, credentials_host_delimiter_pos - offset);
+            credentials = percent_decode(url.substr(offset, credentials_host_delimiter_pos - offset));
             offset = credentials_host_delimiter_pos + 1;
         }
 
