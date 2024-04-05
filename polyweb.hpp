@@ -649,7 +649,7 @@ namespace pw {
         std::string ca_file;
         std::string ca_path;
 
-        size_t buffer_size = 4'000;
+        size_t recv_buf_size = 4'000;
         size_t header_climit = 100;
         size_t header_name_rlimit = 500;
         size_t header_value_rlimit = 4'000'000;

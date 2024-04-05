@@ -447,6 +447,7 @@ namespace pw {
             connect_req.headers["Proxy-Authorization"] = "basic " + base64_encode(proxy_url_info.credentials.data(), proxy_url_info.credentials.size());
         }
 
+        client.buf_receiver.size = 0;
         if (client.connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
@@ -467,6 +468,7 @@ namespace pw {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
+        client.buf_receiver.size = config.recv_buf_size;
 
         if (secure) {
             if (config.configure_ssl(client, hostname) == PN_ERROR) {
