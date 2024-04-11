@@ -520,7 +520,7 @@ namespace pw {
             return PN_OK;
         }
 
-        int send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, const std::string& http_version = "HTTP/1.1") {
+        int send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1", bool head_only = false,) {
             return send(HTTPResponse::make_basic(status_code, headers, http_version), head_only);
         }
 
