@@ -246,7 +246,7 @@ namespace pw {
         return ret;
     }
 
-    std::wstring escape_xml(const std::wstring& wstr) {
+    std::wstring xml_escape(const std::wstring& wstr) {
         std::wstring ret;
         ret.reserve(wstr.size() + (wstr.size() / 10));
         for (wchar_t wc : wstr) {
@@ -262,9 +262,9 @@ namespace pw {
         return ret;
     }
 
-    std::string escape_xml(const std::string& str) {
+    std::string xml_escape(const std::string& str) {
         static thread_local std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-        return converter.to_bytes(escape_xml(converter.from_bytes(str)));
+        return converter.to_bytes(xml_escape(converter.from_bytes(str)));
     }
 
     std::string QueryParameters::build() const {

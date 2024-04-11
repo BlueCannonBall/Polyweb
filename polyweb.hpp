@@ -229,8 +229,8 @@ namespace pw {
     std::string percent_encode(const std::string& str, bool plus_as_space = false, bool allow_slash = true);
     std::string percent_decode(const std::string& str, bool plus_as_space = false);
 
-    std::wstring escape_xml(const std::wstring& str);
-    std::string escape_xml(const std::string& str); // Automatically converts std::string to std::wstring and calls the former function
+    std::wstring xml_escape(const std::wstring& str);
+    std::string xml_escape(const std::string& str); // Automatically converts std::string to std::wstring and calls the former function
 
     typedef std::unordered_map<std::string, std::string, string::CaseInsensitiveHasher, string::CaseInsensitiveComparer> HTTPHeaders;
 
