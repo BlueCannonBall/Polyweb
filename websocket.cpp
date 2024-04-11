@@ -69,7 +69,7 @@ namespace pw {
         return ret;
     }
 
-    int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit, size_t message_rlimit) {
+    int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, long frame_rlimit, long message_rlimit) {
         for (bool fin = false; !fin;) {
             char frame_header[2];
             {
@@ -130,7 +130,7 @@ namespace pw {
             if (payload_length) {
                 size_t end = data.size();
 
-                if (payload_length > frame_rlimit || end + payload_length > message_rlimit) {
+                if (payload_length > (unsigned long long) frame_rlimit || end + payload_length > (unsigned long long) message_rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 } else {
@@ -264,7 +264,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPRequest req("GET", target, query_parameters, headers);
 
         if (!req.headers.count("User-Agent")) {
@@ -307,13 +307,13 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(hostname, port, target, resp, query_parameters, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -327,13 +327,13 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(url, resp, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::recv(WSMessage& message, bool handle_pings, size_t frame_rlimit, size_t message_rlimit) {
+    int BasicWebSocketClient<Base>::recv(WSMessage& message, bool handle_pings, long frame_rlimit, long message_rlimit) {
         for (int i = 0;;) {
             if (message.parse(*this, buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
                 return this->ws_closed ? i : PN_ERROR;

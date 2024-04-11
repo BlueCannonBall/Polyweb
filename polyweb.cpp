@@ -411,7 +411,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_rlimit, long misc_rlimit) {
         method.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -440,7 +440,7 @@ namespace pw {
         }
 
         headers.clear();
-        for (size_t i = 0;; ++i) {
+        for (int i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -493,7 +493,7 @@ namespace pw {
             }
 
             if (content_length) {
-                if (content_length > body_rlimit) {
+                if (content_length > (unsigned long long) body_rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
@@ -503,7 +503,7 @@ namespace pw {
                 if ((result = buf_receiver.recvall(conn, body.data(), content_length)) == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
-                } else if ((size_t) result != content_length) {
+                } else if ((unsigned long long) result != content_length) {
                     detail::set_last_error(PW_EWEB);
                     body.resize(result);
                     return PN_ERROR;
@@ -557,7 +557,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, size_t header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         http_version.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -592,7 +592,7 @@ namespace pw {
         }
 
         headers.clear();
-        for (size_t i = 0;; ++i) {
+        for (int i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -669,7 +669,7 @@ namespace pw {
 
                         size_t end = body.size();
 
-                        if (chunk_size > body_chunk_rlimit || end + chunk_size > body_rlimit) {
+                        if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         } else {
@@ -709,7 +709,7 @@ namespace pw {
                 }
 
                 if (content_length) {
-                    if (content_length > body_rlimit) {
+                    if (content_length > (unsigned long long) body_rlimit) {
                         detail::set_last_error(PW_EWEB);
                         return PN_ERROR;
                     }
@@ -719,7 +719,7 @@ namespace pw {
                     if ((result = buf_receiver.recvall(conn, body.data(), content_length)) == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
-                    } else if ((size_t) result != content_length) {
+                    } else if ((unsigned long long) result != content_length) {
                         detail::set_last_error(PW_EWEB);
                         body.resize(result);
                         return PN_ERROR;
