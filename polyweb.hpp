@@ -520,8 +520,8 @@ namespace pw {
             return PN_OK;
         }
 
-        int send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, const std::string& http_version = "HTTP/1.1") {
-            return send(HTTPResponse::make_basic(status_code, headers, http_version));
+        int send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, const std::string& http_version = "HTTP/1.1") {
+            return send(HTTPResponse::make_basic(status_code, headers, http_version), head_only);
         }
 
         virtual int ws_close(uint16_t status_code, const std::string& reason, const char* masking_key = nullptr, bool validity_check = true);
