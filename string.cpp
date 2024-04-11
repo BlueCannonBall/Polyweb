@@ -2,8 +2,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <sstream>
-#include <utility>
 
 namespace pw {
     namespace string {
@@ -35,14 +33,16 @@ namespace pw {
         }
 
         void trim_right(std::string& str) {
-            while (!str.empty() && isspace(str.back())) {
-                str.pop_back();
+            std::string::reverse_iterator it;
+            if ((it = std::find_if_not(str.rbegin(), str.rend(), isspace)) != str.rend()) {
+                str.erase(it.base(), str.end());
             }
         }
 
         void trim_left(std::string& str) {
-            while (!str.empty() && isspace(str.front())) {
-                str.erase(str.begin());
+            std::string::iterator it;
+            if ((it = std::find_if_not(str.begin(), str.end(), isspace)) != str.end()) {
+                str.erase(str.begin(), it);
             }
         }
 
@@ -103,17 +103,24 @@ namespace pw {
 
         std::vector<std::string> split(const std::string& str, char delimiter) {
             std::vector<std::string> ret;
-            std::istringstream ss(str);
-            for (std::string element; std::getline(ss, element, delimiter); ret.push_back(std::move(element))) {}
+            for (size_t i = 0; i < str.size();) {
+                size_t j;
+                if ((j = str.find(delimiter, i)) != i) {
+                    ret.push_back(str.substr(i, j - i));
+                }
+
+                if (j == std::string::npos) {
+                    break;
+                } else {
+                    i = j + 1;
+                }
+            }
             return ret;
         }
 
         std::vector<std::string> split_and_trim(const std::string& str, char delimiter) {
-            std::vector<std::string> ret;
-            std::istringstream ss(str);
-            for (std::string element; std::getline(ss, element, delimiter); ret.push_back(std::move(element))) {
-                trim(element);
-            }
+            std::vector<std::string> ret = split(str, delimiter);
+            std::for_each(ret.begin(), ret.end(), trim);
             return ret;
         }
     } // namespace string
