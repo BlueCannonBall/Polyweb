@@ -130,7 +130,7 @@ namespace pw {
                 }
 
                 if (c == end_sequence[search_pos]) {
-                    if (++search_pos == end_sequence.size()) {
+                    if ((size_t) ++search_pos == end_sequence.size()) {
                         break;
                     }
                 } else {
@@ -138,7 +138,7 @@ namespace pw {
                     search_pos = 0;
 
                     if (c == end_sequence[search_pos]) {
-                        if (++search_pos == end_sequence.size()) {
+                        if ((size_t) ++search_pos == end_sequence.size()) {
                             break;
                         }
                     }
