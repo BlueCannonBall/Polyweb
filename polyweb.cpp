@@ -411,7 +411,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_rlimit, long misc_rlimit) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_rlimit, long misc_rlimit) {
         method.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -440,7 +440,7 @@ namespace pw {
         }
 
         headers.clear();
-        for (int i = 0;; ++i) {
+        for (unsigned int i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -557,7 +557,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         http_version.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -592,7 +592,7 @@ namespace pw {
         }
 
         headers.clear();
-        for (int i = 0;; ++i) {
+        for (unsigned int i = 0;; ++i) {
             if (i > header_climit) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
