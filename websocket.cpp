@@ -197,7 +197,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, ws_route_type& route) {
+    int BasicServer<Base>::handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const {
         route.on_open(*conn, route.data);
         for (;;) {
             if (!conn) {

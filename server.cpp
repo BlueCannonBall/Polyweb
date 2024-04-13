@@ -33,7 +33,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) {
+    int BasicServer<Base>::handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) const {
         bool keep_alive = true;
         bool websocket = false;
         do {
@@ -92,7 +92,7 @@ namespace pw {
             }
 
             std::string http_route_target;
-            for (const auto& route : routes) {
+            for (const auto& route : http_routes) {
                 if (route.first == req.target) {
                     http_route_target = route.first;
                     break;
@@ -105,7 +105,7 @@ namespace pw {
                 if (!ws_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = ws_routes[ws_route_target].on_connect(*conn, req, ws_routes[ws_route_target].data);
+                        resp = ws_routes.at(ws_route_target).on_connect(*conn, req, ws_routes.at(ws_route_target).data);
                     } catch (...) {
                         if (handle_error(*conn, 500, keep_alive, false, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
@@ -175,7 +175,7 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        return handle_ws_connection(std::move(conn), buf_receiver, ws_routes[ws_route_target]);
+                        return handle_ws_connection(std::move(conn), buf_receiver, ws_routes.at(ws_route_target));
                     }
                 } else if (!http_route_target.empty()) {
                     if (handle_error(*conn, 400, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
@@ -190,7 +190,7 @@ namespace pw {
                 if (!http_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = routes[http_route_target].cb(*conn, req, routes[http_route_target].data);
+                        resp = http_routes.at(http_route_target).cb(*conn, req, http_routes.at(http_route_target).data);
                     } catch (...) {
                         if (handle_error(*conn, 500, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                             return PN_ERROR;
@@ -223,7 +223,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, const std::string& http_version) {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, const std::string& http_version) const {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
@@ -249,7 +249,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, const std::string& http_version) {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, const std::string& http_version) const {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);

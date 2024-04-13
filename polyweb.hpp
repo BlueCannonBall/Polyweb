@@ -604,11 +604,11 @@ namespace pw {
             Base(args...) {}
 
         void route(const std::string& target, const http_route_type& route) {
-            routes[target] = route;
+            http_routes[target] = route;
         }
 
         void unroute(const std::string& target) {
-            routes.erase(target);
+            http_routes.erase(target);
         }
 
         void route_ws(const std::string& target, const ws_route_type& route) {
@@ -627,13 +627,13 @@ namespace pw {
             int backlog = 128);
 
     protected:
-        std::unordered_map<std::string, http_route_type> routes;
+        std::unordered_map<std::string, http_route_type> http_routes;
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
-        int handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, ws_route_type& route);
-        int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver);
-        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, const std::string& http_version = "HTTP/1.1");
-        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, const std::string& http_version = "HTTP/1.1");
+        int handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const;
+        int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) const;
+        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, const std::string& http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, const std::string& http_version = "HTTP/1.1") const;
     };
 
     using Server = BasicServer<pn::tcp::Server>;
