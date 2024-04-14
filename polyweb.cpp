@@ -640,7 +640,7 @@ namespace pw {
                 if (string::iequals(transfer_encoding_it->second, "chunked")) {
                     for (;;) {
                         std::string chunk_size_string;
-                        if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", body_chunk_rlimit) == PN_ERROR) {
+                        if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", misc_rlimit) == PN_ERROR) {
                             return PN_ERROR;
                         }
                         if (chunk_size_string.empty()) {
@@ -651,7 +651,11 @@ namespace pw {
                         unsigned long long chunk_size;
                         {
                             std::istringstream ss(chunk_size_string);
-                            ss >> std::hex >> chunk_size;
+                            ss >> std::hex;
+                            if (!(ss >> chunk_size)) {
+                                detail::set_last_error(PW_EWEB);
+                                return PN_ERROR;
+                            }
                         }
 
                         if (!chunk_size) {
