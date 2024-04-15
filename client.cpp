@@ -39,7 +39,7 @@ namespace pw {
         return PN_OK;
     }
 
-    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned int max_redirects) {
+    int fetch(const std::string& hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
         if (!req.headers.count("User-Agent")) {
             req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
         }
@@ -115,11 +115,11 @@ namespace pw {
         return PN_OK;
     }
 
-    int fetch(const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int fetch(const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         return fetch("GET", url, resp, headers, config, max_redirects, http_version);
     }
 
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -133,7 +133,7 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", std::move(req), resp, config, max_redirects);
     }
 
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -148,7 +148,7 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", std::move(req), resp, config, max_redirects);
     }
 
-    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int fetch(const std::string& method, const std::string& url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -163,7 +163,7 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(const std::string& hostname, unsigned short port, bool secure, const std::string& proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned int max_redirects) {
+    int proxied_fetch(const std::string& hostname, unsigned short port, bool secure, const std::string& proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
         URLInfo proxy_url_info;
         if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
             return PN_ERROR;
@@ -254,11 +254,11 @@ namespace pw {
         return PN_OK;
     }
 
-    int proxied_fetch(const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int proxied_fetch(const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         return proxied_fetch("GET", url, proxy_url, resp, headers, config, max_redirects, http_version);
     }
 
-    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -272,7 +272,7 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", proxy_url, std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -287,7 +287,7 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), url_info.scheme == "https", proxy_url, std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned int max_redirects, const std::string& http_version) {
+    int proxied_fetch(const std::string& method, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, const std::string& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, const std::string& http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
