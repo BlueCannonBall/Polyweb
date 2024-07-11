@@ -365,7 +365,7 @@ namespace pw {
     unsigned short URLInfo::port() const {
         size_t hostname_port_delimiter_pos;
         if ((hostname_port_delimiter_pos = host.find(':')) == std::string::npos) {
-            return scheme == "https" || scheme == "wss" ? 443 : 80;
+            return string::iequals(scheme, "https") || string::iequals(scheme, "wss") ? 443 : 80;
         } else {
             std::string port = host.substr(hostname_port_delimiter_pos + 1);
             try {
