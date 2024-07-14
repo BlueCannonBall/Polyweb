@@ -1,6 +1,27 @@
 #include "polyweb.hpp"
 
 namespace pw {
+    template <>
+    Client& Client::operator=(const pn::tcp::Client& conn) {
+        if (this != &conn) {
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
+        }
+        return *this;
+    }
+
+    template <>
+    SecureClient& SecureClient::operator=(const pn::tcp::SecureClient& conn) {
+        if (this != &conn) {
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
+            ssl = conn.ssl;
+        }
+        return *this;
+    }
+
     int ClientConfig::configure_sockopts(pn::tcp::Connection& conn) const {
 #ifdef _WIN32
         DWORD send_timeout = this->send_timeout.count();

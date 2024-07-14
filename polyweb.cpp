@@ -756,27 +756,6 @@ namespace pw {
         return *this;
     }
 
-    template <>
-    Client& Client::operator=(const pn::tcp::Client& conn) {
-        if (this != &conn) {
-            fd = conn.fd;
-            addr = conn.addr;
-            addrlen = conn.addrlen;
-        }
-        return *this;
-    }
-
-    template <>
-    SecureClient& SecureClient::operator=(const pn::tcp::SecureClient& conn) {
-        if (this != &conn) {
-            fd = conn.fd;
-            addr = conn.addr;
-            addrlen = conn.addrlen;
-            ssl = conn.ssl;
-        }
-        return *this;
-    }
-
     template class BasicConnection<pn::tcp::Connection>;
     template class BasicConnection<pn::tcp::SecureConnection>;
 

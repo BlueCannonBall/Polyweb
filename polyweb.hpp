@@ -686,6 +686,8 @@ namespace pw {
             *this = conn;
         }
 
+        BasicWebSocketClient<Base>& operator=(const Base& conn);
+
         int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
         int ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
         int ws_connect(const std::string& url, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);

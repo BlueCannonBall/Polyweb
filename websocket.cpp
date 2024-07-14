@@ -263,6 +263,27 @@ namespace pw {
         return PN_OK;
     }
 
+    template <>
+    WebSocketClient& WebSocketClient::operator=(const pn::tcp::Client& conn) {
+        if (this != &conn) {
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
+        }
+        return *this;
+    }
+
+    template <>
+    SecureWebSocketClient& SecureWebSocketClient::operator=(const pn::tcp::SecureClient& conn) {
+        if (this != &conn) {
+            fd = conn.fd;
+            addr = conn.addr;
+            addrlen = conn.addrlen;
+            ssl = conn.ssl;
+        }
+        return *this;
+    }
+
     template <typename Base>
     int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPRequest req("GET", target, query_parameters, headers);
