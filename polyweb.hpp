@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #define PW_SERVER_CLIENT_NAME "Polyweb"
@@ -472,7 +473,7 @@ namespace pw {
 
         template <typename... Args>
         BasicConnection(Args&&... args):
-            Base(args...) {}
+            Base(std::forward<Args>(args)...) {}
         BasicConnection(const Base& conn) {
             *this = conn;
         }
@@ -601,7 +602,7 @@ namespace pw {
 
         template <typename... Args>
         BasicServer(Args&&... args):
-            Base(args...) {}
+            Base(std::forward<Args>(args)...) {}
 
         void route(const std::string& target, const http_route_type& route) {
             http_routes[target] = route;
@@ -681,7 +682,7 @@ namespace pw {
 
         template <typename... Args>
         BasicWebSocketClient(Args&&... args):
-            BasicConnection<Base>(args...) {}
+            BasicConnection<Base>(std::forward<Args>(args)...) {}
         BasicWebSocketClient(const Base& conn) {
             *this = conn;
         }
