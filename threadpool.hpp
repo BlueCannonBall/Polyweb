@@ -8,7 +8,6 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <vector>
 
 namespace tp {
     enum TaskStatus {
