@@ -7,9 +7,9 @@
 #include "string.hpp"
 #include "threadpool.hpp"
 #include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <ctime>
+#include <stddef.h>
+#include <stdint.h>
+#include <time.h>
 #include <functional>
 #include <iostream>
 #include <stdexcept>

@@ -1,7 +1,7 @@
 #include "string.hpp"
 #include <algorithm>
-#include <cctype>
-#include <cstddef>
+#include <ctype.h>
+#include <stddef.h>
 
 namespace pw {
     namespace string {

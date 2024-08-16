@@ -1,5 +1,5 @@
 #include "polyweb.hpp"
-#include <cstring>
+#include <string.h>
 #include <utility>
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>

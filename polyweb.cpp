@@ -1,10 +1,10 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <bitset>
-#include <cmath>
+#include <math.h>
 #include <codecvt>
-#include <cstring>
-#include <cwchar>
+#include <string.h>
+#include <wchar.h>
 #include <iomanip>
 #include <iterator>
 #include <locale>
