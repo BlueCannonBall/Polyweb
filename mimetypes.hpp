@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace pw {
-    inline std::string filename_to_mimetype(const std::string& filename) {
+    inline std::string filename_to_mimetype(pn::StringView filename) {
         const static std::unordered_map<std::string, std::string, string::CaseInsensitiveHasher, string::CaseInsensitiveComparer> mimetypes = {
             {"123", "application/vnd.lotus-1-2-3"},
             {"3dml", "text/vnd.in3d.3dml"},

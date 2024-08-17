@@ -223,7 +223,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, const std::string& http_version) const {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, pn::StringView http_version) const {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
@@ -249,7 +249,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, const std::string& http_version) const {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, pn::StringView http_version) const {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);

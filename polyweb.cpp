@@ -1,14 +1,14 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <bitset>
-#include <math.h>
 #include <codecvt>
-#include <string.h>
-#include <wchar.h>
 #include <iomanip>
 #include <iterator>
 #include <locale>
+#include <math.h>
 #include <sstream>
+#include <string.h>
+#include <wchar.h>
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>
 #endif
@@ -41,7 +41,7 @@ namespace pw {
     }
 
     std::string strerror(int error) {
-        static const std::string error_strings[] = {
+        const static std::string error_strings[] = {
             "Success",       // PW_ESUCCESS
             "Network error", // PW_ENET
             "Web error",     // PW_EWEB
@@ -141,7 +141,7 @@ namespace pw {
         return base64_encode((const unsigned char*) data, size);
     }
 
-    std::vector<char> base64_decode(const std::string& str) {
+    std::vector<char> base64_decode(pn::StringView str) {
         std::vector<uint8_t> indices;
         indices.reserve(str.size());
 
@@ -189,7 +189,7 @@ namespace pw {
         return ret;
     }
 
-    std::string percent_encode(const std::string& str, bool plus_as_space, bool allow_slash) {
+    std::string percent_encode(pn::StringView str, bool plus_as_space, bool allow_slash) {
         std::string ret;
         ret.reserve(str.size());
         for (char c : str) {
@@ -211,7 +211,7 @@ namespace pw {
         return ret;
     }
 
-    std::string percent_decode(const std::string& str, bool plus_as_space) {
+    std::string percent_decode(pn::StringView str, bool plus_as_space) {
         std::string ret;
         ret.reserve(str.size());
 
@@ -246,7 +246,7 @@ namespace pw {
         return ret;
     }
 
-    std::wstring xml_escape(const std::wstring& wstr) {
+    std::wstring xml_escape(pn::WStringView wstr) {
         std::wstring ret;
         ret.reserve(wstr.size() + (wstr.size() / 10));
         for (wchar_t wc : wstr) {
@@ -280,7 +280,7 @@ namespace pw {
         return ret;
     }
 
-    void QueryParameters::parse(const std::string& query_string) {
+    void QueryParameters::parse(pn::StringView query_string) {
         std::vector<std::string> split_query_string = string::split(query_string, '&');
         map.clear();
         for (const auto& parameter : split_query_string) {
@@ -308,7 +308,7 @@ namespace pw {
         return ret;
     }
 
-    int URLInfo::parse(const std::string& url) {
+    int URLInfo::parse(pn::StringView url) {
         size_t offset = 0;
 
         size_t scheme_host_delimiter_pos;

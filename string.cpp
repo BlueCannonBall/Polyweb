@@ -5,7 +5,7 @@
 
 namespace pw {
     namespace string {
-        bool starts_with(const std::string& str, const std::string& beginning) {
+        bool starts_with(pn::StringView str, pn::StringView beginning) {
             if (str.size() < beginning.size() || beginning.empty()) {
                 return false;
             }
@@ -18,7 +18,7 @@ namespace pw {
             return true;
         }
 
-        bool ends_with(const std::string& str, const std::string& ending) {
+        bool ends_with(pn::StringView str, pn::StringView ending) {
             if (str.size() < ending.size() || ending.empty()) {
                 return false;
             }
@@ -74,21 +74,21 @@ namespace pw {
             std::transform(str.begin(), str.end(), str.begin(), toupper);
         }
 
-        std::string to_lower_copy(const std::string& str) {
+        std::string to_lower_copy(pn::StringView str) {
             std::string ret;
             ret.reserve(str.size());
             std::transform(str.begin(), str.end(), std::back_inserter(ret), tolower);
             return ret;
         }
 
-        std::string to_upper_copy(const std::string& str) {
+        std::string to_upper_copy(pn::StringView str) {
             std::string ret;
             ret.reserve(str.size());
             std::transform(str.begin(), str.end(), std::back_inserter(ret), toupper);
             return ret;
         }
 
-        bool iequals(const std::string& a, const std::string& b) {
+        bool iequals(pn::StringView a, pn::StringView b) {
             if (a.size() != b.size()) {
                 return false;
             }
@@ -101,7 +101,7 @@ namespace pw {
             return true;
         }
 
-        std::vector<std::string> split(const std::string& str, char delimiter) {
+        std::vector<std::string> split(pn::StringView str, char delimiter) {
             std::vector<std::string> ret;
             for (size_t i = 0; i < str.size();) {
                 size_t j;
@@ -118,7 +118,7 @@ namespace pw {
             return ret;
         }
 
-        std::vector<std::string> split_and_trim(const std::string& str, char delimiter) {
+        std::vector<std::string> split_and_trim(pn::StringView str, char delimiter) {
             std::vector<std::string> ret = split(str, delimiter);
             std::for_each(ret.begin(), ret.end(), trim);
             return ret;

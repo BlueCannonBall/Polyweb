@@ -172,7 +172,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicConnection<Base>::ws_close(uint16_t status_code, const std::string& reason, const char* masking_key, bool validity_check) {
+    int BasicConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key, bool validity_check) {
         if (validity_check && !this->is_valid()) {
             ws_closed = true;
             return PN_OK;
@@ -285,7 +285,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, pn::StringView target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPRequest req("GET", target, query_parameters, headers);
 
         if (!req.headers.count("User-Agent")) {
@@ -296,7 +296,7 @@ namespace pw {
             if (port == default_port[this->is_secure()]) {
                 req.headers["Host"] = hostname;
             } else {
-                req.headers["Host"] = hostname + ':' + std::to_string(port);
+                req.headers["Host"] = std::string(hostname) + ':' + std::to_string(port);
             }
         }
         if (!req.headers.count("Connection")) {
@@ -328,13 +328,13 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& hostname, unsigned short port, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, pn::StringView target, const QueryParameters& query_parameters, const HTTPHeaders& headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(hostname, port, target, resp, query_parameters, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPResponse& resp, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -348,7 +348,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(const std::string& url, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView url, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(url, resp, headers, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
@@ -398,7 +398,7 @@ namespace pw {
         }
     }
 
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
+    int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
         if (client.connect(hostname, port) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
@@ -425,12 +425,12 @@ namespace pw {
         return PN_OK;
     }
 
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
+    int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_websocket_client(client, hostname, port, secure, target, resp, query_parameters, headers, config);
     }
 
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    int make_websocket_client(SecureWebSocketClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -443,12 +443,12 @@ namespace pw {
         return make_websocket_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", url_info.path, resp, url_info.query_parameters, headers, config);
     }
 
-    int make_websocket_client(SecureWebSocketClient& client, const std::string& url, HTTPHeaders headers, const ClientConfig& config) {
+    int make_websocket_client(SecureWebSocketClient& client, pn::StringView url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_websocket_client(client, url, resp, headers, config);
     }
 
-    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const std::string& proxy_url, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
+    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, pn::StringView proxy_url, HTTPResponse& resp, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
         URLInfo proxy_url_info;
         if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
             return PN_ERROR;
@@ -459,9 +459,9 @@ namespace pw {
         }
 
         HTTPRequest connect_req("CONNECT",
-            hostname + ':' + std::to_string(port),
+            std::string(hostname) + ':' + std::to_string(port),
             {
-                {"Host", hostname + ':' + std::to_string(port)},
+                {"Host", std::string(hostname) + ':' + std::to_string(port)},
                 {"Connection", "close"},
             });
         if (!proxy_url_info.credentials.empty() && !connect_req.headers.count("Proxy-Authorization")) {
@@ -508,12 +508,12 @@ namespace pw {
         return PN_OK;
     }
 
-    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& hostname, unsigned short port, bool secure, const std::string& target, const std::string& proxy_url, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
+    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, pn::StringView proxy_url, const QueryParameters& query_parameters, const HTTPHeaders& headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_proxied_websocket_client(client, hostname, port, secure, target, proxy_url, resp, query_parameters, headers, config);
     }
 
-    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& url, const std::string& proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -526,7 +526,7 @@ namespace pw {
         return make_proxied_websocket_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", url_info.path, proxy_url, resp, url_info.query_parameters, headers, config);
     }
 
-    int make_proxied_websocket_client(SecureWebSocketClient& client, const std::string& url, const std::string& proxy_url, HTTPHeaders headers, const ClientConfig& config) {
+    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_proxied_websocket_client(client, url, proxy_url, resp, headers, config);
     }
