@@ -7,13 +7,13 @@
 #include "string.hpp"
 #include "threadpool.hpp"
 #include <chrono>
-#include <stddef.h>
-#include <stdint.h>
-#include <time.h>
 #include <functional>
 #include <iostream>
+#include <stddef.h>
 #include <stdexcept>
+#include <stdint.h>
 #include <string>
+#include <time.h>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -604,19 +604,19 @@ namespace pw {
         BasicServer(Args&&... args):
             Base(std::forward<Args>(args)...) {}
 
-        void route(pn::StringView target, const http_route_type& route) {
+        void route(const std::string& target, const http_route_type& route) {
             http_routes[target] = route;
         }
 
-        void unroute(pn::StringView target) {
+        void unroute(const std::string& target) {
             http_routes.erase(target);
         }
 
-        void route_ws(pn::StringView target, const ws_route_type& route) {
+        void route_ws(const std::string& target, const ws_route_type& route) {
             ws_routes[target] = route;
         }
 
-        void unroute_ws(pn::StringView target) {
+        void unroute_ws(const std::string& target) {
             ws_routes.erase(target);
         }
 
