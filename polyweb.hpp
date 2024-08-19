@@ -457,6 +457,22 @@ namespace pw {
         WSMessage(uint8_t opcode):
             opcode(opcode) {}
 
+        const std::vector<char>& operator*() const {
+            return data;
+        }
+
+        std::vector<char>& operator*() {
+            return data;
+        }
+
+        const std::vector<char>* operator->() const {
+            return &data;
+        }
+
+        std::vector<char>* operator->() {
+            return &data;
+        }
+
         std::string to_string() const {
             return std::string(data.begin(), data.end());
         }
