@@ -179,17 +179,13 @@ namespace pw {
         }
 
         WSMessage message(8);
-        if (reason.empty()) {
-            message.data.resize(2);
-        } else {
-            message.data.resize(2 + reason.size());
-            memcpy(message.data.data() + 2, reason.data(), reason.size());
-        }
+        message.data.resize(2 + reason.size());
 #if BYTE_ORDER == BIG_ENDIAN
         memcpy(message.data.data(), &status_code, 2);
 #else
         reverse_memcpy(message.data.data(), &status_code, 2);
 #endif
+        memcpy(message.data.data() + 2, reason.data(), reason.size());
 
         if (send(message, masking_key) == PN_ERROR) {
             return PN_ERROR;
