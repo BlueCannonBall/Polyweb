@@ -172,21 +172,24 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key, bool validity_check) {
-        if (validity_check && !this->is_valid()) {
+    int BasicConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
+        if (!this->is_valid()) {
             ws_closed = true;
             return PN_OK;
         }
 
         WSMessage message(8);
-        message.data.resize(2 + reason.size());
-
+        if (reason.empty()) {
+            message.data.resize(2);
+        } else {
+            message.data.resize(2 + reason.size());
+            memcpy(message.data.data() + 2, reason.data(), reason.size());
+        }
 #if BYTE_ORDER == BIG_ENDIAN
         memcpy(message.data.data(), &status_code, 2);
 #else
         reverse_memcpy(message.data.data(), &status_code, 2);
 #endif
-        memcpy(message.data.data() + 2, reason.data(), reason.size());
 
         if (send(message, masking_key) == PN_ERROR) {
             return PN_ERROR;

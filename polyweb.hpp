@@ -25,6 +25,9 @@
     #define timegm _mkgmtime
 #endif
 
+// Protocol layers
+#define PW_PROTOCOL_LAYER_WS (1 << 16)
+
 // Errors
 #define PW_ESUCCESS 0
 #define PW_ENET     1
@@ -541,7 +544,13 @@ namespace pw {
             return send(HTTPResponse::make_basic(status_code, headers, http_version), head_only);
         }
 
-        virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr, bool validity_check = true);
+        // This function can optionally do a WebSocket close, but it would only be somewhat graceful
+        int close(bool reset = true, int protocol_layers = PN_PROTOCOL_LAYER_ALL) override {
+            if (protocol_layers & PW_PROTOCOL_LAYER_WS && !ws_closed) ws_close(1001, {});
+            return Base::close(reset, protocol_layers);
+        }
+
+        virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
     };
 
     using Connection = BasicConnection<pn::tcp::Connection>;
