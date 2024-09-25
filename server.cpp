@@ -29,7 +29,36 @@ namespace pw {
         } else {
             throw std::logic_error("Base::listen returned without an error");
         }
-        return PN_OK;
+    }
+
+    template <>
+    int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&, void*)> filter, void* filter_data, int backlog) {
+        if (pn::tcp::SecureServer::listen([filter = std::move(filter), filter_data](typename pn::tcp::SecureServer::connection_type& conn, void* data) -> bool {
+                if (filter(conn, filter_data)) {
+                    conn.close();
+                } else {
+                    auto server = (pw::SecureServer*) data;
+                    threadpool.schedule([conn](void* data) mutable {
+                        if (conn.ssl_accept() == PN_ERROR) {
+                            return;
+                        }
+
+                        auto server = (pw::SecureServer*) data;
+                        pn::tcp::BufReceiver buf_receiver(server->buffer_size);
+                        server->handle_connection(pn::UniqueSocket<connection_type>(conn), buf_receiver);
+                    },
+                        server,
+                        true);
+                }
+                return true;
+            },
+                backlog,
+                this) == PN_ERROR) {
+            detail::set_last_error(PW_ENET);
+            return PN_ERROR;
+        } else {
+            throw std::logic_error("pw::SecureServer::listen returned without an error");
+        }
     }
 
     template <typename Base>

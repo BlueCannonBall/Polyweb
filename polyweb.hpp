@@ -636,6 +636,7 @@ namespace pw {
             ws_routes.erase(target);
         }
 
+        // Warning: filter is called on the LISTENING THREAD, BEFORE ssl_accept
         int listen(
             std::function<bool(typename Base::connection_type&, void*)> filter = [](typename Base::connection_type&, void*) {
                 return false;
