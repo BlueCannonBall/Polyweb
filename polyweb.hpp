@@ -737,12 +737,12 @@ namespace pw {
         // If this returns 0, no messages were handled because the connection was closed
         int recv(WSMessage& message, bool handle_pings = true, long frame_rlimit = 16'000'000, long message_rlimit = 32'000'000);
 
-        int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr, bool validity_check = true) override {
+        int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr) override {
             if (masking_key) {
-                return BasicConnection<Base>::ws_close(status_code, reason, masking_key, validity_check);
+                return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
             } else {
                 static constexpr char masking_key[4] = {0};
-                return BasicConnection<Base>::ws_close(status_code, reason, masking_key, validity_check);
+                return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
             }
         }
     };
