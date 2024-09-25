@@ -37,7 +37,7 @@ int main() {
         }
     }
 
-    client.ws_close(1000, ""); // Send a WebSocket close frame
+    client.ws_close(1000, {}); // Send a WebSocket close frame
     client.close();            // Forcefully close the actual socket
     pn::quit();
     return 0;
