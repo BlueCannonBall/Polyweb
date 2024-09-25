@@ -39,11 +39,12 @@ namespace pw {
                 } else {
                     auto server = (pw::SecureServer*) data;
                     threadpool.schedule([conn](void* data) mutable {
-                        if (conn.ssl_accept() == PN_ERROR) {
+                        auto server = (pw::SecureServer*) data;
+
+                        if (server->ssl_ctx && conn.ssl_accept() == PN_ERROR) {
                             return;
                         }
 
-                        auto server = (pw::SecureServer*) data;
                         pn::tcp::BufReceiver buf_receiver(server->buffer_size);
                         server->handle_connection(pn::UniqueSocket<connection_type>(conn), buf_receiver);
                     },
