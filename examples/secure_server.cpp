@@ -1,4 +1,5 @@
 #include "../polyweb.hpp"
+#include <iostream>
 
 int main() {
     pn::init();
