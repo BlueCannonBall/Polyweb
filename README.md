@@ -20,6 +20,7 @@ server.route("/wildcard/",
         [](const pw::Connection& conn, const pw::HTTPRequest& req, void* data) {
             return pw::HTTPResponse(200, req.target, {{"Content-Type", "text/plain"}});
         },
+        nullptr,
         true,
     });
 
