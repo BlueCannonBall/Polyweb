@@ -42,6 +42,7 @@ namespace pw {
                         auto server = (pw::SecureServer*) data;
 
                         if (server->ssl_ctx && conn.ssl_accept() == PN_ERROR) {
+                            conn.close();
                             return;
                         }
 
