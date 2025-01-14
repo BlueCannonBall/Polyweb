@@ -204,6 +204,7 @@ namespace pw {
             {415, "Unsupported Media Type"},
             {416, "Requested range not satisfiable"},
             {417, "Expectation Failed"},
+            {418, "I'm a teapot"},
             {426, "Upgrade Required"},
             {500, "Internal Server Error"},
             {501, "Not Implemented"},
