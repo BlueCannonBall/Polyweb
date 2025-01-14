@@ -193,7 +193,7 @@ namespace pw {
         std::string ret;
         ret.reserve(str.size());
         for (char c : str) {
-            static constexpr char allowed_characters[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~@";
+            static constexpr char allowed_characters[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~@:";
             if (plus_as_space && c == ' ') {
                 ret.push_back('+');
             } else if (allow_slash && c == '/') {
