@@ -246,6 +246,11 @@ namespace pw {
     public:
         typedef decltype(map) map_type;
 
+        QueryParameters() = default;
+        QueryParameters(pn::StringView query_string) {
+            parse(query_string);
+        }
+
         operator map_type() const {
             return map;
         }
