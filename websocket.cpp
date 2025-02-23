@@ -73,8 +73,7 @@ namespace pw {
         for (bool fin = false; !fin;) {
             char frame_header[2];
             {
-                long result;
-                if ((result = buf_receiver.recvall(conn, frame_header, 2)) == PN_ERROR) {
+                if (long result = buf_receiver.recvall(conn, frame_header, 2); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 2) {
@@ -91,8 +90,7 @@ namespace pw {
             uint8_t payload_length_7 = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
             if (payload_length_7 == 126) {
                 uint16_t payload_length_16;
-                long result;
-                if ((result = buf_receiver.recvall(conn, &payload_length_16, 2)) == PN_ERROR) {
+                if (long result = buf_receiver.recvall(conn, &payload_length_16, 2); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 2) {
@@ -102,8 +100,7 @@ namespace pw {
                 payload_length = ntohs(payload_length_16);
             } else if (payload_length_7 == 127) {
                 uint64_t payload_length_64;
-                long result;
-                if ((result = buf_receiver.recvall(conn, &payload_length_64, 8)) == PN_ERROR) {
+                if (long result = buf_receiver.recvall(conn, &payload_length_64, 8); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 8) {
@@ -117,8 +114,7 @@ namespace pw {
 
             char masking_key[4];
             if (masked) {
-                long result;
-                if ((result = buf_receiver.recvall(conn, &masking_key, 4)) == PN_ERROR) {
+                if (long result = buf_receiver.recvall(conn, &masking_key, 4); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 4) {
@@ -135,8 +131,7 @@ namespace pw {
                     return PN_ERROR;
                 } else {
                     data.resize(end + payload_length);
-                    long result;
-                    if ((result = buf_receiver.recvall(conn, &data[end], payload_length)) == PN_ERROR) {
+                    if (long result = buf_receiver.recvall(conn, &data[end], payload_length); result == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     } else if ((unsigned long long) result != payload_length) {

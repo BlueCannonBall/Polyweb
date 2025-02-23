@@ -25,8 +25,7 @@ int main() {
 
         {
             pw::WSMessage message;
-            int result;
-            if ((result = client.recv(message)) == PN_ERROR) {
+            if (int result = client.recv(message); result == PN_ERROR) {
                 std::cerr << "Error: " << pw::universal_strerror() << std::endl;
                 return 1;
             } else if (result == 0) {

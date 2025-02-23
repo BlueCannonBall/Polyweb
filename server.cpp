@@ -87,8 +87,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            HTTPHeaders::const_iterator connection_it;
-            if ((connection_it = req.headers.find("Connection")) != req.headers.end()) {
+            if (auto connection_it = req.headers.find("Connection"); connection_it != req.headers.end()) {
                 std::vector<std::string> split_connection = string::split_and_trim(string::to_lower_copy(connection_it->second), ',');
                 if (req.http_version == "HTTP/1.1") {
                     keep_alive = std::find(split_connection.begin(), split_connection.end(), "close") == split_connection.end();
@@ -159,8 +158,7 @@ namespace pw {
                             resp.headers["Upgrade"] = "websocket";
                         }
 
-                        HTTPHeaders::const_iterator websocket_version_it;
-                        if ((websocket_version_it = req.headers.find("Sec-WebSocket-Version")) != req.headers.end()) {
+                        if (auto websocket_version_it = req.headers.find("Sec-WebSocket-Version"); websocket_version_it != req.headers.end()) {
                             std::vector<std::string> split_websocket_version = string::split_and_trim(websocket_version_it->second, ',');
 
                             bool found_version = false;

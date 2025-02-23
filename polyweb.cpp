@@ -465,8 +465,7 @@ namespace pw {
             headers[header_name] = header_value;
 
             char end_check_buf[2];
-            long result;
-            if ((result = buf_receiver.recvall(conn, end_check_buf, 2)) == PN_ERROR) {
+            if (long result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if (result != 2) {
@@ -482,8 +481,7 @@ namespace pw {
         }
 
         body.clear();
-        HTTPHeaders::const_iterator content_length_it;
-        if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
+        if (auto content_length_it = headers.find("Content-Length"); content_length_it != headers.end()) {
             unsigned long long content_length;
             try {
                 content_length = std::stoull(content_length_it->second);
@@ -499,8 +497,7 @@ namespace pw {
                 }
 
                 body.resize(content_length);
-                long result;
-                if ((result = buf_receiver.recvall(conn, body.data(), content_length)) == PN_ERROR) {
+                if (long result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if ((unsigned long long) result != content_length) {
@@ -512,8 +509,7 @@ namespace pw {
         }
 
         query_parameters->clear();
-        std::string::iterator query_string_begin;
-        if ((query_string_begin = std::find(target.begin(), target.end(), '?')) != target.end()) {
+        if (auto query_string_begin = std::find(target.begin(), target.end(), '?'); query_string_begin != target.end()) {
             if (std::next(query_string_begin) != target.end()) {
                 query_parameters.parse(std::string(std::next(query_string_begin), target.end()));
             }
@@ -616,8 +612,7 @@ namespace pw {
             headers[header_name] = header_value;
 
             char end_check_buf[2];
-            long result;
-            if ((result = buf_receiver.recvall(conn, end_check_buf, 2)) == PN_ERROR) {
+            if (long result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if (result != 2) {
@@ -634,9 +629,7 @@ namespace pw {
 
         body.clear();
         if (!head_only) {
-            HTTPHeaders::const_iterator transfer_encoding_it;
-            HTTPHeaders::const_iterator content_length_it;
-            if ((transfer_encoding_it = headers.find("Transfer-Encoding")) != headers.end()) {
+            if (auto transfer_encoding_it = headers.find("Transfer-Encoding"); transfer_encoding_it != headers.end()) {
                 if (string::iequals(transfer_encoding_it->second, "chunked")) {
                     for (;;) {
                         std::string chunk_size_string;
@@ -660,8 +653,7 @@ namespace pw {
 
                         if (!chunk_size) {
                             char end_buf[2];
-                            long result;
-                            if ((result = buf_receiver.recvall(conn, end_buf, 2)) == PN_ERROR) {
+                            if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
                                 detail::set_last_error(PW_ENET);
                                 return PN_ERROR;
                             } else if (result != 2) {
@@ -678,8 +670,7 @@ namespace pw {
                             return PN_ERROR;
                         } else {
                             body.resize(end + chunk_size);
-                            long result;
-                            if ((result = buf_receiver.recvall(conn, &body[end], chunk_size)) == PN_ERROR) {
+                            if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
                                 detail::set_last_error(PW_ENET);
                                 return PN_ERROR;
                             } else if ((unsigned long long) result != chunk_size) {
@@ -690,8 +681,7 @@ namespace pw {
                         }
 
                         char end_buf[2];
-                        long result;
-                        if ((result = buf_receiver.recvall(conn, end_buf, 2)) == PN_ERROR) {
+                        if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PN_ERROR;
                         } else if (result != 2) {
@@ -703,7 +693,7 @@ namespace pw {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
-            } else if ((content_length_it = headers.find("Content-Length")) != headers.end()) {
+            } else if (auto content_length_it = headers.find("Content-Length"); content_length_it != headers.end()) {
                 unsigned long long content_length;
                 try {
                     content_length = std::stoull(content_length_it->second);
@@ -719,8 +709,7 @@ namespace pw {
                     }
 
                     body.resize(content_length);
-                    long result;
-                    if ((result = buf_receiver.recvall(conn, body.data(), content_length)) == PN_ERROR) {
+                    if (long result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     } else if ((unsigned long long) result != content_length) {

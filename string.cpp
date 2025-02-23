@@ -33,15 +33,13 @@ namespace pw {
         }
 
         void trim_right(std::string& str) {
-            std::string::reverse_iterator it;
-            if ((it = std::find_if_not(str.rbegin(), str.rend(), isspace)) != str.rend()) {
+            if (auto it = std::find_if_not(str.rbegin(), str.rend(), isspace); it != str.rend()) {
                 str.erase(it.base(), str.end());
             }
         }
 
         void trim_left(std::string& str) {
-            std::string::iterator it;
-            if ((it = std::find_if_not(str.begin(), str.end(), isspace)) != str.end()) {
+            if (auto it = std::find_if_not(str.begin(), str.end(), isspace); it != str.end()) {
                 str.erase(str.begin(), it);
             }
         }

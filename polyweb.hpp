@@ -96,8 +96,7 @@ namespace pw {
                 }
 
                 char c;
-                long result;
-                if ((result = buf_receiver.recv(conn, &c, 1)) == PN_ERROR) {
+                if (long result = buf_receiver.recv(conn, &c, 1); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 1) {
@@ -124,8 +123,7 @@ namespace pw {
                 }
 
                 char c;
-                long result;
-                if ((result = buf_receiver.recv(conn, &c, 1)) == PN_ERROR) {
+                if (long result = buf_receiver.recv(conn, &c, 1); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 1) {
@@ -214,8 +212,7 @@ namespace pw {
             {505, "HTTP Version not supported"},
         };
 
-        decltype(conversion_mapping)::const_iterator ret_it;
-        if ((ret_it = conversion_mapping.find(status_code)) != conversion_mapping.end()) {
+        if (auto ret_it = conversion_mapping.find(status_code); ret_it != conversion_mapping.end()) {
             return ret_it->second;
         } else if (status_code >= 100 && status_code < 600) {
             return conversion_mapping.at(status_code / 100 * 100); // Zero out last two digits
@@ -509,8 +506,7 @@ namespace pw {
 
         int send(const HTTPRequest& req) {
             auto data = req.build();
-            long result;
-            if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
+            if (long result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if ((size_t) result != data.size()) {
@@ -522,8 +518,7 @@ namespace pw {
 
         int send(const HTTPResponse& resp, bool head_only = false) {
             auto data = resp.build(head_only);
-            long result;
-            if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
+            if (long result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if ((size_t) result != data.size()) {
@@ -535,8 +530,7 @@ namespace pw {
 
         virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
-            long result;
-            if ((result = Base::sendall(data.data(), data.size())) == PN_ERROR) {
+            if (long result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if ((size_t) result != data.size()) {
