@@ -92,7 +92,7 @@ namespace pw {
                 if (req.http_version == "HTTP/1.1") {
                     keep_alive = std::find(split_connection.begin(), split_connection.end(), "close") == split_connection.end();
 
-                    HTTPHeaders::const_iterator upgrade_it;
+                    HTTPHeaders::iterator upgrade_it;
                     if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
                         if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
@@ -179,7 +179,7 @@ namespace pw {
                             }
                         }
 
-                        HTTPHeaders::const_iterator websocket_key_it;
+                        HTTPHeaders::iterator websocket_key_it;
                         if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -188,7 +188,7 @@ namespace pw {
                             resp.headers["Sec-WebSocket-Accept"] = base64_encode(digest, SHA_DIGEST_LENGTH);
                         }
 
-                        HTTPHeaders::const_iterator websocket_protocol_it;
+                        HTTPHeaders::iterator websocket_protocol_it;
                         if (!resp.headers.count("Sec-WebSocket-Protocol") && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
                             std::vector<std::string> split_websocket_protocol = string::split(websocket_protocol_it->second, ',');
                             if (!split_websocket_protocol.empty()) {

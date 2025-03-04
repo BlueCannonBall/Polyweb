@@ -121,7 +121,7 @@ namespace pw {
             }
         }
 
-        HTTPHeaders::const_iterator location_it;
+        HTTPHeaders::iterator location_it;
         if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
             URLInfo url_info;
             if (url_info.parse(location_it->second) == PN_ERROR) {
@@ -260,7 +260,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        HTTPHeaders::const_iterator location_it;
+        HTTPHeaders::iterator location_it;
         if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
             URLInfo url_info;
             if (url_info.parse(location_it->second) == PN_ERROR) {
