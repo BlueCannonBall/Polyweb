@@ -128,7 +128,7 @@ namespace pw {
                 return PN_ERROR;
             }
             if (!url_info.credentials.empty()) {
-                req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+                req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
             }
             return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects - 1);
         }
@@ -147,8 +147,8 @@ namespace pw {
         }
 
         HTTPRequest req(method, url_info.path, url_info.query_parameters, headers, http_version);
-        if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
-            req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
@@ -162,8 +162,8 @@ namespace pw {
 
         HTTPRequest req(method, url_info.path, body, headers, http_version);
         req.query_parameters = url_info.query_parameters;
-        if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
-            req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
@@ -177,8 +177,8 @@ namespace pw {
 
         HTTPRequest req(method, url_info.path, body, headers, http_version);
         req.query_parameters = url_info.query_parameters;
-        if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
-            req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
@@ -267,7 +267,7 @@ namespace pw {
                 return PN_ERROR;
             }
             if (!url_info.credentials.empty()) {
-                req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+                req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
             }
             return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects - 1);
         }
@@ -286,8 +286,8 @@ namespace pw {
         }
 
         HTTPRequest req(method, url_info.path, url_info.query_parameters, headers, http_version);
-        if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
-            req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
@@ -301,8 +301,8 @@ namespace pw {
 
         HTTPRequest req(method, url_info.path, body, headers, http_version);
         req.query_parameters = url_info.query_parameters;
-        if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
-            req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
@@ -316,8 +316,8 @@ namespace pw {
 
         HTTPRequest req(method, url_info.path, body, headers, http_version);
         req.query_parameters = url_info.query_parameters;
-        if (!url_info.credentials.empty() && !req.headers.count("WWW-Authenticate")) {
-            req.headers["WWW-Authenticate"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
