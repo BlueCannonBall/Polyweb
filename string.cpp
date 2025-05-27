@@ -1,6 +1,7 @@
 #include "string.hpp"
 #include <algorithm>
 #include <ctype.h>
+#include <iterator>
 #include <stddef.h>
 
 namespace pw {
