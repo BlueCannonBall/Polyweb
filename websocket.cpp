@@ -166,97 +166,6 @@ namespace pw {
         return PN_OK;
     }
 
-    template <typename Base>
-    int BasicConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
-        if (!this->is_valid()) {
-            ws_closed = true;
-            return PN_OK;
-        }
-
-        WSMessage message(8);
-        message.data.resize(2 + reason.size());
-#if BYTE_ORDER == BIG_ENDIAN
-        memcpy(message.data.data(), &status_code, 2);
-#else
-        reverse_memcpy(message.data.data(), &status_code, 2);
-#endif
-        memcpy(message.data.data() + 2, reason.data(), reason.size());
-
-        if (send(message, masking_key) == PN_ERROR) {
-            return PN_ERROR;
-        }
-
-        ws_closed = true;
-        return PN_OK;
-    }
-
-    template <typename Base>
-    int BasicServer<Base>::handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const {
-        route.on_open(*conn, route.data);
-        for (;;) {
-            if (!conn) {
-                route.on_close(*conn, 0, {}, false, route.data);
-                break;
-            }
-
-            WSMessage message;
-            if (message.parse(*conn, buf_receiver, ws_frame_rlimit, ws_message_rlimit) == PN_ERROR) {
-                route.on_close(*conn, 0, {}, false, route.data);
-                return PN_ERROR;
-            }
-
-            switch (message.opcode) {
-            case 0x1:
-            case 0x2:
-            case 0xA:
-                route.on_message(*conn, std::move(message), route.data);
-                break;
-
-            case 0x8:
-                if (conn->ws_closed) {
-                    route.on_close(*conn, 0, {}, true, route.data);
-                    if (conn->close() == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    }
-                } else {
-                    uint16_t status_code = 0;
-                    std::string reason;
-
-                    if (message.data.size() >= 2) {
-#if BYTE_ORDER__ == BIG_ENDIAN
-                        memcpy(&status_code, message.data.data(), 2);
-#else
-                        reverse_memcpy(&status_code, message.data.data(), 2);
-#endif
-                    }
-                    if (message.data.size() > 2) {
-                        reason.assign(message.data.begin() + 2, message.data.end());
-                    }
-
-                    route.on_close(*conn, status_code, reason, true, route.data);
-                    if (conn->send(WSMessage(std::move(message.data), 0x8)) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-
-                    if (conn->close() == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    }
-                }
-                return PN_OK;
-
-            case 0x9:
-                if (conn->send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
-                    route.on_close(*conn, 0, {}, false, route.data);
-                    return PN_ERROR;
-                }
-                break;
-            }
-        }
-        return PN_OK;
-    }
-
     template <>
     WebSocketClient& WebSocketClient::operator=(const pn::tcp::Client& conn) {
         if (this != &conn) {
@@ -524,15 +433,6 @@ namespace pw {
         HTTPResponse resp;
         return make_proxied_websocket_client(client, url, proxy_url, resp, headers, config);
     }
-
-    template class BasicConnection<pn::tcp::Connection>;
-    template class BasicConnection<pn::tcp::SecureConnection>;
-
-    template class BasicConnection<pn::tcp::Client>;
-    template class BasicConnection<pn::tcp::SecureClient>;
-
-    template class BasicServer<pn::tcp::Server>;
-    template class BasicServer<pn::tcp::SecureServer>;
 
     template class BasicWebSocketClient<pn::tcp::Client>;
     template class BasicWebSocketClient<pn::tcp::SecureClient>;

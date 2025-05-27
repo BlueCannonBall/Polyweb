@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <openssl/sha.h>
 #include <stdexcept>
+#include <string.h>
 #include <utility>
 
 namespace pw {
@@ -248,6 +249,73 @@ namespace pw {
                 }
             }
         } while (conn && keep_alive);
+        return PN_OK;
+    }
+
+    template <typename Base>
+    int BasicServer<Base>::handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const {
+        route.on_open(*conn, route.data);
+        for (;;) {
+            if (!conn) {
+                route.on_close(*conn, 0, {}, false, route.data);
+                break;
+            }
+
+            WSMessage message;
+            if (message.parse(*conn, buf_receiver, ws_frame_rlimit, ws_message_rlimit) == PN_ERROR) {
+                route.on_close(*conn, 0, {}, false, route.data);
+                return PN_ERROR;
+            }
+
+            switch (message.opcode) {
+            case 0x1:
+            case 0x2:
+            case 0xA:
+                route.on_message(*conn, std::move(message), route.data);
+                break;
+
+            case 0x8:
+                if (conn->ws_closed) {
+                    route.on_close(*conn, 0, {}, true, route.data);
+                    if (conn->close() == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    }
+                } else {
+                    uint16_t status_code = 0;
+                    std::string reason;
+
+                    if (message.data.size() >= 2) {
+#if BYTE_ORDER__ == BIG_ENDIAN
+                        memcpy(&status_code, message.data.data(), 2);
+#else
+                        reverse_memcpy(&status_code, message.data.data(), 2);
+#endif
+                    }
+                    if (message.data.size() > 2) {
+                        reason.assign(message.data.begin() + 2, message.data.end());
+                    }
+
+                    route.on_close(*conn, status_code, reason, true, route.data);
+                    if (conn->send(WSMessage(std::move(message.data), 0x8)) == PN_ERROR) {
+                        return PN_ERROR;
+                    }
+
+                    if (conn->close() == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    }
+                }
+                return PN_OK;
+
+            case 0x9:
+                if (conn->send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
+                    route.on_close(*conn, 0, {}, false, route.data);
+                    return PN_ERROR;
+                }
+                break;
+            }
+        }
         return PN_OK;
     }
 
