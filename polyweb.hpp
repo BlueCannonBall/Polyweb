@@ -500,7 +500,12 @@ namespace pw {
             *this = conn;
         }
 
-        BasicConnection<Base>& operator=(const Base& conn);
+        BasicConnection& operator=(const Base& conn) {
+            if (this != &conn) {
+                Base::operator=(conn);
+            }
+            return *this;
+        }
 
         using pn::tcp::Connection::send;
 
@@ -713,7 +718,12 @@ namespace pw {
             *this = conn;
         }
 
-        BasicWebSocketClient<Base>& operator=(const Base& conn);
+        BasicWebSocketClient& operator=(const Base& conn) {
+            if (this != &conn) {
+                Base::operator=(conn);
+            }
+            return *this;
+        }
 
         int ws_connect(pn::StringView hostname, unsigned short port, pn::StringView target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
         int ws_connect(pn::StringView hostname, unsigned short port, pn::StringView target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);

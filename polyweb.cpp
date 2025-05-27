@@ -724,22 +724,6 @@ namespace pw {
         return PN_OK;
     }
 
-    template <>
-    BasicConnection<pn::tcp::Connection>& BasicConnection<pn::tcp::Connection>::operator=(const pn::tcp::Connection& conn) {
-        if (this != &conn) {
-            pn::tcp::Connection::operator=(conn);
-        }
-        return *this;
-    }
-
-    template <>
-    BasicConnection<pn::tcp::SecureConnection>& BasicConnection<pn::tcp::SecureConnection>::operator=(const pn::tcp::SecureConnection& conn) {
-        if (this != &conn) {
-            pn::tcp::SecureConnection::operator=(conn);
-        }
-        return *this;
-    }
-
     template <typename Base>
     int BasicConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
         if (!this->is_valid()) {
