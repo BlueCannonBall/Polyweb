@@ -725,22 +725,17 @@ namespace pw {
     }
 
     template <>
-    Connection& Connection::operator=(const pn::tcp::Connection& conn) {
+    BasicConnection<pn::tcp::Connection>& BasicConnection<pn::tcp::Connection>::operator=(const pn::tcp::Connection& conn) {
         if (this != &conn) {
-            fd = conn.fd;
-            addr = conn.addr;
-            addrlen = conn.addrlen;
+            pn::tcp::Connection::operator=(conn);
         }
         return *this;
     }
 
     template <>
-    SecureConnection& SecureConnection::operator=(const pn::tcp::SecureConnection& conn) {
+    BasicConnection<pn::tcp::SecureConnection>& BasicConnection<pn::tcp::SecureConnection>::operator=(const pn::tcp::SecureConnection& conn) {
         if (this != &conn) {
-            fd = conn.fd;
-            addr = conn.addr;
-            addrlen = conn.addrlen;
-            ssl = conn.ssl;
+            pn::tcp::SecureConnection::operator=(conn);
         }
         return *this;
     }
