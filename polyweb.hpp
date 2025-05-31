@@ -6,6 +6,7 @@
 #include "Polynet/smart_sockets.hpp"
 #include "string.hpp"
 #include "threadpool.hpp"
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -116,6 +117,7 @@ namespace pw {
 
         template <typename OutputIt>
         int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, long rlimit = 1'000) {
+            std::vector<char> found_buf;
             for (long i = 0, search_pos = 0;; ++i) {
                 if (i >= rlimit) {
                     detail::set_last_error(PW_EWEB);
@@ -132,14 +134,18 @@ namespace pw {
                 }
 
                 if (c == end_sequence[search_pos]) {
+                    found_buf.push_back(c);
                     if ((size_t) ++search_pos == end_sequence.size()) {
                         break;
                     }
                 } else {
+                    std::copy(found_buf.begin(), found_buf.end(), ret);
                     *ret++ = c;
+                    found_buf.clear();
                     search_pos = 0;
 
                     if (c == end_sequence[search_pos]) {
+                        found_buf.push_back(c);
                         if ((size_t) ++search_pos == end_sequence.size()) {
                             break;
                         }
