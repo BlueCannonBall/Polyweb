@@ -24,8 +24,8 @@ namespace pw {
         void reverse_memcpy(char* dest, const char* src, size_t size) {
             size_t i = 0;
 #ifdef POLYWEB_SIMD
-            for (const static __m128i pattern_vec = _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= size; i += 16) {
-                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + size - 1 - i));
+            for (const static __m128i pattern_vec = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= size; i += 16) {
+                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + size) - 1 - i);
                 __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
                 _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
             }
