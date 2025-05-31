@@ -13,7 +13,7 @@ namespace pw {
                     conn.close();
                 } else {
                     auto server = (BasicServer<Base>*) data;
-                    threadpool.schedule([conn](void* data) {
+                    threadpool.schedule([conn = conn](void* data) {
                         auto server = (BasicServer<Base>*) data;
                         pn::tcp::BufReceiver buf_receiver(server->buffer_size);
                         server->handle_connection(pn::UniqueSocket<connection_type>(conn), buf_receiver);
@@ -39,7 +39,7 @@ namespace pw {
                     conn.close();
                 } else {
                     auto server = (pw::SecureServer*) data;
-                    threadpool.schedule([conn](void* data) mutable {
+                    threadpool.schedule([conn = conn](void* data) mutable {
                         auto server = (pw::SecureServer*) data;
 
                         if (server->ssl_ctx && conn.ssl_accept() == PN_ERROR) {
