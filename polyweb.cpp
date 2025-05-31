@@ -228,7 +228,7 @@ namespace pw {
                     ret.push_back(c);
                 }
             } else {
-                char nibble;
+                unsigned char nibble;
                 if (c >= '0' && c <= '9') {
                     nibble = c - '0';
                 } else {
