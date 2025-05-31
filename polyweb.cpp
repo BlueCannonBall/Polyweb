@@ -216,7 +216,7 @@ namespace pw {
         ret.reserve(str.size());
 
         int reading_percent = 0;
-        char current_character;
+        unsigned char current_character;
         for (char c : str) {
             if (!reading_percent) {
                 if (c == '%') {
@@ -232,7 +232,7 @@ namespace pw {
                 if (c >= '0' && c <= '9') {
                     nibble = c - '0';
                 } else {
-                    nibble = toupper(c) - 'A' + 10;
+                    nibble = toupper((unsigned char) c) - 'A' + 10;
                 }
 
                 current_character |= nibble << ((reading_percent - 1) * 4);

@@ -66,24 +66,32 @@ namespace pw {
         }
 
         void to_lower(std::string& str) {
-            std::transform(str.begin(), str.end(), str.begin(), tolower);
+            std::transform(str.begin(), str.end(), str.begin(), [](char c) {
+                return tolower((unsigned char) c);
+            });
         }
 
         void to_upper(std::string& str) {
-            std::transform(str.begin(), str.end(), str.begin(), toupper);
+            std::transform(str.begin(), str.end(), str.begin(), [](char c) {
+                return toupper((unsigned char) c);
+            });
         }
 
         std::string to_lower_copy(pn::StringView str) {
             std::string ret;
             ret.reserve(str.size());
-            std::transform(str.begin(), str.end(), std::back_inserter(ret), tolower);
+            std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) {
+                return tolower((unsigned char) c);
+            });
             return ret;
         }
 
         std::string to_upper_copy(pn::StringView str) {
             std::string ret;
             ret.reserve(str.size());
-            std::transform(str.begin(), str.end(), std::back_inserter(ret), toupper);
+            std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) {
+                return toupper((unsigned char) c);
+            });
             return ret;
         }
 
@@ -93,7 +101,7 @@ namespace pw {
             }
 
             for (size_t i = 0; i < a.size(); ++i) {
-                if (tolower(a[i]) != tolower(b[i])) {
+                if (tolower((unsigned char) a[i]) != tolower((unsigned char) b[i])) {
                     return false;
                 }
             }
