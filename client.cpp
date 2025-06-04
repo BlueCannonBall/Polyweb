@@ -115,17 +115,17 @@ namespace pw {
         return PN_OK;
     }
 
-    int fetch(pn::StringView url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
-        return fetch("GET", url, resp, headers, config, max_redirects, http_version);
+    int fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+        return fetch("GET", url, resp, std::move(headers), config, max_redirects, std::move(http_version));
     }
 
-    int fetch(pn::StringView method, pn::StringView url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
+    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path, url_info.query_parameters, headers, http_version);
+        HTTPRequest req(std::move(method), std::move(url_info.path), std::move(url_info.query_parameters), std::move(headers), std::move(http_version));
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -133,13 +133,13 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
     }
 
-    int fetch(pn::StringView method, pn::StringView url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
+    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        HTTPRequest req(std::move(method), std::move(url_info.path), std::move(body), std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -148,13 +148,13 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
     }
 
-    int fetch(pn::StringView method, pn::StringView url, HTTPResponse& resp, pn::StringView body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
+    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        HTTPRequest req(std::move(method), std::move(url_info.path), body, std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -254,17 +254,17 @@ namespace pw {
         return PN_OK;
     }
 
-    int proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
-        return proxied_fetch("GET", url, proxy_url, resp, headers, config, max_redirects, http_version);
+    int proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+        return proxied_fetch("GET", url, proxy_url, resp, std::move(headers), config, max_redirects, std::move(http_version));
     }
 
-    int proxied_fetch(pn::StringView method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
+    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path, url_info.query_parameters, headers, http_version);
+        HTTPRequest req(std::move(method), std::move(url_info.path), std::move(url_info.query_parameters), std::move(headers), std::move(http_version));
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
@@ -272,13 +272,13 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(pn::StringView method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
+    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        HTTPRequest req(std::move(method), std::move(url_info.path), std::move(body), std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -287,13 +287,13 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(pn::StringView method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, const HTTPHeaders& headers, const ClientConfig& config, unsigned short max_redirects, pn::StringView http_version) {
+    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        HTTPRequest req(method, url_info.path, body, headers, http_version);
+        HTTPRequest req(std::move(method), std::move(url_info.path), body, std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());

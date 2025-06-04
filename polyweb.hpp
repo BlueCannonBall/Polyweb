@@ -284,8 +284,9 @@ namespace pw {
 
     inline std::istream& operator>>(std::istream& is, QueryParameters& query_parameters) {
         std::string query_string;
-        is >> query_string;
-        query_parameters.parse(query_string);
+        if (is >> query_string) {
+            query_parameters.parse(query_string);
+        }
         return is;
     }
 
@@ -352,29 +353,29 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPRequest() = default;
-        HTTPRequest(pn::StringView method, pn::StringView target, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
-            method(method),
-            target(target),
-            headers(headers),
-            http_version(http_version) {}
-        HTTPRequest(pn::StringView method, pn::StringView target, const std::vector<char>& body, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
-            method(method),
-            target(target),
-            headers(headers),
-            body(body),
-            http_version(http_version) {}
-        HTTPRequest(pn::StringView method, pn::StringView target, pn::StringView body, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
-            method(method),
-            target(target),
-            headers(headers),
+        HTTPRequest(std::string method, std::string target, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+            method(std::move(method)),
+            target(std::move(target)),
+            headers(std::move(headers)),
+            http_version(std::move(http_version)) {}
+        HTTPRequest(std::string method, std::string target, std::vector<char> body, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+            method(std::move(method)),
+            target(std::move(target)),
+            headers(std::move(headers)),
+            body(std::move(body)),
+            http_version(std::move(http_version)) {}
+        HTTPRequest(std::string method, std::string target, pn::StringView body, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+            method(std::move(method)),
+            target(std::move(target)),
+            headers(std::move(headers)),
             body(body.begin(), body.end()),
-            http_version(http_version) {}
-        HTTPRequest(pn::StringView method, pn::StringView target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
-            method(method),
-            target(target),
-            headers(headers),
-            query_parameters(query_parameters),
-            http_version(http_version) {}
+            http_version(std::move(http_version)) {}
+        HTTPRequest(std::string method, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+            method(std::move(method)),
+            target(std::move(target)),
+            headers(std::move(headers)),
+            query_parameters(std::move(query_parameters)),
+            http_version(std::move(http_version)) {}
 
         std::vector<char> build() const;
 
@@ -407,26 +408,26 @@ namespace pw {
         std::string http_version = "HTTP/1.1";
 
         HTTPResponse() = default;
-        HTTPResponse(uint16_t status_code, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
+        HTTPResponse(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
-            headers(headers),
-            http_version(http_version) {}
-        HTTPResponse(uint16_t status_code, const std::vector<char>& body, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
+            headers(std::move(headers)),
+            http_version(std::move(http_version)) {}
+        HTTPResponse(uint16_t status_code, std::vector<char> body, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
-            body(body),
-            headers(headers),
-            http_version(http_version) {}
-        HTTPResponse(uint16_t status_code, pn::StringView body, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1"):
+            body(std::move(body)),
+            headers(std::move(headers)),
+            http_version(std::move(http_version)) {}
+        HTTPResponse(uint16_t status_code, pn::StringView body, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
             body(body.begin(), body.end()),
-            headers(headers),
-            http_version(http_version) {}
+            headers(std::move(headers)),
+            http_version(std::move(http_version)) {}
 
-        static HTTPResponse make_basic(uint16_t status_code, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1") {
-            HTTPResponse resp(status_code, std::to_string(status_code) + ' ' + status_code_to_reason_phrase(status_code), headers, http_version);
+        static HTTPResponse make_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1") {
+            HTTPResponse resp(status_code, std::to_string(status_code) + ' ' + status_code_to_reason_phrase(status_code), std::move(headers), std::move(http_version));
             if (!resp.headers.count("Content-Type")) {
                 resp.headers["Content-Type"] = "text/plain";
             }
@@ -460,11 +461,8 @@ namespace pw {
         WSMessage(pn::StringView str, uint8_t opcode = 1):
             data(str.begin(), str.end()),
             opcode(opcode) {}
-        WSMessage(const std::vector<char>& data, uint8_t opcode = 2):
-            data(data),
-            opcode(opcode) {}
-        WSMessage(std::vector<char>&& data, uint8_t opcode = 2):
-            data(data),
+        WSMessage(std::vector<char> data, uint8_t opcode = 2):
+            data(std::move(data)),
             opcode(opcode) {}
         WSMessage(uint8_t opcode):
             opcode(opcode) {}
@@ -551,8 +549,8 @@ namespace pw {
             return PN_OK;
         }
 
-        int send_basic(uint16_t status_code, const HTTPHeaders& headers = {}, pn::StringView http_version = "HTTP/1.1", bool head_only = false) {
-            return send(HTTPResponse::make_basic(status_code, headers, http_version), head_only);
+        int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", bool head_only = false) {
+            return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), head_only);
         }
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
@@ -588,7 +586,7 @@ namespace pw {
         BasicHTTPRoute() = default;
         BasicHTTPRoute(decltype(cb) cb, void* data = nullptr, bool wildcard = false):
             Route(data, wildcard),
-            cb(cb) {}
+            cb(std::move(cb)) {}
     };
 
     using HTTPRoute = BasicHTTPRoute<Connection>;
@@ -605,15 +603,15 @@ namespace pw {
         BasicWSRoute() = default;
         BasicWSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
             Route(data, wildcard),
-            on_open(on_open),
-            on_message(on_message),
-            on_close(on_close) {}
+            on_open(std::move(on_open)),
+            on_message(std::move(on_message)),
+            on_close(std::move(on_close)) {}
         BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
             Route(data, wildcard),
-            on_connect(on_connect),
-            on_open(on_open),
-            on_message(on_message),
-            on_close(on_close) {}
+            on_connect(std::move(on_connect)),
+            on_open(std::move(on_open)),
+            on_message(std::move(on_message)),
+            on_close(std::move(on_close)) {}
     };
 
     using WSRoute = BasicWSRoute<Connection>;
@@ -640,16 +638,16 @@ namespace pw {
         BasicServer(Args&&... args):
             Base(std::forward<Args>(args)...) {}
 
-        void route(const std::string& target, const http_route_type& route) {
-            http_routes[target] = route;
+        void route(std::string target, http_route_type route) {
+            http_routes.insert_or_assign(std::move(target), std::move(route));
         }
 
         void unroute(const std::string& target) {
             http_routes.erase(target);
         }
 
-        void route_ws(const std::string& target, const ws_route_type& route) {
-            ws_routes[target] = route;
+        void route_ws(std::string target, ws_route_type route) {
+            ws_routes.insert_or_assign(std::move(target), std::move(route));
         }
 
         void unroute_ws(const std::string& target) {
@@ -670,8 +668,8 @@ namespace pw {
 
         int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) const;
         int handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const;
-        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, pn::StringView http_version = "HTTP/1.1") const;
-        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, pn::StringView http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
     };
 
     using Server = BasicServer<pn::tcp::Server>;
@@ -700,16 +698,16 @@ namespace pw {
     };
 
     int fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
-    int fetch(pn::StringView url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
-    int fetch(pn::StringView method, pn::StringView url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
-    int fetch(pn::StringView method, pn::StringView url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
-    int fetch(pn::StringView method, pn::StringView url, HTTPResponse& resp, pn::StringView body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
+    int fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
     int proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
-    int proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
-    int proxied_fetch(pn::StringView method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
-    int proxied_fetch(pn::StringView method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, const std::vector<char>& body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
-    int proxied_fetch(pn::StringView method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, const HTTPHeaders& headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, pn::StringView http_version = "HTTP/1.1");
+    int proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWebSocketClient : public BasicConnection<Base> {
@@ -731,8 +729,8 @@ namespace pw {
             return *this;
         }
 
-        int ws_connect(pn::StringView hostname, unsigned short port, pn::StringView target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
-        int ws_connect(pn::StringView hostname, unsigned short port, pn::StringView target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
+        int ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
+        int ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
         int ws_connect(pn::StringView url, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
         int ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
 
@@ -766,13 +764,13 @@ namespace pw {
     using WebSocketClient = BasicWebSocketClient<pn::tcp::Client>;
     using SecureWebSocketClient = BasicWebSocketClient<pn::tcp::SecureClient>;
 
-    int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
-    int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
+    int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
     int make_websocket_client(SecureWebSocketClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
     int make_websocket_client(SecureWebSocketClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
 
-    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, pn::StringView proxy_url, HTTPResponse& resp, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, pn::StringView target, pn::StringView proxy_url, const QueryParameters& query_parameters = {}, const HTTPHeaders& headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
     int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
     int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw

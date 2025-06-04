@@ -25,7 +25,7 @@ namespace pw {
             size_t i = 0;
 #ifdef POLYWEB_SIMD
             for (const static __m128i pattern_vec = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= size; i += 16) {
-                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + size) - 1 - i);
+                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + size - 16 - i));
                 __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
                 _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
             }
@@ -642,13 +642,9 @@ namespace pw {
                         }
 
                         unsigned long long chunk_size;
-                        {
-                            std::istringstream ss(chunk_size_string);
-                            ss >> std::hex;
-                            if (!(ss >> chunk_size)) {
-                                detail::set_last_error(PW_EWEB);
-                                return PN_ERROR;
-                            }
+                        if (std::istringstream ss(chunk_size_string); !(ss >> std::hex >> chunk_size)) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
                         }
 
                         if (!chunk_size) {
@@ -732,13 +728,13 @@ namespace pw {
         }
 
         WSMessage message(8);
-        message.data.resize(2 + reason.size());
+        message->resize(2 + reason.size());
 #if BYTE_ORDER == BIG_ENDIAN
-        memcpy(message.data.data(), &status_code, 2);
+        memcpy(message->data(), &status_code, 2);
 #else
-        reverse_memcpy(message.data.data(), &status_code, 2);
+        reverse_memcpy(message->data(), &status_code, 2);
 #endif
-        memcpy(message.data.data() + 2, reason.data(), reason.size());
+        memcpy(message->data() + 2, reason.data(), reason.size());
 
         if (send(message, masking_key) == PN_ERROR) {
             return PN_ERROR;

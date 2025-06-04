@@ -2,8 +2,9 @@
 #include <algorithm>
 #include <openssl/sha.h>
 #include <stdexcept>
-#include <string.h>
-#include <utility>
+#if BYTE_ORDER == BIG_ENDIAN
+    #include <string.h>
+#endif
 
 namespace pw {
     template <typename Base>
@@ -285,15 +286,15 @@ namespace pw {
                     uint16_t status_code = 0;
                     std::string reason;
 
-                    if (message.data.size() >= 2) {
-#if BYTE_ORDER__ == BIG_ENDIAN
-                        memcpy(&status_code, message.data.data(), 2);
+                    if (message->size() >= 2) {
+#if BYTE_ORDER == BIG_ENDIAN
+                        memcpy(&status_code, message->data(), 2);
 #else
-                        reverse_memcpy(&status_code, message.data.data(), 2);
+                        reverse_memcpy(&status_code, message->data(), 2);
 #endif
                     }
-                    if (message.data.size() > 2) {
-                        reason.assign(message.data.begin() + 2, message.data.end());
+                    if (message->size() > 2) {
+                        reason.assign(message->begin() + 2, message->end());
                     }
 
                     route.on_close(*conn, status_code, reason, true, route.data);
@@ -320,7 +321,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, pn::StringView http_version) const {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, bool head_only, std::string http_version) const {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
@@ -328,14 +329,13 @@ namespace pw {
             resp = HTTPResponse::make_basic(500);
         }
 
+        resp.http_version = std::move(http_version);
         if (!resp.headers.count("Server")) {
             resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
         }
 
         for (const auto& header : headers) {
-            if (!resp.headers.count(header.first)) {
-                resp.headers.insert(header);
-            }
+            resp.headers.insert(header);
         }
 
         if (conn.send(resp, head_only) == PN_ERROR) {
@@ -346,7 +346,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, pn::StringView http_version) const {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only, std::string http_version) const {
         HTTPResponse resp;
         try {
             resp = on_error(status_code);
@@ -354,6 +354,7 @@ namespace pw {
             resp = HTTPResponse::make_basic(500);
         }
 
+        resp.http_version = std::move(http_version);
         if (!resp.headers.count("Server")) {
             resp.headers["Server"] = PW_SERVER_CLIENT_NAME;
         }

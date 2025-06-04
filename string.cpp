@@ -34,13 +34,19 @@ namespace pw {
         }
 
         void trim_right(std::string& str) {
-            if (auto it = std::find_if_not(str.rbegin(), str.rend(), isspace); it != str.rend()) {
+            if (auto it = std::find_if_not(str.rbegin(), str.rend(), [](char c) -> bool {
+                    return isspace((unsigned char) c);
+                });
+                it != str.rend()) {
                 str.erase(it.base(), str.end());
             }
         }
 
         void trim_left(std::string& str) {
-            if (auto it = std::find_if_not(str.begin(), str.end(), isspace); it != str.end()) {
+            if (auto it = std::find_if_not(str.begin(), str.end(), [](char c) -> bool {
+                    return isspace((unsigned char) c);
+                });
+                it != str.end()) {
                 str.erase(str.begin(), it);
             }
         }
@@ -66,13 +72,13 @@ namespace pw {
         }
 
         void to_lower(std::string& str) {
-            std::transform(str.begin(), str.end(), str.begin(), [](char c) {
+            std::transform(str.begin(), str.end(), str.begin(), [](char c) -> char {
                 return tolower((unsigned char) c);
             });
         }
 
         void to_upper(std::string& str) {
-            std::transform(str.begin(), str.end(), str.begin(), [](char c) {
+            std::transform(str.begin(), str.end(), str.begin(), [](char c) -> char {
                 return toupper((unsigned char) c);
             });
         }
@@ -80,7 +86,7 @@ namespace pw {
         std::string to_lower_copy(pn::StringView str) {
             std::string ret;
             ret.reserve(str.size());
-            std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) {
+            std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) -> char {
                 return tolower((unsigned char) c);
             });
             return ret;
@@ -89,7 +95,7 @@ namespace pw {
         std::string to_upper_copy(pn::StringView str) {
             std::string ret;
             ret.reserve(str.size());
-            std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) {
+            std::transform(str.begin(), str.end(), std::back_inserter(ret), [](char c) -> char {
                 return toupper((unsigned char) c);
             });
             return ret;
