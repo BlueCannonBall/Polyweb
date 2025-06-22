@@ -323,11 +323,14 @@ namespace pw {
         }
 
         std::string username() const {
-            return credentials.substr(0, host.find(':'));
+            return credentials.substr(0, credentials.find(':'));
         }
 
         std::string password() const {
-            return credentials.substr(host.find(':') + 1);
+            if (size_t pos = credentials.find(':'); pos != std::string::npos && ++pos != credentials.size()) {
+                return credentials.substr(pos);
+            }
+            return {};
         }
     };
 
