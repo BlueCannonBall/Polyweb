@@ -106,6 +106,10 @@ namespace pw {
             if (url_info.parse(location_it->second) == PN_ERROR) {
                 return PN_ERROR;
             }
+            if (secure && string::iequals(url_info.scheme, "http")) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
+            }
             if (!url_info.credentials.empty()) {
                 req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
             }
@@ -243,6 +247,10 @@ namespace pw {
         if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
             URLInfo url_info;
             if (url_info.parse(location_it->second) == PN_ERROR) {
+                return PN_ERROR;
+            }
+            if (secure && string::iequals(url_info.scheme, "http")) {
+                detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
             }
             if (!url_info.credentials.empty()) {
