@@ -387,7 +387,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
 
         std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -628,6 +628,7 @@ namespace pw {
         unsigned int header_climit = 100;
         long header_name_rlimit = 500;
         long header_value_rlimit = 4'000'000;
+        long body_chunk_rlimit = 16'000'000;
         long body_rlimit = 32'000'000;
         long ws_frame_rlimit = 16'000'000;
         long ws_message_rlimit = 32'000'000;

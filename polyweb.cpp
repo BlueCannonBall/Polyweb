@@ -411,7 +411,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_rlimit, long misc_rlimit) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
         method.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -481,7 +481,67 @@ namespace pw {
         }
 
         body.clear();
-        if (auto content_length_it = headers.find("Content-Length"); content_length_it != headers.end()) {
+        if (auto transfer_encoding_it = headers.find("Transfer-Encoding"); transfer_encoding_it != headers.end()) {
+            if (string::iequals(transfer_encoding_it->second, "chunked")) {
+                for (;;) {
+                    std::string chunk_size_string;
+                    if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", misc_rlimit) == PN_ERROR) {
+                        return PN_ERROR;
+                    }
+                    if (chunk_size_string.empty()) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    }
+
+                    unsigned long long chunk_size;
+                    if (std::istringstream ss(chunk_size_string); !(ss >> std::hex >> chunk_size)) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    }
+
+                    if (!chunk_size) {
+                        char end_buf[2];
+                        if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if (result != 2) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
+                        break;
+                    }
+
+                    size_t end = body.size();
+
+                    if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    } else {
+                        body.resize(end + chunk_size);
+                        if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if ((unsigned long long) result != chunk_size) {
+                            detail::set_last_error(PW_EWEB);
+                            body.resize(end + result);
+                            return PN_ERROR;
+                        }
+                    }
+
+                    char end_buf[2];
+                    if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if (result != 2) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    }
+                }
+            } else { // Only chunked transfer encoding is supported atm
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
+            }
+        } else if (auto content_length_it = headers.find("Content-Length"); content_length_it != headers.end()) {
             unsigned long long content_length;
             try {
                 content_length = std::stoull(content_length_it->second);
