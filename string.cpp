@@ -34,21 +34,19 @@ namespace pw {
         }
 
         void trim_right(std::string& str) {
-            if (auto it = std::find_if_not(str.rbegin(), str.rend(), [](char c) -> bool {
+            str.erase(
+                std::find_if_not(str.rbegin(), str.rend(), [](char c) -> bool {
                     return isspace((unsigned char) c);
-                });
-                it != str.rend()) {
-                str.erase(it.base(), str.end());
-            }
+                }).base(),
+                str.end());
         }
 
         void trim_left(std::string& str) {
-            if (auto it = std::find_if_not(str.begin(), str.end(), [](char c) -> bool {
+            str.erase(
+                str.begin(),
+                std::find_if_not(str.begin(), str.end(), [](char c) -> bool {
                     return isspace((unsigned char) c);
-                });
-                it != str.end()) {
-                str.erase(str.begin(), it);
-            }
+                }));
         }
 
         void trim(std::string& str) {
