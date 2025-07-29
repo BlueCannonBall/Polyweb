@@ -310,7 +310,7 @@ namespace pw {
 
     int URLInfo::parse(pn::StringView url) {
         size_t offset = 0;
-
+    
         size_t scheme_host_delimiter_pos;
         if ((scheme_host_delimiter_pos = url.find("://", offset)) == std::string::npos || scheme_host_delimiter_pos == offset) {
             detail::set_last_error(PW_EWEB);
@@ -318,11 +318,11 @@ namespace pw {
         }
         scheme = url.substr(offset, scheme_host_delimiter_pos - offset);
         offset = scheme_host_delimiter_pos + 3;
-
+    
         credentials.clear();
         size_t credentials_host_delimiter_pos;
         if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos &&
-            url.find('/', offset) > credentials_host_delimiter_pos) {
+            url.find_first_of("/?#", offset) > credentials_host_delimiter_pos) {
             if (credentials_host_delimiter_pos == offset) {
                 detail::set_last_error(PW_EWEB);
                 return PN_ERROR;
@@ -330,35 +330,61 @@ namespace pw {
             credentials = percent_decode(url.substr(offset, credentials_host_delimiter_pos - offset));
             offset = credentials_host_delimiter_pos + 1;
         }
-
-        size_t path_pos;
-        if ((path_pos = url.find('/', offset)) != std::string::npos) {
-            if (path_pos == offset) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-            host = url.substr(offset, path_pos - offset);
-            offset = path_pos + 1;
-        } else {
+    
+        // Find the end of the authority part (host and port)
+        size_t authority_terminator_pos = url.find_first_of("/?#", offset);
+    
+        if (authority_terminator_pos == std::string::npos) {
+            // Case: scheme://host
             host = url.substr(offset);
             path = '/';
-            return PN_OK;
-        }
-
-        size_t path_query_string_delimiter_pos;
-        if ((path_query_string_delimiter_pos = url.find('?', offset)) != std::string::npos) {
-            if (path_query_string_delimiter_pos == offset) {
-                path = '/';
-            } else {
-                path = '/' + url.substr(offset, path_query_string_delimiter_pos - offset);
-            }
-            offset = path_query_string_delimiter_pos + 1;
+            query_parameters->clear();
         } else {
-            path = '/' + url.substr(offset, url.find('#', offset));
-            return PN_OK;
+            // Case: scheme://host/... or scheme://host?... or scheme://host#...
+            host = url.substr(offset, authority_terminator_pos - offset);
+            offset = authority_terminator_pos;
+    
+            // Now parse path and query from the new offset
+            if (url[offset] == '/') {
+                // Path is present
+                size_t path_terminator_pos = url.find_first_of("?#", offset);
+                if (path_terminator_pos == std::string::npos) {
+                    // Path is the rest of the string
+                    path = url.substr(offset);
+                    query_parameters->clear();
+                } else {
+                    // Path is up to the '?' or '#'
+                    path = url.substr(offset, path_terminator_pos - offset);
+                    offset = path_terminator_pos;
+                }
+            } else {
+                // No path component, e.g., "https://example.com?q=1"
+                path = '/';
+            }
+    
+            // Parse query if it exists
+            if (offset != std::string::npos && url[offset] == '?') {
+                offset++; // Move past '?'
+                size_t fragment_pos = url.find('#', offset);
+                if (fragment_pos == std::string::npos) {
+                    query_parameters.parse(url.substr(offset));
+                } else {
+                    query_parameters.parse(url.substr(offset, fragment_pos - offset));
+                }
+            } else {
+                query_parameters->clear();
+            }
         }
-
-        query_parameters.parse(url.substr(offset, url.find('#', offset)));
+    
+        if (host.empty()) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+        // A path must always exist, even if it's just "/"
+        if (path.empty()) {
+            path = "/";
+        }
+    
         return PN_OK;
     }
 
