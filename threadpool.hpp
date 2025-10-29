@@ -83,7 +83,7 @@ namespace tp {
             cv.notify_all();
         }
 
-        std::mutex mutex;
+        mutable std::mutex mutex;
         std::condition_variable cv;
         std::queue<std::shared_ptr<Task>> queue;
         unsigned int thread_count;
@@ -134,7 +134,7 @@ namespace tp {
             mutex.unlock();
             cv.notify_one();
             return task;
-        };
+        }
 
         void resize(unsigned int size) {
             std::unique_lock<std::mutex> lock(mutex);
@@ -154,8 +154,7 @@ namespace tp {
             });
         }
 
-        // This function cannot be const due to its locking of the mutex
-        unsigned int size() {
+        unsigned int size() const {
             std::lock_guard<std::mutex> lock(mutex);
             return target_thread_count;
         }
