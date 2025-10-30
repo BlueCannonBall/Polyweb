@@ -22,8 +22,12 @@ namespace pw {
             return PN_ERROR;
         }
 
+#ifdef _WIN32
+        DWORD tcp_keep_alive = this->tcp_keep_alive;
+#else
         int tcp_keep_alive = this->tcp_keep_alive;
-        if (conn.setsockopt(SOL_SOCKET, SO_KEEPALIVE, &tcp_keep_alive, sizeof(int)) == PN_ERROR) {
+#endif
+        if (conn.setsockopt(SOL_SOCKET, SO_KEEPALIVE, &tcp_keep_alive, sizeof tcp_keep_alive) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
         }
