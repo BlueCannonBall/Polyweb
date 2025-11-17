@@ -57,7 +57,7 @@ namespace pw {
 
         if (secure) {
             pn::UniqueSocket<SecureClient> client;
-            pn::tcp::BufReceiver buf_receiver(config.recv_buf_size);
+            pn::tcp::BufReceiver buf_receiver(config.buf_size);
             if (client->connect(hostname, port) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
@@ -82,7 +82,7 @@ namespace pw {
             }
         } else {
             pn::UniqueSocket<Client> client;
-            pn::tcp::BufReceiver buf_receiver(config.recv_buf_size);
+            pn::tcp::BufReceiver buf_receiver(config.buf_size);
             if (client->connect(hostname, port) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
@@ -223,7 +223,7 @@ namespace pw {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
-        buf_receiver.size = config.recv_buf_size;
+        buf_receiver.size = config.buf_size;
 
         if (secure) {
             if (config.configure_ssl(*client, hostname) == PN_ERROR) {

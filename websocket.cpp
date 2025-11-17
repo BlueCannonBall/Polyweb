@@ -370,7 +370,7 @@ namespace pw {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
-        client.buf_receiver.size = config.recv_buf_size;
+        client.buf_receiver.size = config.buf_size;
 
         if (secure) {
             if (config.configure_ssl(client, hostname) == PN_ERROR) {

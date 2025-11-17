@@ -16,7 +16,7 @@ namespace pw {
                     auto server = (BasicServer<Base>*) data;
                     threadpool.schedule([conn = conn](void* data) {
                         auto server = (BasicServer<Base>*) data;
-                        pn::tcp::BufReceiver buf_receiver(server->buffer_size);
+                        pn::tcp::BufReceiver buf_receiver(server->buf_size);
                         server->handle_connection(pn::UniqueSocket<connection_type>(conn), buf_receiver);
                     },
                         server,
@@ -48,7 +48,7 @@ namespace pw {
                             return;
                         }
 
-                        pn::tcp::BufReceiver buf_receiver(server->buffer_size);
+                        pn::tcp::BufReceiver buf_receiver(server->buf_size);
                         server->handle_connection(pn::UniqueSocket<connection_type>(conn), buf_receiver);
                     },
                         server,

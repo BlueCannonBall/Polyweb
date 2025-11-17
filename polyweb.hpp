@@ -624,7 +624,7 @@ namespace pw {
     class BasicServer : public Base {
     public:
         std::function<HTTPResponse(uint16_t)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
-        size_t buffer_size = 4'000;
+        size_t buf_size = 4'000;
         unsigned int header_climit = 100;
         long header_name_rlimit = 500;
         long header_value_rlimit = 4'000'000;
@@ -689,7 +689,7 @@ namespace pw {
         std::string ca_file;
         std::string ca_path;
 
-        size_t recv_buf_size = 4'000;
+        size_t buf_size = 4'000;
         unsigned int header_climit = 100;
         long header_name_rlimit = 500;
         long header_value_rlimit = 4'000'000;
