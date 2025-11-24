@@ -59,7 +59,7 @@ namespace pw {
             pn::UniqueSocket<SecureClient> client;
             pn::tcp::BufReceiver buf_receiver(config.buf_size);
             if (client->connect(hostname, port, [&config](auto& client) {
-                    config.configure_sockopts(client);
+                    return config.configure_sockopts(client) == PN_OK;
                 }) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
@@ -83,7 +83,7 @@ namespace pw {
             pn::UniqueSocket<Client> client;
             pn::tcp::BufReceiver buf_receiver(config.buf_size);
             if (client->connect(hostname, port, [&config](auto& client) {
-                    config.configure_sockopts(client);
+                    return config.configure_sockopts(client) == PN_OK;
                 }) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
