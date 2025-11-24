@@ -254,17 +254,17 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_ws_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const {
-        route.on_open(*conn, route.data);
+    int BasicServer<Base>::handle_ws_connection(pn::SharedSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const {
+        route.on_open(conn, route.data);
         for (;;) {
             if (!conn) {
-                route.on_close(*conn, 0, {}, false, route.data);
+                route.on_close(conn, 0, {}, false, route.data);
                 break;
             }
 
             WSMessage message;
             if (message.parse(*conn, buf_receiver, ws_frame_rlimit, ws_message_rlimit) == PN_ERROR) {
-                route.on_close(*conn, 0, {}, false, route.data);
+                route.on_close(conn, 0, {}, false, route.data);
                 return PN_ERROR;
             }
 
@@ -272,12 +272,12 @@ namespace pw {
             case 0x1:
             case 0x2:
             case 0xA:
-                route.on_message(*conn, std::move(message), route.data);
+                route.on_message(conn, std::move(message), route.data);
                 break;
 
             case 0x8:
                 if (conn->ws_closed) {
-                    route.on_close(*conn, 0, {}, true, route.data);
+                    route.on_close(conn, 0, {}, true, route.data);
                     if (conn->close() == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
@@ -297,7 +297,7 @@ namespace pw {
                         reason.assign(message->begin() + 2, message->end());
                     }
 
-                    route.on_close(*conn, status_code, reason, true, route.data);
+                    route.on_close(conn, status_code, reason, true, route.data);
                     if (conn->send(WSMessage(std::move(message.data), 0x8)) == PN_ERROR) {
                         return PN_ERROR;
                     }
@@ -311,7 +311,7 @@ namespace pw {
 
             case 0x9:
                 if (conn->send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
-                    route.on_close(*conn, 0, {}, false, route.data);
+                    route.on_close(conn, 0, {}, false, route.data);
                     return PN_ERROR;
                 }
                 break;
