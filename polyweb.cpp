@@ -462,7 +462,7 @@ namespace pw {
             }
             string::trim(header_value);
 
-            headers[header_name] = header_value;
+            headers.insert_or_assign(std::move(header_name), std::move(header_value));
 
             char end_check_buf[2];
             if (long result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
@@ -669,7 +669,7 @@ namespace pw {
             }
             string::trim(header_value);
 
-            headers[header_name] = header_value;
+            headers.insert_or_assign(std::move(header_name), std::move(header_value));
 
             char end_check_buf[2];
             if (long result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
