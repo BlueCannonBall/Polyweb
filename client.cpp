@@ -58,11 +58,10 @@ namespace pw {
         if (secure) {
             pn::UniqueSocket<SecureClient> client;
             pn::tcp::BufReceiver buf_receiver(config.buf_size);
-            if (client->connect(hostname, port) == PN_ERROR) {
+            if (client->connect(hostname, port, [&config](auto& client) {
+                    config.configure_sockopts(client);
+                }) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            }
-            if (config.configure_sockopts(*client) == PN_ERROR) {
                 return PN_ERROR;
             }
             if (config.configure_ssl(*client, hostname) == PN_ERROR) {
@@ -83,11 +82,10 @@ namespace pw {
         } else {
             pn::UniqueSocket<Client> client;
             pn::tcp::BufReceiver buf_receiver(config.buf_size);
-            if (client->connect(hostname, port) == PN_ERROR) {
+            if (client->connect(hostname, port, [&config](auto& client) {
+                    config.configure_sockopts(client);
+                }) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            }
-            if (config.configure_sockopts(*client) == PN_ERROR) {
                 return PN_ERROR;
             }
 
