@@ -269,13 +269,13 @@ namespace pw {
             }
 
             switch (message.opcode) {
-            case 0x1:
-            case 0x2:
-            case 0xA:
+            case PW_WS_OPCODE_TEXT:
+            case PW_WS_OPCODE_BINARY:
+            case PW_WS_OPCODE_PONG:
                 route.on_message(conn, std::move(message), route.data);
                 break;
 
-            case 0x8:
+            case PW_WS_OPCODE_CLOSE:
                 if (conn->ws_closed) {
                     route.on_close(conn, 0, {}, true, route.data);
                     if (conn->close() == PN_ERROR) {
@@ -298,7 +298,7 @@ namespace pw {
                     }
 
                     route.on_close(conn, status_code, reason, true, route.data);
-                    if (conn->send(WSMessage(std::move(message.data), 0x8)) == PN_ERROR) {
+                    if (conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_CLOSE)) == PN_ERROR) {
                         return PN_ERROR;
                     }
 
@@ -309,8 +309,8 @@ namespace pw {
                 }
                 return PN_OK;
 
-            case 0x9:
-                if (conn->send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
+            case PW_WS_OPCODE_PING:
+                if (conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_PONG)) == PN_ERROR) {
                     route.on_close(conn, 0, {}, false, route.data);
                     return PN_ERROR;
                 }

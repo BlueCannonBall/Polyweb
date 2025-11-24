@@ -82,7 +82,9 @@ namespace pw {
             }
 
             fin = PW_GET_WS_FRAME_FIN(frame_header);
-            if (PW_GET_WS_FRAME_OPCODE(frame_header) != 0) opcode = PW_GET_WS_FRAME_OPCODE(frame_header);
+            if (ws_opcode_t opcode = PW_GET_WS_FRAME_OPCODE(frame_header); opcode != PW_WS_OPCODE_CONTINUATION) {
+                this->opcode = opcode;
+            }
             bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
 
             unsigned long long payload_length;
@@ -241,7 +243,7 @@ namespace pw {
                 return this->ws_closed ? i : PN_ERROR;
             }
 
-            if (message.opcode == 0x8) {
+            if (message.opcode == PW_WS_OPCODE_CLOSE) {
                 if (on_close) {
                     if (this->ws_closed) {
                         on_close(*this, 0, {}, true, this->data);
@@ -261,15 +263,15 @@ namespace pw {
                         }
 
                         on_close(*this, status_code, reason, true, this->data);
-                        if (send(WSMessage(std::move(message.data), 0x8)) == PN_ERROR) {
+                        if (send(WSMessage(std::move(message.data), PW_WS_OPCODE_CLOSE)) == PN_ERROR) {
                             return PN_ERROR;
                         }
                     }
                 }
 
                 return i;
-            } else if (handle_pings && message.opcode == 0x9) {
-                if (send(WSMessage(std::move(message.data), 0xA)) == PN_ERROR) {
+            } else if (handle_pings && message.opcode == PW_WS_OPCODE_PING) {
+                if (send(WSMessage(std::move(message.data), PW_WS_OPCODE_PONG)) == PN_ERROR) {
                     return this->ws_closed ? i : PN_ERROR;
                 }
                 continue;

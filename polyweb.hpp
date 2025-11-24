@@ -46,6 +46,13 @@
 #define PW_WS_VERSION "13"
 #define PW_WS_KEY     "cG9seXdlYiBpcyBncmVhdA==" // polyweb is great
 
+#define PW_WS_OPCODE_CONTINUATION 0x0
+#define PW_WS_OPCODE_TEXT         0x1
+#define PW_WS_OPCODE_BINARY       0x2
+#define PW_WS_OPCODE_CLOSE        0x8
+#define PW_WS_OPCODE_PING         0x9
+#define PW_WS_OPCODE_PONG         0xA
+
 #define PW_GET_WS_FRAME_FIN(frame_header)            (frame_header[0] & 0b10000000)
 #define PW_GET_WS_FRAME_RSV1(frame_header)           (frame_header[0] & 0b01000000)
 #define PW_GET_WS_FRAME_RSV2(frame_header)           (frame_header[0] & 0b00100000)
@@ -455,19 +462,21 @@ namespace pw {
         }
     };
 
+    typedef uint8_t ws_opcode_t;
+
     class WSMessage {
     public:
         std::vector<char> data;
-        uint8_t opcode = 2;
+        ws_opcode_t opcode = PW_WS_OPCODE_BINARY;
 
         WSMessage() = default;
-        WSMessage(pn::StringView str, uint8_t opcode = 1):
+        WSMessage(pn::StringView str, ws_opcode_t opcode = PW_WS_OPCODE_TEXT):
             data(str.begin(), str.end()),
             opcode(opcode) {}
-        WSMessage(std::vector<char> data, uint8_t opcode = 2):
+        WSMessage(std::vector<char> data, ws_opcode_t opcode = PW_WS_OPCODE_BINARY):
             data(std::move(data)),
             opcode(opcode) {}
-        WSMessage(uint8_t opcode):
+        WSMessage(ws_opcode_t opcode):
             opcode(opcode) {}
 
         const std::vector<char>& operator*() const {
