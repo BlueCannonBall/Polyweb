@@ -15,7 +15,7 @@
 
 namespace pw {
     // f(x) = 2 * log2(x) + x + 4
-    tp::ThreadPool threadpool(std::round(2. * std::log2(std::thread::hardware_concurrency()) + std::thread::hardware_concurrency() + 4.));
+    tp::ThreadPool threadpool(std::round(2.0 * std::log2(std::thread::hardware_concurrency()) + std::thread::hardware_concurrency() + 4.0));
 
     namespace detail {
         thread_local int last_error = PW_ESUCCESS;
