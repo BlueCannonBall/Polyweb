@@ -37,7 +37,7 @@ int main() {
         }));
     }
     for (const auto& task : tasks) {
-        assert(task->await() == tp::TASK_STATUS_SUCCESS);
+        assert(task->wait() == tp::TASK_STATUS_SUCCESS);
     }
 
     pn::quit();
