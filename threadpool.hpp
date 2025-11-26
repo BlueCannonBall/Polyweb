@@ -155,9 +155,9 @@ namespace tp {
                 }
             }
 
-            control_block->mutex.lock();
+            std::unique_lock<std::mutex> lock(control_block->mutex);
             control_block->queue.push(task);
-            control_block->mutex.unlock();
+            lock.unlock();
             control_block->cv.notify_one();
             return task;
         }
