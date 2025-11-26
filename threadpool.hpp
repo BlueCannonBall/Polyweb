@@ -19,13 +19,13 @@ namespace tp {
 
     class Task {
     protected:
-        std::mutex mutex;
-        std::condition_variable cv;
+        mutable std::mutex mutex;
+        mutable std::condition_variable cv;
 
     public:
-        TaskStatus status = TASK_STATUS_RUNNING;
         std::function<void(void*)> func;
         void* arg = nullptr;
+        TaskStatus status = TASK_STATUS_RUNNING;
         std::exception_ptr error;
 
         Task(std::function<void(void*)> func, void* arg = nullptr):
@@ -39,15 +39,14 @@ namespace tp {
                 std::lock_guard<std::mutex> lock(mutex);
                 status = TASK_STATUS_SUCCESS;
             } catch (...) {
-                error = std::current_exception();
-
                 std::lock_guard<std::mutex> lock(mutex);
                 status = TASK_STATUS_FAILURE;
+                error = std::current_exception();
             }
             cv.notify_all();
         }
 
-        TaskStatus wait() {
+        TaskStatus wait() const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait(lock, [this]() {
                 return status != TASK_STATUS_RUNNING;
@@ -56,7 +55,7 @@ namespace tp {
         }
 
         template <typename Rep, typename Period>
-        TaskStatus wait_for(const std::chrono::duration<Rep, Period>& time) {
+        TaskStatus wait_for(const std::chrono::duration<Rep, Period>& time) const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait_for(lock, time, [this]() {
                 return status != TASK_STATUS_RUNNING;
@@ -65,12 +64,22 @@ namespace tp {
         }
 
         template <typename Clock, typename Duration>
-        TaskStatus wait_until(const std::chrono::time_point<Clock, Duration>& time) {
+        TaskStatus wait_until(const std::chrono::time_point<Clock, Duration>& time) const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait_until(lock, time, [this]() {
                 return status != TASK_STATUS_RUNNING;
             });
             return status;
+        }
+
+        TaskStatus get_status() const {
+            std::lock_guard<std::mutex> lock(mutex);
+            return status;
+        }
+
+        std::exception_ptr get_error() const {
+            std::lock_guard<std::mutex> lock(mutex);
+            return error;
         }
     };
 
