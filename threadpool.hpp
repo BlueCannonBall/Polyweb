@@ -1,5 +1,5 @@
-#ifndef _THREADPOOL_HPP
-#define _THREADPOOL_HPP
+#ifndef THREADPOOL_HPP_
+#define THREADPOOL_HPP_
 
 #include <chrono>
 #include <condition_variable>

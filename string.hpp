@@ -1,5 +1,5 @@
-#ifndef _POLYWEB_STRING_HPP
-#define _POLYWEB_STRING_HPP
+#ifndef POLYWEB_STRING_HPP_
+#define POLYWEB_STRING_HPP_
 
 #include "Polynet/string.hpp"
 #include <string>

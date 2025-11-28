@@ -1,5 +1,5 @@
-#ifndef _POLYWEB_HPP
-#define _POLYWEB_HPP
+#ifndef POLYWEB_HPP_
+#define POLYWEB_HPP_
 
 #include "Polynet/polynet.hpp"
 #include "Polynet/secure_sockets.hpp"

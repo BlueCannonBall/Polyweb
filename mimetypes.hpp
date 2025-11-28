@@ -1,5 +1,5 @@
-#ifndef _POLYWEB_MIMETYPES_HPP
-#define _POLYWEB_MIMETYPES_HPP
+#ifndef POLYWEB_MIMETYPES_HPP_
+#define POLYWEB_MIMETYPES_HPP_
 
 #include "string.hpp"
 #include <string>
