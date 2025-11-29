@@ -278,10 +278,6 @@ namespace pw {
             case PW_WS_OPCODE_CLOSE:
                 if (conn->ws_closed) {
                     route.on_close(conn, 0, {}, true, route.data);
-                    if (conn->close() == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    }
                 } else {
                     uint16_t status_code = 0;
                     std::string reason;
@@ -299,11 +295,6 @@ namespace pw {
 
                     route.on_close(conn, status_code, reason, true, route.data);
                     if (conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_CLOSE)) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
-
-                    if (conn->close() == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     }
                 }
