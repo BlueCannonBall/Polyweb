@@ -49,9 +49,8 @@ namespace pw {
 
         if (error >= 0 && error <= 2) {
             return error_strings[error];
-        } else {
-            return "Unknown error";
         }
+        return "Unknown error";
     }
 
     std::string universal_strerror(int error) {
@@ -363,8 +362,7 @@ namespace pw {
     }
 
     unsigned short URLInfo::port() const {
-        size_t hostname_port_delimiter_pos;
-        if ((hostname_port_delimiter_pos = host.find(':')) == std::string::npos) {
+        if (size_t hostname_port_delimiter_pos = host.find(':'); hostname_port_delimiter_pos == std::string::npos) {
             return string::iequals(scheme, "https") || string::iequals(scheme, "wss") ? 443 : 80;
         } else {
             std::string port = host.substr(hostname_port_delimiter_pos + 1);
@@ -475,9 +473,8 @@ namespace pw {
 
             if (memcmp("\r\n", end_check_buf, 2) == 0) {
                 break;
-            } else {
-                buf_receiver.rewind(end_check_buf, 2);
             }
+            buf_receiver.rewind(end_check_buf, 2);
         }
 
         body.clear();
@@ -512,20 +509,18 @@ namespace pw {
                     }
 
                     size_t end = body.size();
-
                     if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
                         detail::set_last_error(PW_EWEB);
                         return PN_ERROR;
-                    } else {
-                        body.resize(end + chunk_size);
-                        if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != chunk_size) {
-                            detail::set_last_error(PW_EWEB);
-                            body.resize(end + result);
-                            return PN_ERROR;
-                        }
+                    }
+                    body.resize(end + chunk_size);
+                    if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if ((unsigned long long) result != chunk_size) {
+                        detail::set_last_error(PW_EWEB);
+                        body.resize(end + result);
+                        return PN_ERROR;
                     }
 
                     char end_buf[2];
@@ -682,9 +677,8 @@ namespace pw {
 
             if (memcmp("\r\n", end_check_buf, 2) == 0) {
                 break;
-            } else {
-                buf_receiver.rewind(end_check_buf, 2);
             }
+            buf_receiver.rewind(end_check_buf, 2);
         }
 
         body.clear();
@@ -720,20 +714,18 @@ namespace pw {
                         }
 
                         size_t end = body.size();
-
                         if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
-                        } else {
-                            body.resize(end + chunk_size);
-                            if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
-                                detail::set_last_error(PW_ENET);
-                                return PN_ERROR;
-                            } else if ((unsigned long long) result != chunk_size) {
-                                detail::set_last_error(PW_EWEB);
-                                body.resize(end + result);
-                                return PN_ERROR;
-                            }
+                        }
+                        body.resize(end + chunk_size);
+                        if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if ((unsigned long long) result != chunk_size) {
+                            detail::set_last_error(PW_EWEB);
+                            body.resize(end + result);
+                            return PN_ERROR;
                         }
 
                         char end_buf[2];

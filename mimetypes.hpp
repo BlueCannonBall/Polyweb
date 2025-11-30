@@ -1009,9 +1009,8 @@ namespace pw {
         decltype(mimetypes)::const_iterator ret_it;
         if (!split_filename.empty() && (ret_it = mimetypes.find(split_filename.back())) != mimetypes.end()) {
             return ret_it->second;
-        } else {
-            return "application/octet-stream";
         }
+        return "application/octet-stream";
     }
 } // namespace pw
 

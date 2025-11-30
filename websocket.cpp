@@ -126,20 +126,18 @@ namespace pw {
 
             if (payload_length) {
                 size_t end = data.size();
-
                 if (payload_length > (unsigned long long) frame_rlimit || end + payload_length > (unsigned long long) message_rlimit) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
-                } else {
-                    data.resize(end + payload_length);
-                    if (long result = buf_receiver.recvall(conn, &data[end], payload_length); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((unsigned long long) result != payload_length) {
-                        detail::set_last_error(PW_EWEB);
-                        data.resize(end + result);
-                        return PN_ERROR;
-                    }
+                }
+                data.resize(end + payload_length);
+                if (long result = buf_receiver.recvall(conn, &data[end], payload_length); result == PN_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if ((unsigned long long) result != payload_length) {
+                    detail::set_last_error(PW_EWEB);
+                    data.resize(end + result);
+                    return PN_ERROR;
                 }
 
                 if (masked) {
@@ -351,7 +349,7 @@ namespace pw {
             connect_req.headers["Proxy-Authorization"] = "basic " + base64_encode(proxy_url_info.credentials.data(), proxy_url_info.credentials.size());
         }
 
-        client.buf_receiver.size = 0;
+        client.buf_receiver.capacity = 0;
         if (client.connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
@@ -372,7 +370,7 @@ namespace pw {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
-        client.buf_receiver.size = config.buf_size;
+        client.buf_receiver.capacity = config.buf_size;
 
         if (secure) {
             if (config.configure_ssl(client, hostname) == PN_ERROR) {

@@ -114,9 +114,8 @@ namespace pw {
 
                 if (c == end) {
                     break;
-                } else {
-                    *ret++ = c;
                 }
+                *ret++ = c;
             }
 
             return PN_OK;
@@ -229,9 +228,8 @@ namespace pw {
             return ret_it->second;
         } else if (status_code >= 100 && status_code < 600) {
             return conversion_mapping.at(status_code / 100 * 100); // Zero out last two digits
-        } else {
-            throw std::out_of_range("Invalid status code");
         }
+        throw std::out_of_range("Invalid status code");
     }
 
     std::string build_date(time_t rawtime = time(nullptr));
@@ -324,9 +322,8 @@ namespace pw {
         std::string path_with_query_parameters() const {
             if (query_parameters->empty()) {
                 return path;
-            } else {
-                return path + '?' + query_parameters.build();
             }
+            return path + '?' + query_parameters.build();
         }
 
         std::string username() const {
@@ -403,9 +400,8 @@ namespace pw {
         std::string target_with_query_parameters() const {
             if (query_parameters->empty()) {
                 return target;
-            } else {
-                return target + '?' + query_parameters.build();
             }
+            return target + '?' + query_parameters.build();
         }
     };
 
@@ -750,12 +746,11 @@ namespace pw {
         using BasicConnection<Base>::send;
 
         int send(const WSMessage& message, const char* masking_key = nullptr) override {
-            if (masking_key) {
-                return BasicConnection<Base>::send(message, masking_key);
-            } else {
+            if (!masking_key) {
                 static constexpr char masking_key[4] = {0};
                 return BasicConnection<Base>::send(message, masking_key);
             }
+            return BasicConnection<Base>::send(message, masking_key);
         }
 
         using BasicConnection<Base>::recv;
@@ -765,12 +760,11 @@ namespace pw {
         int recv(WSMessage& message, bool handle_pings = true, long frame_rlimit = 16'000'000, long message_rlimit = 32'000'000);
 
         int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr) override {
-            if (masking_key) {
-                return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
-            } else {
+            if (!masking_key) {
                 static constexpr char masking_key[4] = {0};
                 return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
             }
+            return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
         }
     };
 

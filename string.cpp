@@ -122,9 +122,8 @@ namespace pw {
 
                 if (j == std::string::npos) {
                     break;
-                } else {
-                    i = j + 1;
                 }
+                i = j + 1;
             }
             return ret;
         }

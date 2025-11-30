@@ -221,7 +221,7 @@ namespace pw {
             detail::set_last_error(PW_EWEB);
             return PN_ERROR;
         }
-        buf_receiver.size = config.buf_size;
+        buf_receiver.capacity = config.buf_size;
 
         if (secure) {
             if (config.configure_ssl(*client, hostname) == PN_ERROR) {
