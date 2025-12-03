@@ -206,7 +206,7 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        return handle_ws_connection(std::move(conn), buf_receiver, ws_routes.at(ws_route_target));
+                        return handle_ws_connection(std::move(conn), buf_receiver, std::move(req), ws_routes.at(ws_route_target));
                     }
                 } else if (!http_route_target.empty()) {
                     if (handle_error(*conn, 400, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
@@ -254,8 +254,8 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_ws_connection(pn::SharedSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const {
-        route.on_open(conn, route.data);
+    int BasicServer<Base>::handle_ws_connection(pn::SharedSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, HTTPRequest req, const ws_route_type& route) const {
+        route.on_open(conn, req, route.data);
         for (;;) {
             if (!conn) {
                 route.on_close(conn, 0, {}, false, route.data);

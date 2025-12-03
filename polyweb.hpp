@@ -604,7 +604,7 @@ namespace pw {
     class BasicWSRoute : public Route {
     public:
         std::function<HTTPResponse(const T&, const HTTPRequest&, void*)> on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
-        std::function<void(pn::SharedSocket<T>&, void*)> on_open;
+        std::function<void(pn::SharedSocket<T>&, HTTPRequest, void*)> on_open;
         std::function<void(pn::SharedSocket<T>&, WSMessage, void*)> on_message;
         std::function<void(pn::SharedSocket<T>&, uint16_t, pn::StringView, bool clean, void*)> on_close;
 
@@ -676,7 +676,7 @@ namespace pw {
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
         int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) const;
-        int handle_ws_connection(pn::SharedSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, const ws_route_type& route) const;
+        int handle_ws_connection(pn::SharedSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, HTTPRequest req, const ws_route_type& route) const;
         int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
         int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
     };
