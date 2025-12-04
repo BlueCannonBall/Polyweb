@@ -4,11 +4,11 @@
 #include <chrono>
 #include <condition_variable>
 #include <exception>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <type_traits>
 
 namespace tp {
     enum TaskStatus {
@@ -22,19 +22,41 @@ namespace tp {
         mutable std::mutex mutex;
         mutable std::condition_variable cv;
 
+        class BasicFunction {
+        public:
+            virtual ~BasicFunction() = default;
+
+            virtual void call(void*) = 0;
+        };
+
+        template <typename F>
+        class Function : public BasicFunction {
+        protected:
+            F func;
+
+        public:
+            Function(F&& func):
+                func(std::move(func)) {}
+
+            void call(void* arg) override {
+                func(arg);
+            }
+        };
+
     public:
-        std::function<void(void*)> func;
+        std::unique_ptr<BasicFunction> func;
         void* arg = nullptr;
         TaskStatus status = TASK_STATUS_RUNNING;
         std::exception_ptr error;
 
-        Task(std::function<void(void*)> func, void* arg = nullptr):
-            func(std::move(func)),
+        template <typename F>
+        Task(F&& func, void* arg = nullptr):
+            func(std::make_unique<Function<std::decay_t<F>>>(std::forward<F>(func))),
             arg(arg) {}
 
         void execute() {
             try {
-                func(arg);
+                func->call(arg);
 
                 std::lock_guard<std::mutex> lock(mutex);
                 status = TASK_STATUS_SUCCESS;
@@ -152,8 +174,9 @@ namespace tp {
             });
         }
 
-        std::shared_ptr<Task> schedule(std::function<void(void*)> func, void* arg = nullptr, bool launch_if_busy = false) {
-            std::shared_ptr<Task> task = std::make_shared<Task>(std::move(func), arg);
+        template <typename F>
+        std::shared_ptr<Task> schedule(F&& func, void* arg = nullptr, bool launch_if_busy = false) {
+            std::shared_ptr<Task> task = std::make_shared<Task>(std::forward<F>(func), arg);
 
             if (launch_if_busy) {
                 std::unique_lock<std::mutex> lock(control_block->mutex);

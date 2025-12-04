@@ -3,13 +3,14 @@
 
 #include "Polynet/polynet.hpp"
 #include "Polynet/secure_sockets.hpp"
-#include "Polynet/smart_sockets.hpp"
 #include "string.hpp"
 #include "threadpool.hpp"
 #include <algorithm>
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <stddef.h>
 #include <stdexcept>
 #include <stdint.h>
@@ -33,14 +34,6 @@
 #define PW_ESUCCESS 0
 #define PW_ENET     1
 #define PW_EWEB     2
-
-// Default callback macros
-#define PW_DEFAULT_WS_ROUTE_ON_CONNECT [](const auto&, const pw::HTTPRequest&, void*) -> pw::HTTPResponse { \
-    return pw::HTTPResponse(101);                                                                           \
-}
-#define PW_DEFAULT_SERVER_ON_ERROR [](uint16_t status_code) -> pw::HTTPResponse { \
-    return pw::HTTPResponse::make_basic(status_code);                             \
-}
 
 // WebSocket macros
 #define PW_WS_VERSION "13"
@@ -502,19 +495,25 @@ namespace pw {
     template <typename Base>
     class BasicConnection : public Base {
     public:
+        std::mutex mutex;
         bool ws_closed = false;
         void* data = nullptr; // User data
 
         template <typename... Args>
         BasicConnection(Args&&... args):
             Base(std::forward<Args>(args)...) {}
-        BasicConnection(const Base& conn) {
-            *this = conn;
+        BasicConnection(BasicConnection&& conn) {
+            *this = std::move(conn);
         }
 
-        BasicConnection& operator=(const Base& conn) {
+        BasicConnection& operator=(BasicConnection&& conn) {
             if (this != &conn) {
-                Base::operator=(conn);
+                ws_closed = conn.ws_closed;
+                data = conn.data;
+                Base::operator=(std::move(conn));
+
+                conn.ws_closed = false;
+                conn.data = nullptr;
             }
             return *this;
         }
@@ -547,6 +546,7 @@ namespace pw {
 
         virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
+            std::lock_guard<std::mutex> lock(mutex);
             if (long result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
@@ -563,7 +563,7 @@ namespace pw {
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
         int close(bool reset = true, int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
-            if (protocol_layers & PW_PROTOCOL_LAYER_WS && !ws_closed) ws_close(1001, {});
+            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && !ws_closed) ws_close(1001, {});
             return Base::close(reset, protocol_layers);
         }
 
@@ -603,10 +603,10 @@ namespace pw {
     template <typename T>
     class BasicWSRoute : public Route {
     public:
-        std::function<HTTPResponse(const T&, const HTTPRequest&, void*)> on_connect = PW_DEFAULT_WS_ROUTE_ON_CONNECT;
-        std::function<void(pn::SharedSocket<T>&, HTTPRequest, void*)> on_open;
-        std::function<void(pn::SharedSocket<T>&, WSMessage, void*)> on_message;
-        std::function<void(pn::SharedSocket<T>&, uint16_t, pn::StringView, bool clean, void*)> on_close;
+        std::function<HTTPResponse(const T&, const HTTPRequest&, void*)> on_connect;
+        std::function<void(std::shared_ptr<T>&, HTTPRequest, void*)> on_open;
+        std::function<void(std::shared_ptr<T>&, WSMessage, void*)> on_message;
+        std::function<void(std::shared_ptr<T>&, uint16_t, pn::StringView, bool clean, void*)> on_close;
 
         BasicWSRoute() = default;
         BasicWSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
@@ -628,7 +628,7 @@ namespace pw {
     template <typename Base>
     class BasicServer : public Base {
     public:
-        std::function<HTTPResponse(uint16_t)> on_error = PW_DEFAULT_SERVER_ON_ERROR;
+        std::function<HTTPResponse(uint16_t)> on_error;
         size_t buf_size = 4'000;
         unsigned int header_climit = 100;
         long header_name_rlimit = 500;
@@ -646,6 +646,38 @@ namespace pw {
         template <typename... Args>
         BasicServer(Args&&... args):
             Base(std::forward<Args>(args)...) {}
+        BasicServer(BasicServer&& server) {
+            *this = std::move(server);
+        }
+
+        BasicServer& operator=(BasicServer&& server) {
+            if (this != &server) {
+                on_error = std::move(server.on_error);
+                buf_size = server.buf_size;
+                header_climit = server.header_climit;
+                header_name_rlimit = server.header_name_rlimit;
+                header_value_rlimit = server.header_value_rlimit;
+                body_chunk_rlimit = server.body_chunk_rlimit;
+                body_rlimit = server.body_rlimit;
+                ws_frame_rlimit = server.ws_frame_rlimit;
+                ws_message_rlimit = server.ws_message_rlimit;
+                misc_rlimit = server.misc_rlimit;
+                http_routes = std::move(server.http_routes);
+                ws_routes = std::move(server.ws_routes);
+                Base::operator=(std::move(server));
+
+                server.buf_size = 4'000;
+                server.header_climit = 100;
+                server.header_name_rlimit = 500;
+                server.header_value_rlimit = 4'000'000;
+                server.body_chunk_rlimit = 16'000'000;
+                server.body_rlimit = 32'000'000;
+                server.ws_frame_rlimit = 16'000'000;
+                server.ws_message_rlimit = 32'000'000;
+                server.misc_rlimit = 1'000;
+            }
+            return *this;
+        }
 
         void route(std::string target, http_route_type route) {
             http_routes.insert_or_assign(std::move(target), std::move(route));
@@ -675,8 +707,8 @@ namespace pw {
         std::unordered_map<std::string, http_route_type> http_routes;
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
-        int handle_connection(pn::UniqueSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver) const;
-        int handle_ws_connection(pn::SharedSocket<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, HTTPRequest req, const ws_route_type& route) const;
+        int handle_connection(connection_type conn, pn::tcp::BufReceiver& buf_receiver) const;
+        int handle_ws_connection(std::shared_ptr<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, HTTPRequest req, const ws_route_type& route) const;
         int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
         int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
     };
@@ -727,16 +759,6 @@ namespace pw {
         template <typename... Args>
         BasicWebSocketClient(Args&&... args):
             BasicConnection<Base>(std::forward<Args>(args)...) {}
-        BasicWebSocketClient(const Base& conn) {
-            *this = conn;
-        }
-
-        BasicWebSocketClient& operator=(const Base& conn) {
-            if (this != &conn) {
-                Base::operator=(conn);
-            }
-            return *this;
-        }
 
         int ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);
         int ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, long header_name_rlimit = 500, long header_value_rlimit = 4'000'000, long body_chunk_rlimit = 16'000'000, long body_rlimit = 32'000'000, long misc_rlimit = 1'000);

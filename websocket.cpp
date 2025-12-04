@@ -280,12 +280,10 @@ namespace pw {
     }
 
     int make_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
-        if (client.connect(hostname, port) == PN_ERROR) {
+        if (client.connect(hostname, port, [&config](auto& client) {
+                return config.configure_sockopts(client) == PN_OK;
+            }) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
-            return PN_ERROR;
-        }
-
-        if (config.configure_sockopts(client) == PN_ERROR) {
             return PN_ERROR;
         }
 
@@ -350,12 +348,10 @@ namespace pw {
         }
 
         client.buf_receiver.capacity = 0;
-        if (client.connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
+        if (client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config](auto& client) {
+                return config.configure_sockopts(client) == PN_OK;
+            }) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
-            return PN_ERROR;
-        }
-
-        if (config.configure_sockopts(client) == PN_ERROR) {
             return PN_ERROR;
         }
 

@@ -56,44 +56,44 @@ namespace pw {
         }
 
         if (secure) {
-            pn::UniqueSocket<SecureClient> client;
+            SecureClient client;
             pn::tcp::BufReceiver buf_receiver(config.buf_size);
-            if (client->connect(hostname, port, [&config](auto& client) {
+            if (client.connect(hostname, port, [&config](auto& client) {
                     return config.configure_sockopts(client) == PN_OK;
                 }) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
-            if (config.configure_ssl(*client, hostname) == PN_ERROR) {
+            if (config.configure_ssl(client, hostname) == PN_ERROR) {
                 return PN_ERROR;
             }
-            if (client->ssl_connect() == PN_ERROR) {
+            if (client.ssl_connect() == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
 
-            if (client->send(req) == PN_ERROR) {
+            if (client.send(req) == PN_ERROR) {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            if (resp.parse(client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         } else {
-            pn::UniqueSocket<Client> client;
+            Client client;
             pn::tcp::BufReceiver buf_receiver(config.buf_size);
-            if (client->connect(hostname, port, [&config](auto& client) {
+            if (client.connect(hostname, port, [&config](auto& client) {
                     return config.configure_sockopts(client) == PN_OK;
                 }) == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
 
-            if (client->send(req) == PN_ERROR) {
+            if (client.send(req) == PN_ERROR) {
                 return PN_ERROR;
             }
 
-            if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            if (resp.parse(client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         }
@@ -200,22 +200,21 @@ namespace pw {
             req.headers["Connection"] = "close";
         }
 
-        pn::UniqueSocket<SecureClient> client;
+        SecureClient client;
         pn::tcp::BufReceiver buf_receiver(0);
-        if (client->connect(proxy_url_info.hostname(), proxy_url_info.port()) == PN_ERROR) {
+        if (client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config](auto& client) {
+                return config.configure_sockopts(client) == PN_OK;
+            }) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
         }
-        if (config.configure_sockopts(*client) == PN_ERROR) {
-            return PN_ERROR;
-        }
 
-        if (client->send(connect_req) == PN_ERROR) {
+        if (client.send(connect_req) == PN_ERROR) {
             return PN_ERROR;
         }
 
         HTTPResponse connect_resp;
-        if (connect_resp.parse(*client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+        if (connect_resp.parse(client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         } else if (connect_resp.status_code_category() != 200) {
             detail::set_last_error(PW_EWEB);
@@ -224,20 +223,20 @@ namespace pw {
         buf_receiver.capacity = config.buf_size;
 
         if (secure) {
-            if (config.configure_ssl(*client, hostname) == PN_ERROR) {
+            if (config.configure_ssl(client, hostname) == PN_ERROR) {
                 return PN_ERROR;
             }
-            if (client->ssl_connect() == PN_ERROR) {
+            if (client.ssl_connect() == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             }
         }
 
-        if (client->send(req) == PN_ERROR) {
+        if (client.send(req) == PN_ERROR) {
             return PN_ERROR;
         }
 
-        if (resp.parse(*client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+        if (resp.parse(client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
 
