@@ -9,9 +9,6 @@
 #include <sstream>
 #include <string.h>
 #include <wchar.h>
-#ifdef POLYWEB_SIMD
-    #include <x86intrin.h>
-#endif
 
 namespace pw {
     // f(x) = 2 * log2(x) + x + 4
@@ -22,15 +19,7 @@ namespace pw {
         static constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
         void reverse_memcpy(char* dest, const char* src, size_t size) {
-            size_t i = 0;
-#ifdef POLYWEB_SIMD
-            for (const static __m128i pattern_vec = _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15); i + 16 <= size; i += 16) {
-                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) (src + size - 16 - i));
-                __m128i reversed_vec = _mm_shuffle_epi8(src_vec, pattern_vec);
-                _mm_storeu_si128(((__m128i_u*) &dest[i]), reversed_vec);
-            }
-#endif
-            for (; i < size; ++i) {
+            for (size_t i = 0; i < size; ++i) {
                 dest[i] = src[size - 1 - i];
             }
         }
