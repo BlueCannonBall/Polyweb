@@ -508,12 +508,9 @@ namespace pw {
 
         BasicConnection& operator=(BasicConnection&& conn) {
             if (this != &conn) {
-                ws_closed = conn.ws_closed;
-                data = conn.data;
                 Base::operator=(std::move(conn));
-
-                conn.ws_closed = false;
-                conn.data = nullptr;
+                ws_closed = std::exchange(conn.ws_closed, false);
+                data = std::exchange(conn.data, nullptr);
             }
             return *this;
         }
@@ -562,9 +559,9 @@ namespace pw {
         }
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
-        int close(bool reset = true, int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
+        int close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
             if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && !ws_closed) ws_close(1001, {});
-            return Base::close(reset, protocol_layers);
+            return Base::close(protocol_layers);
         }
 
         virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
@@ -607,19 +604,22 @@ namespace pw {
         std::function<void(std::shared_ptr<T>&, HTTPRequest, void*)> on_open;
         std::function<void(std::shared_ptr<T>&, WSMessage, void*)> on_message;
         std::function<void(std::shared_ptr<T>&, uint16_t, pn::StringView, bool clean, void*)> on_close;
+        bool handle_pings = true;
 
         BasicWSRoute() = default;
-        BasicWSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
+        BasicWSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false, bool handle_pings = true):
             Route(data, wildcard),
             on_open(std::move(on_open)),
             on_message(std::move(on_message)),
-            on_close(std::move(on_close)) {}
-        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false):
+            on_close(std::move(on_close)),
+            handle_pings(handle_pings) {}
+        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, void* data = nullptr, bool wildcard = false, bool handle_pings = true):
             Route(data, wildcard),
             on_connect(std::move(on_connect)),
             on_open(std::move(on_open)),
             on_message(std::move(on_message)),
-            on_close(std::move(on_close)) {}
+            on_close(std::move(on_close)),
+            handle_pings(handle_pings) {}
     };
 
     using WSRoute = BasicWSRoute<Connection>;
@@ -652,29 +652,19 @@ namespace pw {
 
         BasicServer& operator=(BasicServer&& server) {
             if (this != &server) {
+                Base::operator=(std::move(server));
                 on_error = std::move(server.on_error);
-                buf_size = server.buf_size;
-                header_climit = server.header_climit;
-                header_name_rlimit = server.header_name_rlimit;
-                header_value_rlimit = server.header_value_rlimit;
-                body_chunk_rlimit = server.body_chunk_rlimit;
-                body_rlimit = server.body_rlimit;
-                ws_frame_rlimit = server.ws_frame_rlimit;
-                ws_message_rlimit = server.ws_message_rlimit;
-                misc_rlimit = server.misc_rlimit;
+                buf_size = std::exchange(server.buf_size, 4'000);
+                header_climit = std::exchange(server.header_climit, 100);
+                header_name_rlimit = std::exchange(server.header_name_rlimit, 500);
+                header_value_rlimit = std::exchange(server.header_value_rlimit, 4'000'000);
+                body_chunk_rlimit = std::exchange(server.body_chunk_rlimit, 16'000'000);
+                body_rlimit = std::exchange(server.body_rlimit, 32'000'000);
+                ws_frame_rlimit = std::exchange(server.ws_frame_rlimit, 16'000'000);
+                ws_message_rlimit = std::exchange(server.ws_message_rlimit, 32'000'000);
+                misc_rlimit = std::exchange(server.misc_rlimit, 1'000);
                 http_routes = std::move(server.http_routes);
                 ws_routes = std::move(server.ws_routes);
-                Base::operator=(std::move(server));
-
-                server.buf_size = 4'000;
-                server.header_climit = 100;
-                server.header_name_rlimit = 500;
-                server.header_value_rlimit = 4'000'000;
-                server.body_chunk_rlimit = 16'000'000;
-                server.body_rlimit = 32'000'000;
-                server.ws_frame_rlimit = 16'000'000;
-                server.ws_message_rlimit = 32'000'000;
-                server.misc_rlimit = 1'000;
             }
             return *this;
         }
