@@ -502,11 +502,11 @@ namespace pw {
         template <typename... Args>
         BasicConnection(Args&&... args):
             Base(std::forward<Args>(args)...) {}
-        BasicConnection(BasicConnection&& conn) {
+        BasicConnection(BasicConnection&& conn) noexcept {
             *this = std::move(conn);
         }
 
-        BasicConnection& operator=(BasicConnection&& conn) {
+        BasicConnection& operator=(BasicConnection&& conn) noexcept {
             if (this != &conn) {
                 Base::operator=(std::move(conn));
                 ws_closed = std::exchange(conn.ws_closed, false);
@@ -646,11 +646,11 @@ namespace pw {
         template <typename... Args>
         BasicServer(Args&&... args):
             Base(std::forward<Args>(args)...) {}
-        BasicServer(BasicServer&& server) {
+        BasicServer(BasicServer&& server) noexcept {
             *this = std::move(server);
         }
 
-        BasicServer& operator=(BasicServer&& server) {
+        BasicServer& operator=(BasicServer&& server) noexcept {
             if (this != &server) {
                 Base::operator=(std::move(server));
                 on_error = std::move(server.on_error);
