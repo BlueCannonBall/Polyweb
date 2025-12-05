@@ -187,7 +187,7 @@ namespace pw {
                             std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
                             unsigned char digest[SHA_DIGEST_LENGTH];
-                            SHA1((const unsigned char*) websocket_key.data(), websocket_key.size(), digest);
+                            SHA1((unsigned char*) websocket_key.data(), websocket_key.size(), digest);
                             resp.headers["Sec-WebSocket-Accept"] = base64_encode(digest, SHA_DIGEST_LENGTH);
                         }
 

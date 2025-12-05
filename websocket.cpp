@@ -47,12 +47,12 @@ namespace pw {
             int32_t masking_key_integer;
             memcpy(&masking_key_integer, masking_key, 4);
             for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= data.size(); i += 32) {
-                __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &data[i]);
+                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
                 __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                 _mm256_storeu_si256((__m256i_u*) &ret[end + 4 + i], masked_vec);
             }
             for (__m128i mask_vec = _mm_set1_epi32(masking_key_integer); i + 16 <= data.size(); i += 16) {
-                __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &data[i]);
+                __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[i]);
                 __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                 _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
             }
@@ -146,12 +146,12 @@ namespace pw {
                     int32_t masking_key_integer;
                     memcpy(&masking_key_integer, masking_key, 4);
                     for (__m256i mask_vec = _mm256_set1_epi32(masking_key_integer); i + 32 <= payload_length; i += 32) {
-                        __m256i src_vec = _mm256_loadu_si256((const __m256i_u*) &data[end + i]);
+                        __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[end + i]);
                         __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
                         _mm256_storeu_si256((__m256i_u*) &data[end + i], masked_vec);
                     }
                     for (__m128i mask_vec = _mm_set1_epi32(masking_key_integer); i + 16 <= payload_length; i += 16) {
-                        __m128i src_vec = _mm_loadu_si128((const __m128i_u*) &data[end + i]);
+                        __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[end + i]);
                         __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
                         _mm_storeu_si128((__m128i_u*) &data[end + i], masked_vec);
                     }

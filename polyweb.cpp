@@ -18,15 +18,33 @@ namespace pw {
         thread_local int last_error = PW_ESUCCESS;
         static constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-        void reverse_memcpy(char* dest, const char* src, size_t size) {
+        void reverse_memcpy(char* __restrict dest, const char* __restrict src, size_t size) {
             for (size_t i = 0; i < size; ++i) {
                 dest[i] = src[size - 1 - i];
             }
         }
+
+        void reverse_memmove(char* dest, const char* src, size_t size) {
+            if (dest >= src && dest < src + size) {
+                char* buf = new char[size];
+                for (size_t i = 0; i < size; ++i) {
+                    buf[i] = src[size - 1 - i];
+                }
+                memcpy(dest, buf, size);
+                delete[] buf;
+            } else {
+                reverse_memcpy(dest, src, size);
+            }
+        }
+
     } // namespace detail
 
-    void reverse_memcpy(void* dest, const void* src, size_t size) {
+    void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size) {
         detail::reverse_memcpy((char*) dest, (const char*) src, size);
+    }
+
+    void reverse_memmove(void* dest, const void* src, size_t size) {
+        detail::reverse_memmove((char*) dest, (const char*) src, size);
     }
 
     std::string strerror(int error) {

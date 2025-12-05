@@ -161,7 +161,8 @@ namespace pw {
         }
     } // namespace detail
 
-    void reverse_memcpy(void* dest, const void* src, size_t size);
+    void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size);
+    void reverse_memmove(void* dest, const void* src, size_t size);
 
     inline int get_last_error() {
         return detail::last_error;
