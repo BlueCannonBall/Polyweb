@@ -505,6 +505,18 @@ namespace pw {
         template <typename... Args>
         BasicWSConnection(Args&&... args):
             BasicConnection<Base>(std::forward<Args>(args)...) {}
+        BasicWSConnection(BasicWSConnection&& conn) noexcept {
+            *this = std::move(conn);
+        }
+
+        BasicWSConnection& operator=(BasicWSConnection&& conn) noexcept {
+            if (this != &conn) {
+                BasicConnection<Base>::operator=(conn);
+                ws_closed = std::exchange(conn.ws_closed, false);
+            }
+            return *this;
+        }
+
         virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
