@@ -200,7 +200,7 @@ namespace pw {
 
     template <typename Base>
     int BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
-        if (message.parse(*this, buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
+        if (message.parse(*this, this->buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
 

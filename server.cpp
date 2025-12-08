@@ -12,7 +12,7 @@ namespace pw {
         if (Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
                     task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
-                        handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
+                        handle_connection(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
                     },
                         true));
                 }
@@ -34,7 +34,7 @@ namespace pw {
                         if (ssl_ctx && conn.ssl_accept() == PN_ERROR) {
                             return;
                         }
-                        handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
+                        handle_connection(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
                     },
                         true));
                 }
@@ -49,12 +49,12 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_connection(connection_type conn, pn::tcp::BufReceiver buf_receiver) const {
+    int BasicServer<Base>::handle_connection(connection_type conn) const {
         bool keep_alive = true;
         bool websocket = false;
         do {
             HTTPRequest req;
-            if (req.parse(conn, buf_receiver, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
+            if (conn.recv(req, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
                 uint16_t resp_status_code;
                 switch (get_last_error()) {
                 case PW_ENET:
@@ -195,7 +195,7 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        route.on_open(ws_connection_type(std::move(conn), std::move(buf_receiver)), std::move(req));
+                        route.on_open(std::move(conn), std::move(req));
                         return PN_OK;
                     }
                 } else if (!http_route_target.empty()) {

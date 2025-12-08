@@ -270,8 +270,7 @@ namespace pw {
     }
 
     inline std::istream& operator>>(std::istream& is, URLInfo& url_info) {
-        std::string url;
-        if (is >> url && url_info.parse(url) == PN_ERROR) {
+        if (std::string url; (is >> url) && url_info.parse(url) == PN_ERROR) {
             is.setstate(std::istream::failbit);
         }
         return is;
@@ -443,9 +442,15 @@ namespace pw {
     template <typename Base>
     class BasicConnection : public Base {
     public:
+        pn::tcp::BufReceiver buf_receiver;
+
         template <typename... Args>
         BasicConnection(Args&&... args):
             Base(std::forward<Args>(args)...) {}
+        template <typename... Args>
+        BasicConnection(Base conn, pn::tcp::BufReceiver buf_receiver):
+            Base(std::move(conn)),
+            buf_receiver(std::move(buf_receiver)) {}
 
         using Base::send;
 
@@ -476,6 +481,14 @@ namespace pw {
         int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", bool head_only = false) {
             return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), head_only);
         }
+
+        int recv(HTTPRequest& req, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
+            return req.parse(*this, buf_receiver, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        }
+
+        int recv(HTTPResponse& resp, bool head_only = false, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
+            return resp.parse(*this, buf_receiver, head_only, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        }
     };
 
     using Connection = BasicConnection<pn::tcp::Connection>;
@@ -487,17 +500,11 @@ namespace pw {
         std::mutex mutex;
 
     public:
-        pn::tcp::BufReceiver buf_receiver;
         bool ws_closed = false;
 
         template <typename... Args>
         BasicWSConnection(Args&&... args):
             BasicConnection<Base>(std::forward<Args>(args)...) {}
-        template <typename... Args>
-        BasicWSConnection(BasicConnection<Base> conn, pn::tcp::BufReceiver buf_receiver):
-            BasicConnection<Base>(std::move(conn)),
-            buf_receiver(std::move(buf_receiver)) {}
-
         virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
@@ -618,7 +625,7 @@ namespace pw {
         std::unordered_map<std::string, http_route_type> http_routes;
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
-        int handle_connection(connection_type conn, pn::tcp::BufReceiver buf_receiver) const;
+        int handle_connection(connection_type conn) const;
         int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
         int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
     };

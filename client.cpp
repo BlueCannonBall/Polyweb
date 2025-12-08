@@ -76,7 +76,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            if (client.recv(resp, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         } else {
@@ -93,7 +93,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (resp.parse(client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            if (client.recv(resp, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         }
@@ -214,7 +214,7 @@ namespace pw {
         }
 
         HTTPResponse connect_resp;
-        if (connect_resp.parse(client, buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+        if (client.recv(connect_resp, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         } else if (connect_resp.status_code_category() != 200) {
             detail::set_last_error(PW_EWEB);
@@ -236,7 +236,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        if (resp.parse(client, buf_receiver, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+        if (client.recv(resp, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
 
