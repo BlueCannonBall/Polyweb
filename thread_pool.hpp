@@ -44,8 +44,8 @@ namespace tp {
         mutable std::mutex mutex;
         mutable std::condition_variable cv;
         std::unique_ptr<BasicFunction> func;
-        TaskStatus status = TASK_STATUS_RUNNING;
-        std::exception_ptr error;
+        TaskStatus status_ = TASK_STATUS_RUNNING;
+        std::exception_ptr exception_ptr;
 
     public:
         template <typename F>
@@ -57,11 +57,11 @@ namespace tp {
                 func->call();
 
                 std::lock_guard<std::mutex> lock(mutex);
-                status = TASK_STATUS_SUCCESS;
+                status_ = TASK_STATUS_SUCCESS;
             } catch (...) {
                 std::lock_guard<std::mutex> lock(mutex);
-                status = TASK_STATUS_FAILURE;
-                error = std::current_exception();
+                status_ = TASK_STATUS_FAILURE;
+                exception_ptr = std::current_exception();
             }
             cv.notify_all();
         }
@@ -69,37 +69,37 @@ namespace tp {
         TaskStatus wait() const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait(lock, [this]() {
-                return status != TASK_STATUS_RUNNING;
+                return status_ != TASK_STATUS_RUNNING;
             });
-            return status;
+            return status_;
         }
 
         template <typename Rep, typename Period>
         TaskStatus wait_for(const std::chrono::duration<Rep, Period>& time) const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait_for(lock, time, [this]() {
-                return status != TASK_STATUS_RUNNING;
+                return status_ != TASK_STATUS_RUNNING;
             });
-            return status;
+            return status_;
         }
 
         template <typename Clock, typename Duration>
         TaskStatus wait_until(const std::chrono::time_point<Clock, Duration>& time) const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait_until(lock, time, [this]() {
-                return status != TASK_STATUS_RUNNING;
+                return status_ != TASK_STATUS_RUNNING;
             });
-            return status;
+            return status_;
         }
 
-        TaskStatus get_status() const {
+        TaskStatus status() const {
             std::lock_guard<std::mutex> lock(mutex);
-            return status;
+            return status_;
         }
 
-        std::exception_ptr get_error() const {
+        void rethrow_exception() const {
             std::lock_guard<std::mutex> lock(mutex);
-            return error;
+            std::rethrow_exception(exception_ptr);
         }
     };
 
@@ -120,7 +120,7 @@ namespace tp {
             tasks.push_back(std::move(task));
             tasks.remove_if([](const auto& task) {
                 auto task_locked = task.lock();
-                return !task_locked || task_locked->get_status() != TASK_STATUS_RUNNING;
+                return !task_locked || task_locked->status() != TASK_STATUS_RUNNING;
             });
         }
     };
