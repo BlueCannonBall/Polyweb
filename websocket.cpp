@@ -166,41 +166,43 @@ namespace pw {
         return PN_OK;
     }
 
+    uint16_t WSMessage::close_status_code() const {
+        uint16_t ret = 0;
+        if (data.size() >= 2) {
+#if BYTE_ORDER == BIG_ENDIAN
+            memcpy(&ret, data.data(), 2);
+#else
+            reverse_memcpy(&ret, data.data(), 2);
+#endif
+        }
+        return ret;
+    }
+
+    std::string WSMessage::close_reason() const {
+        std::string ret;
+        if (data.size() > 2) {
+            ret.assign(data.begin() + 2, data.end());
+        }
+        return ret;
+    }
+
     template <typename Base>
-    pn::ssize_t BasicWSConnection<Base>::recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close, bool handle_pings, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
-        for (;;) {
-            if (message.parse(*this, buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
+    int BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
+        if (message.parse(*this, buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
+            return PN_ERROR;
+        }
+
+        if (handle_close && message.opcode == WS_OPCODE_CLOSE) {
+            if (!this->ws_closed && send(message) == PN_ERROR) {
                 return PN_ERROR;
             }
-
-            if (handle_pings && message.opcode == WS_OPCODE_PING) {
-                if (send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
-                    return PN_ERROR;
-                }
-                continue;
-            } else if (message.opcode == WS_OPCODE_CLOSE) {
-                uint16_t status_code = 0;
-                std::string reason;
-                if (message->size() >= 2) {
-#if BYTE_ORDER == BIG_ENDIAN
-                    memcpy(&status_code, message->data(), 2);
-#else
-                    reverse_memcpy(&status_code, message->data(), 2);
-#endif
-                    if (message->size() > 2) {
-                        reason.assign(message->begin() + 2, message->end());
-                    }
-                }
-
-                if (on_close) on_close(status_code, reason);
-                if (!this->ws_closed && send(message) == PN_ERROR) {
-                    return PN_ERROR;
-                }
-                return 0;
+        } else if (handle_pings && message.opcode == WS_OPCODE_PING) {
+            if (send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
+                return PN_ERROR;
             }
-
-            return 1;
         }
+
+        return PN_OK;
     }
 
     template <typename Base>

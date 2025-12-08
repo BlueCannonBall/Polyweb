@@ -427,12 +427,15 @@ namespace pw {
             return &data;
         }
 
+        std::vector<char> build(const char* masking_key = nullptr) const;
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
+
         std::string to_string() const {
             return std::string(data.begin(), data.end());
         }
 
-        std::vector<char> build(const char* masking_key = nullptr) const;
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
+        uint16_t close_status_code() const;
+        std::string close_reason() const;
     };
 
     template <typename Base>
@@ -518,8 +521,7 @@ namespace pw {
 
         using BasicConnection<Base>::recv;
 
-        // Returns a positive integer if a message was received, or zero if the connection closed
-        pn::ssize_t recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close = {}, bool handle_pings = true, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
+        int recv(WSMessage& message, bool handle_close = true, bool handle_pings = true, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
     };
 
     using WSConnection = BasicWSConnection<pn::tcp::Connection>;
