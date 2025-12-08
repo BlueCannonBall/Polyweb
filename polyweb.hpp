@@ -411,6 +411,8 @@ namespace pw {
         WSMessage(WSOpcode opcode):
             opcode(opcode) {}
 
+        static WSMessage make_close(uint16_t status_code, pn::StringView reason);
+
         const std::vector<char>& operator*() const {
             return data;
         }

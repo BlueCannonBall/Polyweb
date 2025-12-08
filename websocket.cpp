@@ -5,6 +5,18 @@
 #endif
 
 namespace pw {
+    WSMessage WSMessage::make_close(uint16_t status_code, pn::StringView reason) {
+        WSMessage ret(WS_OPCODE_CLOSE);
+        ret->resize(2 + reason.size());
+#if BYTE_ORDER == BIG_ENDIAN
+        memcpy(message->data(), &status_code, 2);
+#else
+        reverse_memcpy(ret->data(), &status_code, 2);
+#endif
+        memcpy(ret->data() + 2, reason.data(), reason.size());
+        return ret;
+    }
+
     std::vector<char> WSMessage::build(const char* masking_key) const {
         std::vector<char> ret(2);
 
@@ -208,15 +220,7 @@ namespace pw {
 
     template <typename Base>
     int BasicWSConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
-        WSMessage message(WS_OPCODE_CLOSE);
-        message->resize(2 + reason.size());
-#if BYTE_ORDER == BIG_ENDIAN
-        memcpy(message->data(), &status_code, 2);
-#else
-        reverse_memcpy(message->data(), &status_code, 2);
-#endif
-        memcpy(message->data() + 2, reason.data(), reason.size());
-        if (send(message, masking_key) == PN_ERROR) {
+        if (send(WSMessage::make_close(status_code, reason), masking_key) == PN_ERROR) {
             return PN_ERROR;
         }
         ws_closed = true;
