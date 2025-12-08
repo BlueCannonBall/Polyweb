@@ -28,7 +28,7 @@ int main() {
             if (int result = client.recv(message); result == PN_ERROR) {
                 std::cerr << "Error: " << pw::universal_strerror() << std::endl;
                 return 1;
-            } else if (result == 0) {
+            } else if (!result) {
                 std::cout << "Connection closed" << std::endl;
                 return 0;
             }

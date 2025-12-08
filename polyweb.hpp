@@ -4,7 +4,7 @@
 #include "Polynet/polynet.hpp"
 #include "Polynet/secure_sockets.hpp"
 #include "string.hpp"
-#include "threadpool.hpp"
+#include "thread_pool.hpp"
 #include <algorithm>
 #include <chrono>
 #include <functional>
@@ -79,7 +79,7 @@
 #define PW_TOGGLE_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] ^= 0x7F)
 
 namespace pw {
-    extern tp::ThreadPool threadpool;
+    extern tp::ThreadPool thread_pool;
 
     namespace detail {
         extern thread_local int last_error;
@@ -503,18 +503,6 @@ namespace pw {
         template <typename... Args>
         BasicConnection(Args&&... args):
             Base(std::forward<Args>(args)...) {}
-        BasicConnection(BasicConnection&& conn) noexcept {
-            *this = std::move(conn);
-        }
-
-        BasicConnection& operator=(BasicConnection&& conn) noexcept {
-            if (this != &conn) {
-                Base::operator=(std::move(conn));
-                ws_closed = std::exchange(conn.ws_closed, false);
-                data = std::exchange(conn.data, nullptr);
-            }
-            return *this;
-        }
 
         using pn::tcp::Connection::send;
 
@@ -628,6 +616,9 @@ namespace pw {
 
     template <typename Base>
     class BasicServer : public Base {
+    protected:
+        tp::TaskPool task_pool;
+
     public:
         std::function<HTTPResponse(uint16_t)> on_error;
         size_t buf_size = 4'000;
@@ -654,6 +645,7 @@ namespace pw {
         BasicServer& operator=(BasicServer&& server) noexcept {
             if (this != &server) {
                 Base::operator=(std::move(server));
+                task_pool = std::move(server.task_pool);
                 on_error = std::move(server.on_error);
                 buf_size = std::exchange(server.buf_size, 4'000);
                 header_climit = std::exchange(server.header_climit, 100);

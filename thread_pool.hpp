@@ -1,9 +1,10 @@
-#ifndef THREADPOOL_HPP_
-#define THREADPOOL_HPP_
+#ifndef THREAD_POOL_HPP_
+#define THREAD_POOL_HPP_
 
 #include <chrono>
 #include <condition_variable>
 #include <exception>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -21,12 +22,14 @@ namespace tp {
     protected:
         mutable std::mutex mutex;
         mutable std::condition_variable cv;
+        TaskStatus status = TASK_STATUS_RUNNING;
+        std::exception_ptr error;
 
         class BasicFunction {
         public:
             virtual ~BasicFunction() = default;
 
-            virtual void call(void*) = 0;
+            virtual void call(void* arg) = 0;
         };
 
         template <typename F>
@@ -46,8 +49,6 @@ namespace tp {
     public:
         std::unique_ptr<BasicFunction> func;
         void* arg = nullptr;
-        TaskStatus status = TASK_STATUS_RUNNING;
-        std::exception_ptr error;
 
         template <typename F>
         Task(F&& func, void* arg = nullptr):
@@ -105,18 +106,44 @@ namespace tp {
         }
     };
 
+    class TaskPool {
+    protected:
+        std::list<std::weak_ptr<Task>> tasks;
+
+    public:
+        ~TaskPool() {
+            for (const auto& task : tasks) {
+                if (auto task_locked = task.lock()) {
+                    task_locked->wait();
+                }
+            }
+        }
+
+        void insert(std::shared_ptr<Task> task) {
+            for (auto it = tasks.begin(); it != tasks.end();) {
+                if (auto task_locked = it->lock(); !task_locked || task_locked->get_status() != TASK_STATUS_RUNNING) {
+                    it = tasks.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            tasks.emplace_back(std::move(task));
+        }
+    };
+
     namespace detail {
         class ControlBlock {
         public:
             std::mutex mutex;
             std::condition_variable cv;
             std::queue<std::shared_ptr<Task>> queue;
-            unsigned int thread_count = 0;
             unsigned int target_thread_count;
-            unsigned int busy_count = 0;
+            unsigned int persistent_thread_count = 0;
+            unsigned int busy_thread_count = 0;
+            unsigned int total_thread_count = 0;
 
-            ControlBlock(unsigned int size = std::thread::hardware_concurrency()):
-                target_thread_count(size) {}
+            ControlBlock(unsigned int target_thread_count = std::thread::hardware_concurrency()):
+                target_thread_count(target_thread_count) {}
         };
     } // namespace detail
 
@@ -126,7 +153,8 @@ namespace tp {
 
         static void runner(std::shared_ptr<detail::ControlBlock> control_block) {
             std::unique_lock<std::mutex> lock(control_block->mutex);
-            ++control_block->thread_count;
+            ++control_block->persistent_thread_count;
+            ++control_block->total_thread_count;
             control_block->cv.notify_all();
 
             for (;; control_block->cv.wait(lock)) {
@@ -134,18 +162,19 @@ namespace tp {
                     std::shared_ptr<Task> task = std::move(control_block->queue.front());
                     control_block->queue.pop();
 
-                    ++control_block->busy_count;
+                    ++control_block->busy_thread_count;
                     lock.unlock();
                     task->execute();
                     lock.lock();
-                    --control_block->busy_count;
+                    --control_block->busy_thread_count;
                 }
-                if (control_block->target_thread_count < control_block->thread_count) {
+                if (control_block->target_thread_count < control_block->total_thread_count) {
                     break;
                 }
             }
 
-            --control_block->thread_count;
+            --control_block->persistent_thread_count;
+            --control_block->total_thread_count;
             control_block->cv.notify_all();
         }
 
@@ -158,7 +187,7 @@ namespace tp {
 
             std::unique_lock<std::mutex> lock(control_block->mutex);
             control_block->cv.wait(lock, [this]() {
-                return control_block->thread_count == control_block->target_thread_count;
+                return control_block->persistent_thread_count == control_block->target_thread_count;
             });
         }
         ThreadPool(const ThreadPool&) = delete;
@@ -170,27 +199,35 @@ namespace tp {
             control_block->target_thread_count = 0;
             control_block->cv.notify_all();
             control_block->cv.wait(lock, [this]() {
-                return !control_block->thread_count;
+                return !control_block->total_thread_count;
             });
         }
 
         template <typename F>
         std::shared_ptr<Task> schedule(F&& func, void* arg = nullptr, bool launch_if_busy = false) {
-            std::shared_ptr<Task> task = std::make_shared<Task>(std::forward<F>(func), arg);
-
-            if (launch_if_busy) {
-                std::unique_lock<std::mutex> lock(control_block->mutex);
-                if (control_block->busy_count >= control_block->thread_count) {
-                    lock.unlock();
-                    std::thread(&Task::execute, task).detach();
-                    return task;
-                }
-            }
+            auto task = std::make_shared<Task>(std::forward<F>(func), arg);
 
             std::unique_lock<std::mutex> lock(control_block->mutex);
-            control_block->queue.push(task);
-            lock.unlock();
-            control_block->cv.notify_one();
+            if (launch_if_busy && control_block->busy_thread_count >= control_block->persistent_thread_count) {
+                lock.unlock();
+                std::thread([](std::shared_ptr<detail::ControlBlock> control_block, std::shared_ptr<Task> task) {
+                    std::unique_lock<std::mutex> lock(control_block->mutex);
+                    ++control_block->total_thread_count;
+                    lock.unlock();
+                    task->execute();
+                    lock.lock();
+                    --control_block->total_thread_count;
+                    control_block->cv.notify_all();
+                },
+                    control_block,
+                    task)
+                    .detach();
+            } else {
+                control_block->queue.push(task);
+                lock.unlock();
+                control_block->cv.notify_one();
+            }
+
             return task;
         }
 
@@ -210,7 +247,7 @@ namespace tp {
             }
 
             control_block->cv.wait(lock, [this]() {
-                return control_block->thread_count == control_block->target_thread_count;
+                return control_block->persistent_thread_count == control_block->target_thread_count;
             });
         }
 

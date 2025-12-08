@@ -12,13 +12,13 @@ namespace pw {
         if (Base::listen([filter = std::move(filter), filter_data](typename Base::connection_type conn, void* data) -> bool {
                 if (!filter(conn, filter_data)) {
                     auto server = (BasicServer<Base>*) data;
-                    threadpool.schedule([conn = std::move(conn)](void* data) mutable {
+                    server->task_pool.insert(thread_pool.schedule([conn = std::move(conn)](void* data) mutable {
                         auto server = (BasicServer<Base>*) data;
                         pn::tcp::BufReceiver buf_receiver(server->buf_size);
                         server->handle_connection(std::move(conn), buf_receiver);
                     },
                         server,
-                        true);
+                        true));
                 }
                 return true;
             },
@@ -36,7 +36,7 @@ namespace pw {
         if (pn::tcp::SecureServer::listen([filter = std::move(filter), filter_data](typename pn::tcp::SecureServer::connection_type conn, void* data) -> bool {
                 if (!filter(conn, filter_data)) {
                     auto server = (pw::SecureServer*) data;
-                    threadpool.schedule([conn = std::move(conn)](void* data) mutable {
+                    server->task_pool.insert(thread_pool.schedule([conn = std::move(conn)](void* data) mutable {
                         auto server = (pw::SecureServer*) data;
 
                         if (server->ssl_ctx && conn.ssl_accept() == PN_ERROR) {
@@ -47,7 +47,7 @@ namespace pw {
                         server->handle_connection(std::move(conn), buf_receiver);
                     },
                         server,
-                        true);
+                        true));
                 }
                 return true;
             },
