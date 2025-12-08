@@ -24,7 +24,7 @@ int main() {
     std::cout << "10 stories on Hacker News today:" << std::endl;
     std::vector<std::shared_ptr<tp::Task>> tasks;
     for (size_t i = 0; i < 10; ++i) {
-        tasks.push_back(pw::thread_pool.schedule([&story_ids, i](void*) {
+        tasks.push_back(pw::thread_pool.schedule([&story_ids, i]() {
             pw::HTTPResponse resp;
             if (pw::fetch("https://hacker-news.firebaseio.com/v0/item/" + std::to_string(story_ids[i].get<int>()) + ".json", resp) == PN_ERROR) {
                 std::cerr << "Error: " << pw::universal_strerror() << std::endl;

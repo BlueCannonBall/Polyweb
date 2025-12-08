@@ -11,7 +11,7 @@ namespace pw {
     int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog) {
         if (Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
-                    task_list.insert(thread_pool.schedule([this, conn = std::move(conn)](void* data) mutable {
+                    task_list.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                         handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
                     },
                         true));
