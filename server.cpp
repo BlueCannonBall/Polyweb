@@ -12,7 +12,7 @@ namespace pw {
         if (Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
                     task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
-                        handle_connection(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
+                        handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
                     },
                         true));
                 }
@@ -34,7 +34,7 @@ namespace pw {
                         if (ssl_ctx && conn.ssl_accept() == PN_ERROR) {
                             return;
                         }
-                        handle_connection(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
+                        handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
                     },
                         true));
                 }
@@ -49,7 +49,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_connection(connection_type conn) const {
+    int BasicServer<Base>::handle_conn(connection_type conn) const {
         bool keep_alive = true;
         bool websocket = false;
         do {

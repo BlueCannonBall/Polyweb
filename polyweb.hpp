@@ -610,11 +610,11 @@ namespace pw {
             http_routes.erase(target);
         }
 
-        void route_ws(std::string target, ws_route_type route) {
+        void ws_route(std::string target, ws_route_type route) {
             ws_routes.insert_or_assign(std::move(target), std::move(route));
         }
 
-        void unroute_ws(const std::string& target) {
+        void ws_unroute(const std::string& target) {
             ws_routes.erase(target);
         }
 
@@ -625,7 +625,7 @@ namespace pw {
         std::unordered_map<std::string, http_route_type> http_routes;
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
-        int handle_connection(connection_type conn) const;
+        int handle_conn(connection_type conn) const;
         int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
         int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
     };
@@ -701,10 +701,10 @@ namespace pw {
     int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
     int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
 
-    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw
 
 #endif
