@@ -482,6 +482,8 @@ namespace pw {
             return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), head_only);
         }
 
+        using Base::recv;
+
         int recv(HTTPRequest& req, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
             return req.parse(*this, buf_receiver, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
