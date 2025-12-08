@@ -1,7 +1,6 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <bitset>
-#include <cmath>
 #include <codecvt>
 #include <iomanip>
 #include <iterator>
@@ -11,8 +10,7 @@
 #include <wchar.h>
 
 namespace pw {
-    // f(x) = 2 * log2(x) + x + 4
-    tp::ThreadPool thread_pool(std::round(2.0 * std::log2(std::thread::hardware_concurrency()) + std::thread::hardware_concurrency() + 4.0));
+    tp::ThreadPool thread_pool(std::max<unsigned int>(std::thread::hardware_concurrency(), 16));
 
     namespace detail {
         thread_local int last_error = PW_ESUCCESS;
