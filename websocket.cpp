@@ -236,7 +236,7 @@ namespace pw {
     }
 
     template <typename Base>
-    long BasicWebSocketClient<Base>::recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close, bool handle_pings, long frame_rlimit, long message_rlimit) {
+    long long BasicWebSocketClient<Base>::recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close, bool handle_pings, long frame_rlimit, long message_rlimit) {
         for (;;) {
             if (message.parse(*this, buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
                 return PN_ERROR;

@@ -753,7 +753,7 @@ namespace pw {
         using BasicConnection<Base>::recv;
 
         // Returns the size of the message received, or zero if the connection closed
-        long recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close = {}, bool handle_pings = true, long frame_rlimit = 16'000'000, long message_rlimit = 32'000'000);
+        long long recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close = {}, bool handle_pings = true, long frame_rlimit = 16'000'000, long message_rlimit = 32'000'000);
 
         int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr) override {
             if (!masking_key) {
