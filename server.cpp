@@ -8,22 +8,17 @@
 
 namespace pw {
     template <typename Base>
-    int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&, void*)> filter, void* filter_data, int backlog) {
-        if (Base::listen([filter = std::move(filter), filter_data](typename Base::connection_type conn, void* data) -> bool {
-                if (!filter(conn, filter_data)) {
-                    auto server = (BasicServer<Base>*) data;
-                    server->task_list.insert(thread_pool.schedule([conn = std::move(conn)](void* data) mutable {
-                        auto server = (BasicServer<Base>*) data;
-                        pn::tcp::BufReceiver buf_receiver(server->buf_size);
-                        server->handle_connection(std::move(conn), buf_receiver);
+    int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> filter, int backlog) {
+        if (Base::listen([this, filter = std::move(filter)](typename Base::connection_type conn) {
+                if (!filter || !filter(conn)) {
+                    task_list.insert(thread_pool.schedule([this, conn = std::move(conn)](void* data) mutable {
+                        handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
                     },
-                        server,
                         true));
                 }
                 return true;
             },
-                backlog,
-                this) == PN_ERROR) {
+                backlog) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
         } else {
@@ -32,27 +27,20 @@ namespace pw {
     }
 
     template <>
-    int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&, void*)> filter, void* filter_data, int backlog) {
-        if (pn::tcp::SecureServer::listen([filter = std::move(filter), filter_data](typename pn::tcp::SecureServer::connection_type conn, void* data) -> bool {
-                if (!filter(conn, filter_data)) {
-                    auto server = (pw::SecureServer*) data;
-                    server->task_list.insert(thread_pool.schedule([conn = std::move(conn)](void* data) mutable {
-                        auto server = (pw::SecureServer*) data;
-
-                        if (server->ssl_ctx && conn.ssl_accept() == PN_ERROR) {
+    int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&)> filter, int backlog) {
+        if (pn::tcp::SecureServer::listen([this, filter = std::move(filter)](typename pn::tcp::SecureServer::connection_type conn) {
+                if (!filter || !filter(conn)) {
+                    task_list.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
+                        if (ssl_ctx && conn.ssl_accept() == PN_ERROR) {
                             return;
                         }
-
-                        pn::tcp::BufReceiver buf_receiver(server->buf_size);
-                        server->handle_connection(std::move(conn), buf_receiver);
+                        handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
                     },
-                        server,
                         true));
                 }
                 return true;
             },
-                backlog,
-                this) == PN_ERROR) {
+                backlog) == PN_ERROR) {
             detail::set_last_error(PW_ENET);
             return PN_ERROR;
         } else {
@@ -61,7 +49,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_connection(connection_type conn, pn::tcp::BufReceiver& buf_receiver) const {
+    int BasicServer<Base>::handle_connection(connection_type conn, pn::tcp::BufReceiver buf_receiver) const {
         bool keep_alive = true;
         bool websocket = false;
         do {
@@ -135,7 +123,7 @@ namespace pw {
                     HTTPResponse resp;
                     try {
                         if (route.on_connect) {
-                            resp = route.on_connect(conn, req, route.data);
+                            resp = route.on_connect(conn, req);
                         } else {
                             resp = HTTPResponse(101);
                         }
@@ -151,8 +139,8 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        resp.headers.erase("Content-Type");
                         resp.body.clear();
+                        resp.headers.erase("Content-Type");
 
                         if (!resp.headers.count("Connection")) {
                             resp.headers["Connection"] = "upgrade";
@@ -207,7 +195,7 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        return handle_ws_connection(std::make_shared<connection_type>(std::move(conn)), buf_receiver, std::move(req), route);
+                        return handle_ws_connection(std::make_shared<connection_type>(std::move(conn)), std::move(buf_receiver), std::move(req), route);
                     }
                 } else if (!http_route_target.empty()) {
                     if (handle_error(conn, 400, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
@@ -222,7 +210,7 @@ namespace pw {
                 if (!http_route_target.empty()) {
                     HTTPResponse resp;
                     try {
-                        resp = http_routes.at(http_route_target).cb(conn, req, http_routes.at(http_route_target).data);
+                        resp = http_routes.at(http_route_target).cb(conn, req);
                     } catch (...) {
                         if (handle_error(conn, 500, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
                             return PN_ERROR;
@@ -255,60 +243,54 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_ws_connection(std::shared_ptr<connection_type> conn, pn::tcp::BufReceiver& buf_receiver, HTTPRequest req, const ws_route_type& route) const {
-        route.on_open(conn, req, route.data);
+    int BasicServer<Base>::handle_ws_connection(std::shared_ptr<connection_type> conn, pn::tcp::BufReceiver buf_receiver, HTTPRequest req, const ws_route_type& route) const {
+        route.on_open(conn, req);
         for (;;) {
             if (!conn) {
-                route.on_close(conn, 0, {}, false, route.data);
+                route.on_close(conn, 0, {}, false);
                 break;
             }
 
             WSMessage message;
             if (message.parse(*conn, buf_receiver, ws_frame_rlimit, ws_message_rlimit) == PN_ERROR) {
-                route.on_close(conn, 0, {}, false, route.data);
+                route.on_close(conn, 0, {}, false);
                 return PN_ERROR;
             }
 
             switch (message.opcode) {
             case PW_WS_OPCODE_PING:
-                if (route.handle_pings) {
-                    if (conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_PONG)) == PN_ERROR) {
-                        route.on_close(conn, 0, {}, false, route.data);
-                        return PN_ERROR;
-                    }
-                    break;
+                if (route.handle_pings && conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_PONG)) == PN_ERROR) {
+                    route.on_close(conn, 0, {}, false);
+                    return PN_ERROR;
                 }
+                break;
 
             case PW_WS_OPCODE_TEXT:
             case PW_WS_OPCODE_BINARY:
             case PW_WS_OPCODE_PONG:
-                route.on_message(conn, std::move(message), route.data);
+                route.on_message(conn, std::move(message));
                 break;
 
-            case PW_WS_OPCODE_CLOSE:
-                if (conn->ws_closed) {
-                    route.on_close(conn, 0, {}, true, route.data);
-                } else {
-                    uint16_t status_code = 0;
-                    std::string reason;
-
-                    if (message->size() >= 2) {
+            case PW_WS_OPCODE_CLOSE: {
+                uint16_t status_code = 0;
+                std::string reason;
+                if (message->size() >= 2) {
 #if BYTE_ORDER == BIG_ENDIAN
-                        memcpy(&status_code, message->data(), 2);
+                    memcpy(&status_code, message->data(), 2);
 #else
-                        reverse_memcpy(&status_code, message->data(), 2);
+                    reverse_memcpy(&status_code, message->data(), 2);
 #endif
-                    }
                     if (message->size() > 2) {
                         reason.assign(message->begin() + 2, message->end());
                     }
+                }
 
-                    route.on_close(conn, status_code, reason, true, route.data);
-                    if (conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_CLOSE)) == PN_ERROR) {
-                        return PN_ERROR;
-                    }
+                route.on_close(conn, status_code, reason, true);
+                if (!conn->ws_closed && conn->send(message) == PN_ERROR) {
+                    return PN_ERROR;
                 }
                 return PN_OK;
+            }
             }
         }
         return PN_OK;

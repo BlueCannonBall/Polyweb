@@ -501,31 +501,21 @@ namespace pw {
                         return PN_ERROR;
                     }
 
-                    if (!chunk_size) {
-                        char end_buf[2];
-                        if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if (result != 2) {
+                    if (chunk_size) {
+                        size_t end = body.size();
+                        if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
-                        break;
-                    }
-
-                    size_t end = body.size();
-                    if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
-                    }
-                    body.resize(end + chunk_size);
-                    if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((unsigned long long) result != chunk_size) {
-                        detail::set_last_error(PW_EWEB);
-                        body.resize(end + result);
-                        return PN_ERROR;
+                        body.resize(end + chunk_size);
+                        if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if ((unsigned long long) result != chunk_size) {
+                            detail::set_last_error(PW_EWEB);
+                            body.resize(end + result);
+                            return PN_ERROR;
+                        }
                     }
 
                     char end_buf[2];
@@ -706,31 +696,21 @@ namespace pw {
                             return PN_ERROR;
                         }
 
-                        if (!chunk_size) {
-                            char end_buf[2];
-                            if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
-                                detail::set_last_error(PW_ENET);
-                                return PN_ERROR;
-                            } else if (result != 2) {
+                        if (chunk_size) {
+                            size_t end = body.size();
+                            if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
                                 detail::set_last_error(PW_EWEB);
                                 return PN_ERROR;
                             }
-                            break;
-                        }
-
-                        size_t end = body.size();
-                        if (chunk_size > (unsigned long long) body_chunk_rlimit || end + chunk_size > (unsigned long long) body_rlimit) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
-                        }
-                        body.resize(end + chunk_size);
-                        if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != chunk_size) {
-                            detail::set_last_error(PW_EWEB);
-                            body.resize(end + result);
-                            return PN_ERROR;
+                            body.resize(end + chunk_size);
+                            if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                                detail::set_last_error(PW_ENET);
+                                return PN_ERROR;
+                            } else if ((unsigned long long) result != chunk_size) {
+                                detail::set_last_error(PW_EWEB);
+                                body.resize(end + result);
+                                return PN_ERROR;
+                            }
                         }
 
                         char end_buf[2];
