@@ -513,7 +513,7 @@ namespace pw {
 
         BasicWSConnection& operator=(BasicWSConnection&& conn) noexcept {
             if (this != &conn) {
-                BasicConnection<Base>::operator=(conn);
+                BasicConnection<Base>::operator=(std::move(conn));
                 ws_closed = std::exchange(conn.ws_closed, false);
             }
             return *this;
