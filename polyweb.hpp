@@ -493,6 +493,14 @@ namespace pw {
             BasicConnection<Base>(std::move(conn)),
             buf_receiver(std::move(buf_receiver)) {}
 
+        virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
+
+        // This function can optionally do a WebSocket close, but it would only be somewhat graceful
+        int close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
+            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && !ws_closed) ws_close(1001, {});
+            return BasicConnection<Base>::close(protocol_layers);
+        }
+
         using BasicConnection<Base>::send;
 
         virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
@@ -512,14 +520,6 @@ namespace pw {
 
         // Returns a positive integer if a message was received, or zero if the connection closed
         pn::ssize_t recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close = {}, bool handle_pings = true, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
-
-        // This function can optionally do a WebSocket close, but it would only be somewhat graceful
-        int close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
-            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && !ws_closed) ws_close(1001, {});
-            return BasicConnection<Base>::close(protocol_layers);
-        }
-
-        virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
     };
 
     using WSConnection = BasicWSConnection<pn::tcp::Connection>;
