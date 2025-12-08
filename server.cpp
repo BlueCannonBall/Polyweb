@@ -8,9 +8,9 @@
 
 namespace pw {
     template <typename Base>
-    int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> filter, int backlog) {
-        if (Base::listen([this, filter = std::move(filter)](typename Base::connection_type conn) {
-                if (!filter || !filter(conn)) {
+    int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog) {
+        if (Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
+                if (!config_cb || config_cb(conn)) {
                     task_list.insert(thread_pool.schedule([this, conn = std::move(conn)](void* data) mutable {
                         handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
                     },
@@ -27,9 +27,9 @@ namespace pw {
     }
 
     template <>
-    int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&)> filter, int backlog) {
-        if (pn::tcp::SecureServer::listen([this, filter = std::move(filter)](typename pn::tcp::SecureServer::connection_type conn) {
-                if (!filter || !filter(conn)) {
+    int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&)> config_cb, int backlog) {
+        if (pn::tcp::SecureServer::listen([this, config_cb = std::move(config_cb)](typename pn::tcp::SecureServer::connection_type conn) {
+                if (!config_cb || config_cb(conn)) {
                     task_list.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                         if (ssl_ctx && conn.ssl_accept() == PN_ERROR) {
                             return;

@@ -676,8 +676,8 @@ namespace pw {
             ws_routes.erase(target);
         }
 
-        // Warning: filter is called on the LISTENING THREAD, BEFORE ssl_accept
-        int listen(std::function<bool(typename Base::connection_type&)> filter = {}, int backlog = 128);
+        // Returning false from config_cb allows you to reject a connection very early
+        int listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128);
 
     protected:
         std::unordered_map<std::string, http_route_type> http_routes;
