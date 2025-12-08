@@ -4,12 +4,13 @@
 #include <chrono>
 #include <condition_variable>
 #include <exception>
-#include <list>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace tp {
     enum TaskStatus {
@@ -44,7 +45,7 @@ namespace tp {
         mutable std::mutex mutex;
         mutable std::condition_variable cv;
         std::unique_ptr<BasicFunction> func;
-        TaskStatus status_ = TASK_STATUS_RUNNING;
+        TaskStatus status = TASK_STATUS_RUNNING;
         std::exception_ptr exception_ptr;
 
     public:
@@ -57,10 +58,10 @@ namespace tp {
                 func->call();
 
                 std::lock_guard<std::mutex> lock(mutex);
-                status_ = TASK_STATUS_SUCCESS;
+                status = TASK_STATUS_SUCCESS;
             } catch (...) {
                 std::lock_guard<std::mutex> lock(mutex);
-                status_ = TASK_STATUS_FAILURE;
+                status = TASK_STATUS_FAILURE;
                 exception_ptr = std::current_exception();
             }
             cv.notify_all();
@@ -69,81 +70,92 @@ namespace tp {
         TaskStatus wait() const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait(lock, [this]() {
-                return status_ != TASK_STATUS_RUNNING;
+                return status != TASK_STATUS_RUNNING;
             });
-            return status_;
+            return status;
         }
 
         template <typename Rep, typename Period>
         TaskStatus wait_for(const std::chrono::duration<Rep, Period>& time) const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait_for(lock, time, [this]() {
-                return status_ != TASK_STATUS_RUNNING;
+                return status != TASK_STATUS_RUNNING;
             });
-            return status_;
+            return status;
         }
 
         template <typename Clock, typename Duration>
         TaskStatus wait_until(const std::chrono::time_point<Clock, Duration>& time) const {
             std::unique_lock<std::mutex> lock(mutex);
             cv.wait_until(lock, time, [this]() {
-                return status_ != TASK_STATUS_RUNNING;
+                return status != TASK_STATUS_RUNNING;
             });
-            return status_;
+            return status;
         }
 
-        TaskStatus status() const {
+        TaskStatus get_status() const {
             std::lock_guard<std::mutex> lock(mutex);
-            return status_;
+            return status;
         }
 
-        void rethrow_exception() const {
+        std::exception_ptr get_exception_ptr() const {
             std::lock_guard<std::mutex> lock(mutex);
-            std::rethrow_exception(exception_ptr);
+            return exception_ptr;
         }
     };
 
-    class TaskList {
+    class TaskManager {
     protected:
-        std::list<std::weak_ptr<Task>> tasks;
+        std::mutex mutex;
+        std::vector<std::weak_ptr<Task>> tasks;
+        size_t gc_threshold = 64;
 
     public:
-        ~TaskList() {
-            for (const auto& task : tasks) {
-                if (auto task_locked = task.lock()) {
-                    task_locked->wait();
+        ~TaskManager() {
+            for (const auto& weak_task : tasks) {
+                if (auto task = weak_task.lock()) {
+                    task->wait();
                 }
             }
         }
 
         void insert(std::weak_ptr<Task> task) {
+            std::lock_guard<std::mutex> lock(mutex);
             tasks.push_back(std::move(task));
-            tasks.remove_if([](const auto& task) {
-                auto task_locked = task.lock();
-                return !task_locked || task_locked->status() != TASK_STATUS_RUNNING;
-            });
+            if (tasks.size() >= gc_threshold) {
+                tasks.erase(std::remove_if(tasks.begin(), tasks.end(), [](const auto& weak_task) {
+                    auto task = weak_task.lock();
+                    return !task || task->get_status() != TASK_STATUS_RUNNING;
+                }),
+                    tasks.end());
+                gc_threshold = std::max<size_t>(64, tasks.size() * 2);
+            }
         }
     };
 
     class ThreadPool {
     protected:
-        struct ControlBlock {
+        class ControlBlock {
+        public:
             std::mutex mutex;
             std::condition_variable cv;
             std::queue<std::shared_ptr<Task>> queue;
-            unsigned int target_thread_count;
-            unsigned int persistent_thread_count = 0;
-            unsigned int temporary_thread_count = 0;
+            unsigned int thread_count = 0;
+            unsigned int target_thread_count = 0;
             unsigned int busy_thread_count = 0;
+
+            ControlBlock() = default;
+            ControlBlock(unsigned int target_thread_count = std::thread::hardware_concurrency()):
+                target_thread_count(target_thread_count) {}
         };
 
         std::shared_ptr<ControlBlock> control_block;
 
-        static void runner(std::shared_ptr<ControlBlock> control_block) {
+        static void worker(std::shared_ptr<ControlBlock> control_block) {
             std::unique_lock<std::mutex> lock(control_block->mutex);
-            while (control_block->target_thread_count >= control_block->persistent_thread_count) {
+            while (control_block->target_thread_count >= control_block->thread_count) {
                 control_block->cv.wait(lock, [&control_block] {
-                    return !control_block->queue.empty() || control_block->target_thread_count < control_block->persistent_thread_count;
+                    return !control_block->queue.empty() || control_block->target_thread_count < control_block->thread_count;
                 });
 
                 while (!control_block->queue.empty()) {
@@ -157,18 +169,17 @@ namespace tp {
                     --control_block->busy_thread_count;
                 }
             }
-            --control_block->persistent_thread_count;
+            --control_block->thread_count;
             lock.unlock();
             control_block->cv.notify_all();
         }
 
     public:
         ThreadPool(unsigned int size = std::thread::hardware_concurrency()):
-            control_block(std::make_shared<ControlBlock>()) {
-            control_block->target_thread_count = size;
-            while (control_block->persistent_thread_count < control_block->target_thread_count) {
-                ++control_block->persistent_thread_count;
-                std::thread(&ThreadPool::runner, control_block).detach();
+            control_block(std::make_shared<ControlBlock>(size)) {
+            std::lock_guard<std::mutex> lock(control_block->mutex);
+            for (; control_block->thread_count < control_block->target_thread_count; ++control_block->thread_count) {
+                std::thread(&ThreadPool::worker, control_block).detach();
             }
         }
         ThreadPool(const ThreadPool&) = delete;
@@ -182,7 +193,7 @@ namespace tp {
             control_block->target_thread_count = 0;
             control_block->cv.notify_all();
             control_block->cv.wait(lock, [this]() {
-                return !control_block->persistent_thread_count && !control_block->temporary_thread_count;
+                return !control_block->thread_count;
             });
         }
 
@@ -190,18 +201,11 @@ namespace tp {
         std::shared_ptr<Task> schedule(F&& func, bool launch_if_busy = false) {
             auto task = std::make_shared<Task>(std::forward<F>(func));
             std::unique_lock<std::mutex> lock(control_block->mutex);
-            if (launch_if_busy && control_block->busy_thread_count >= control_block->persistent_thread_count) {
-                ++control_block->temporary_thread_count;
+            if (launch_if_busy && control_block->busy_thread_count >= control_block->thread_count) {
                 lock.unlock();
-                std::thread([](std::shared_ptr<ControlBlock> control_block, std::shared_ptr<Task> task) {
+                std::thread([](std::shared_ptr<Task> task) {
                     task->execute();
-
-                    std::unique_lock<std::mutex> lock(control_block->mutex);
-                    --control_block->temporary_thread_count;
-                    lock.unlock();
-                    control_block->cv.notify_all();
                 },
-                    control_block,
                     task)
                     .detach();
             } else {
@@ -220,13 +224,12 @@ namespace tp {
         void resize(unsigned int size) {
             std::unique_lock<std::mutex> lock(control_block->mutex);
             control_block->target_thread_count = size;
-            if (control_block->persistent_thread_count > control_block->target_thread_count) {
+            if (control_block->thread_count > control_block->target_thread_count) {
                 lock.unlock();
                 control_block->cv.notify_all();
             } else {
-                while (control_block->persistent_thread_count < control_block->target_thread_count) {
-                    ++control_block->persistent_thread_count;
-                    std::thread(&ThreadPool::runner, control_block).detach();
+                for (; control_block->thread_count < control_block->target_thread_count; ++control_block->thread_count) {
+                    std::thread(&ThreadPool::worker, control_block).detach();
                 }
             }
         }

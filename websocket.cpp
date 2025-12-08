@@ -68,12 +68,12 @@ namespace pw {
         return ret;
     }
 
-    int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, long frame_rlimit, long message_rlimit) {
+    int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
         data.clear();
         for (bool fin = false; !fin;) {
             char frame_header[2];
             {
-                if (long result = buf_receiver.recvall(conn, frame_header, 2); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, frame_header, 2); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 2) {
@@ -83,7 +83,7 @@ namespace pw {
             }
 
             fin = PW_GET_WS_FRAME_FIN(frame_header);
-            if (ws_opcode_t opcode = PW_GET_WS_FRAME_OPCODE(frame_header); opcode != PW_WS_OPCODE_CONTINUATION) {
+            if (WSOpcode opcode = (WSOpcode) PW_GET_WS_FRAME_OPCODE(frame_header); opcode != WS_OPCODE_CONTINUATION) {
                 this->opcode = opcode;
             }
             bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
@@ -92,7 +92,7 @@ namespace pw {
             uint8_t payload_length_7 = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
             if (payload_length_7 == 126) {
                 uint16_t payload_length_16;
-                if (long result = buf_receiver.recvall(conn, &payload_length_16, 2); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, &payload_length_16, 2); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 2) {
@@ -102,7 +102,7 @@ namespace pw {
                 payload_length = ntohs(payload_length_16);
             } else if (payload_length_7 == 127) {
                 uint64_t payload_length_64;
-                if (long result = buf_receiver.recvall(conn, &payload_length_64, 8); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, &payload_length_64, 8); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 8) {
@@ -116,7 +116,7 @@ namespace pw {
 
             char masking_key[4];
             if (masked) {
-                if (long result = buf_receiver.recvall(conn, &masking_key, 4); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, &masking_key, 4); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 4) {
@@ -132,7 +132,7 @@ namespace pw {
                     return PN_ERROR;
                 }
                 data.resize(end + payload_length);
-                if (long result = buf_receiver.recvall(conn, &data[end], payload_length); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, &data[end], payload_length); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if ((unsigned long long) result != payload_length) {
@@ -167,7 +167,7 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
         HTTPRequest req("GET", std::move(target), std::move(query_parameters), std::move(headers));
 
         if (!req.headers.count("User-Agent")) {
@@ -210,13 +210,13 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers), header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
         URLInfo url_info;
         if (url_info.parse(url) == PN_ERROR) {
             return PN_ERROR;
@@ -230,24 +230,24 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWebSocketClient<Base>::ws_connect(pn::StringView url, HTTPHeaders headers, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int BasicWebSocketClient<Base>::ws_connect(pn::StringView url, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(url, resp, std::move(headers), header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    long long BasicWebSocketClient<Base>::recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close, bool handle_pings, long frame_rlimit, long message_rlimit) {
+    pn::ssize_t BasicWebSocketClient<Base>::recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close, bool handle_pings, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
         for (;;) {
             if (message.parse(*this, buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
 
-            if (handle_pings && message.opcode == PW_WS_OPCODE_PING) {
-                if (send(WSMessage(std::move(message.data), PW_WS_OPCODE_PONG)) == PN_ERROR) {
+            if (handle_pings && message.opcode == WS_OPCODE_PING) {
+                if (send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
                     return PN_ERROR;
                 }
                 continue;
-            } else if (message.opcode == PW_WS_OPCODE_CLOSE) {
+            } else if (message.opcode == WS_OPCODE_CLOSE) {
                 uint16_t status_code = 0;
                 std::string reason;
                 if (message->size() >= 2) {
@@ -268,7 +268,7 @@ namespace pw {
                 return 0;
             }
 
-            return message->size();
+            return 1;
         }
     }
 

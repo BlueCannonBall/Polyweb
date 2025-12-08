@@ -11,7 +11,7 @@ namespace pw {
     int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog) {
         if (Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
-                    task_list.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
+                    task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                         handle_connection(std::move(conn), pn::tcp::BufReceiver(buf_size));
                     },
                         true));
@@ -30,7 +30,7 @@ namespace pw {
     int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&)> config_cb, int backlog) {
         if (pn::tcp::SecureServer::listen([this, config_cb = std::move(config_cb)](typename pn::tcp::SecureServer::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
-                    task_list.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
+                    task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                         if (ssl_ctx && conn.ssl_accept() == PN_ERROR) {
                             return;
                         }
@@ -258,20 +258,22 @@ namespace pw {
             }
 
             switch (message.opcode) {
-            case PW_WS_OPCODE_PING:
-                if (route.handle_pings && conn->send(WSMessage(std::move(message.data), PW_WS_OPCODE_PONG)) == PN_ERROR) {
-                    route.on_close(conn, 0, {}, false);
-                    return PN_ERROR;
+            case WS_OPCODE_PING:
+                if (route.handle_pings) {
+                    if (conn->send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
+                        route.on_close(conn, 0, {}, false);
+                        return PN_ERROR;
+                    }
+                    break;
                 }
-                break;
 
-            case PW_WS_OPCODE_TEXT:
-            case PW_WS_OPCODE_BINARY:
-            case PW_WS_OPCODE_PONG:
+            case WS_OPCODE_TEXT:
+            case WS_OPCODE_BINARY:
+            case WS_OPCODE_PONG:
                 route.on_message(conn, std::move(message));
                 break;
 
-            case PW_WS_OPCODE_CLOSE: {
+            case WS_OPCODE_CLOSE: {
                 uint16_t status_code = 0;
                 std::string reason;
                 if (message->size() >= 2) {
@@ -291,6 +293,10 @@ namespace pw {
                 }
                 return PN_OK;
             }
+
+            default:
+                route.on_close(conn, 0, {}, false);
+                return PN_ERROR;
             }
         }
         return PN_OK;

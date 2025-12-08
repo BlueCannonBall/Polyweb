@@ -92,7 +92,11 @@ namespace pw {
         std::istringstream ss(date);
         ss.imbue(std::locale("C"));
         ss >> std::get_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
+#ifdef _WIN32
+        return _mkgmtime(&timeinfo);
+#else
         return timegm(&timeinfo);
+#endif
     }
 
     std::string base64_encode(const unsigned char* data, size_t size) {
@@ -414,7 +418,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
         method.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -468,7 +472,7 @@ namespace pw {
             headers.insert_or_assign(std::move(header_name), std::move(header_value));
 
             char end_check_buf[2];
-            if (long result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
+            if (pn::ssize_t result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if (result != 2) {
@@ -508,7 +512,7 @@ namespace pw {
                             return PN_ERROR;
                         }
                         body.resize(end + chunk_size);
-                        if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                        if (pn::ssize_t result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PN_ERROR;
                         } else if ((unsigned long long) result != chunk_size) {
@@ -519,7 +523,7 @@ namespace pw {
                     }
 
                     char end_buf[2];
-                    if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
+                    if (pn::ssize_t result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     } else if (result != 2) {
@@ -547,7 +551,7 @@ namespace pw {
                 }
 
                 body.resize(content_length);
-                if (long result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if ((unsigned long long) result != content_length) {
@@ -603,7 +607,7 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, unsigned int header_climit, long header_name_rlimit, long header_value_rlimit, long body_chunk_rlimit, long body_rlimit, long misc_rlimit) {
+    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
         http_version.clear();
         if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
@@ -662,7 +666,7 @@ namespace pw {
             headers.insert_or_assign(std::move(header_name), std::move(header_value));
 
             char end_check_buf[2];
-            if (long result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
+            if (pn::ssize_t result = buf_receiver.recvall(conn, end_check_buf, 2); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if (result != 2) {
@@ -703,7 +707,7 @@ namespace pw {
                                 return PN_ERROR;
                             }
                             body.resize(end + chunk_size);
-                            if (long result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
+                            if (pn::ssize_t result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
                                 detail::set_last_error(PW_ENET);
                                 return PN_ERROR;
                             } else if ((unsigned long long) result != chunk_size) {
@@ -714,7 +718,7 @@ namespace pw {
                         }
 
                         char end_buf[2];
-                        if (long result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
+                        if (pn::ssize_t result = buf_receiver.recvall(conn, end_buf, 2); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PN_ERROR;
                         } else if (result != 2) {
@@ -742,7 +746,7 @@ namespace pw {
                     }
 
                     body.resize(content_length);
-                    if (long result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
+                    if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
                         detail::set_last_error(PW_ENET);
                         return PN_ERROR;
                     } else if ((unsigned long long) result != content_length) {
