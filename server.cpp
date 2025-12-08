@@ -195,7 +195,8 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        return handle_ws_connection(std::make_shared<connection_type>(std::move(conn)), std::move(buf_receiver), std::move(req), route);
+                        route.on_open(ws_connection_type(std::move(conn), std::move(buf_receiver)), std::move(req));
+                        return PN_OK;
                     }
                 } else if (!http_route_target.empty()) {
                     if (handle_error(conn, 400, keep_alive, req.method == "HEAD", req.http_version) == PN_ERROR) {
@@ -239,66 +240,6 @@ namespace pw {
                 }
             }
         } while (conn && keep_alive);
-        return PN_OK;
-    }
-
-    template <typename Base>
-    int BasicServer<Base>::handle_ws_connection(std::shared_ptr<connection_type> conn, pn::tcp::BufReceiver buf_receiver, HTTPRequest req, const ws_route_type& route) const {
-        route.on_open(conn, req);
-        for (;;) {
-            if (!conn) {
-                route.on_close(conn, 0, {}, false);
-                break;
-            }
-
-            WSMessage message;
-            if (message.parse(*conn, buf_receiver, ws_frame_rlimit, ws_message_rlimit) == PN_ERROR) {
-                route.on_close(conn, 0, {}, false);
-                return PN_ERROR;
-            }
-
-            switch (message.opcode) {
-            case WS_OPCODE_PING:
-                if (route.handle_pings) {
-                    if (conn->send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
-                        route.on_close(conn, 0, {}, false);
-                        return PN_ERROR;
-                    }
-                    break;
-                }
-
-            case WS_OPCODE_TEXT:
-            case WS_OPCODE_BINARY:
-            case WS_OPCODE_PONG:
-                route.on_message(conn, std::move(message));
-                break;
-
-            case WS_OPCODE_CLOSE: {
-                uint16_t status_code = 0;
-                std::string reason;
-                if (message->size() >= 2) {
-#if BYTE_ORDER == BIG_ENDIAN
-                    memcpy(&status_code, message->data(), 2);
-#else
-                    reverse_memcpy(&status_code, message->data(), 2);
-#endif
-                    if (message->size() > 2) {
-                        reason.assign(message->begin() + 2, message->end());
-                    }
-                }
-
-                route.on_close(conn, status_code, reason, true);
-                if (!conn->ws_closed && conn->send(message) == PN_ERROR) {
-                    return PN_ERROR;
-                }
-                return PN_OK;
-            }
-
-            default:
-                route.on_close(conn, 0, {}, false);
-                return PN_ERROR;
-            }
-        }
         return PN_OK;
     }
 

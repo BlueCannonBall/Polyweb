@@ -225,7 +225,7 @@ namespace pw {
     std::string percent_decode(pn::StringView str, bool plus_as_space = false);
 
     std::wstring xml_escape(pn::WStringView str);
-    std::string xml_escape(const std::string& str); // Automatically converts std::string to std::wstring and calls the former function
+    std::string xml_escape(const std::string& str);
 
     typedef std::unordered_map<std::string, std::string, string::CaseInsensitiveHasher, string::CaseInsensitiveComparer> HTTPHeaders;
 
@@ -491,15 +491,11 @@ namespace pw {
     template <typename Base>
     class BasicConnection : public Base {
     public:
-        std::mutex mutex;
-        bool ws_closed = false;
-        void* data = nullptr; // User data
-
         template <typename... Args>
         BasicConnection(Args&&... args):
             Base(std::forward<Args>(args)...) {}
 
-        using pn::tcp::Connection::send;
+        using Base::send;
 
         int send(const HTTPRequest& req) {
             auto data = req.build();
@@ -525,10 +521,37 @@ namespace pw {
             return PN_OK;
         }
 
+        int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", bool head_only = false) {
+            return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), head_only);
+        }
+    };
+
+    using Connection = BasicConnection<pn::tcp::Connection>;
+    using SecureConnection = BasicConnection<pn::tcp::SecureConnection>;
+
+    template <typename Base>
+    class BasicWSConnection : public BasicConnection<Base> {
+    protected:
+        std::mutex mutex;
+
+    public:
+        pn::tcp::BufReceiver buf_receiver;
+        bool ws_closed = false;
+
+        template <typename... Args>
+        BasicWSConnection(Args&&... args):
+            BasicConnection<Base>(std::forward<Args>(args)...) {}
+        template <typename... Args>
+        BasicWSConnection(BasicConnection<Base> conn, pn::tcp::BufReceiver buf_receiver):
+            BasicConnection<Base>(std::move(conn)),
+            buf_receiver(std::move(buf_receiver)) {}
+
+        using BasicConnection<Base>::send;
+
         virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
             std::lock_guard<std::mutex> lock(mutex);
-            if (pn::ssize_t result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
+            if (pn::ssize_t result = BasicConnection<Base>::sendall(data.data(), data.size()); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
             } else if ((size_t) result != data.size()) {
@@ -538,24 +561,22 @@ namespace pw {
             return PN_OK;
         }
 
-        int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", bool head_only = false) {
-            return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), head_only);
-        }
+        using BasicConnection<Base>::recv;
+
+        // Returns a positive integer if a message was received, or zero if the connection closed
+        pn::ssize_t recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close = {}, bool handle_pings = true, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
         int close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
             if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && !ws_closed) ws_close(1001, {});
-            return Base::close(protocol_layers);
+            return BasicConnection<Base>::close(protocol_layers);
         }
 
         virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
     };
 
-    using Connection = BasicConnection<pn::tcp::Connection>;
-    using SecureConnection = BasicConnection<pn::tcp::SecureConnection>;
-
-    using Client = BasicConnection<pn::tcp::Client>;
-    using SecureClient = BasicConnection<pn::tcp::SecureClient>;
+    using WSConnection = BasicWSConnection<pn::tcp::Connection>;
+    using SecureWSConnection = BasicWSConnection<pn::tcp::SecureConnection>;
 
     class Route {
     public:
@@ -568,7 +589,7 @@ namespace pw {
     template <typename T>
     class BasicHTTPRoute : public Route {
     public:
-        std::function<HTTPResponse(const T&, const HTTPRequest&)> cb;
+        std::function<HTTPResponse(const BasicConnection<T>&, const HTTPRequest&)> cb;
 
         BasicHTTPRoute() = default;
         BasicHTTPRoute(decltype(cb) cb, bool wildcard = false):
@@ -576,36 +597,27 @@ namespace pw {
             cb(std::move(cb)) {}
     };
 
-    using HTTPRoute = BasicHTTPRoute<Connection>;
-    using SecureHTTPRoute = BasicHTTPRoute<SecureConnection>;
+    using HTTPRoute = BasicHTTPRoute<pn::tcp::Connection>;
+    using SecureHTTPRoute = BasicHTTPRoute<pn::tcp::SecureConnection>;
 
     template <typename T>
     class BasicWSRoute : public Route {
     public:
-        std::function<HTTPResponse(const T&, const HTTPRequest&)> on_connect;
-        std::function<void(std::shared_ptr<T>&, HTTPRequest)> on_open;
-        std::function<void(std::shared_ptr<T>&, WSMessage)> on_message;
-        std::function<void(std::shared_ptr<T>&, uint16_t, pn::StringView, bool clean)> on_close;
-        bool handle_pings = true;
+        std::function<HTTPResponse(const BasicConnection<T>&, const HTTPRequest&)> on_connect;
+        std::function<void(BasicWSConnection<T>, HTTPRequest)> on_open;
 
         BasicWSRoute() = default;
-        BasicWSRoute(decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool handle_pings = true):
+        BasicWSRoute(decltype(on_open) on_open, bool wildcard = false):
             Route(wildcard),
-            on_open(std::move(on_open)),
-            on_message(std::move(on_message)),
-            on_close(std::move(on_close)),
-            handle_pings(handle_pings) {}
-        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, decltype(on_message) on_message, decltype(on_close) on_close, bool wildcard = false, bool handle_pings = true):
+            on_open(std::move(on_open)) {}
+        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, bool wildcard = false, bool handle_pings = true):
             Route(wildcard),
             on_connect(std::move(on_connect)),
-            on_open(std::move(on_open)),
-            on_message(std::move(on_message)),
-            on_close(std::move(on_close)),
-            handle_pings(handle_pings) {}
+            on_open(std::move(on_open)) {}
     };
 
-    using WSRoute = BasicWSRoute<Connection>;
-    using SecureWSRoute = BasicWSRoute<SecureConnection>;
+    using WSRoute = BasicWSRoute<pn::tcp::Connection>;
+    using SecureWSRoute = BasicWSRoute<pn::tcp::SecureConnection>;
 
     template <typename Base>
     class BasicServer : public Base {
@@ -620,13 +632,13 @@ namespace pw {
         pn::ssize_t header_value_rlimit = 4'000'000;
         pn::ssize_t body_chunk_rlimit = 16'000'000;
         pn::ssize_t body_rlimit = 32'000'000;
-        pn::ssize_t ws_frame_rlimit = 16'000'000;
-        pn::ssize_t ws_message_rlimit = 32'000'000;
         pn::ssize_t misc_rlimit = 1'000;
 
         typedef BasicConnection<typename Base::connection_type> connection_type;
-        typedef BasicHTTPRoute<connection_type> http_route_type;
-        typedef BasicWSRoute<connection_type> ws_route_type;
+        typedef BasicWSConnection<typename Base::connection_type> ws_connection_type;
+
+        typedef BasicHTTPRoute<typename Base::connection_type> http_route_type;
+        typedef BasicWSRoute<typename Base::connection_type> ws_route_type;
 
         template <typename... Args>
         BasicServer(Args&&... args):
@@ -656,7 +668,6 @@ namespace pw {
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
         int handle_connection(connection_type conn, pn::tcp::BufReceiver buf_receiver) const;
-        int handle_ws_connection(std::shared_ptr<connection_type> conn, pn::tcp::BufReceiver buf_receiver, HTTPRequest req, const ws_route_type& route) const;
         int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
         int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
     };
@@ -686,6 +697,9 @@ namespace pw {
         int configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const;
     };
 
+    using Client = BasicConnection<pn::tcp::Client>;
+    using SecureClient = BasicConnection<pn::tcp::SecureClient>;
+
     int fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
     int fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
     int fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
@@ -699,55 +713,40 @@ namespace pw {
     int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
-    class BasicWebSocketClient : public BasicConnection<Base> {
+    class BasicWSClient : public BasicWSConnection<Base> {
     public:
-        pn::tcp::BufReceiver buf_receiver;
-
         template <typename... Args>
-        BasicWebSocketClient(Args&&... args):
-            BasicConnection<Base>(std::forward<Args>(args)...) {}
+        BasicWSClient(Args&&... args):
+            BasicWSConnection<Base>(std::forward<Args>(args)...) {}
 
         int ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
         int ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
         int ws_connect(pn::StringView url, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
         int ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
 
-        using BasicConnection<Base>::send;
+        using BasicWSConnection<Base>::send;
 
         int send(const WSMessage& message, const char* masking_key = nullptr) override {
             if (!masking_key) {
                 static constexpr char default_masking_key[4] = {0};
                 masking_key = default_masking_key;
             }
-            return BasicConnection<Base>::send(message, masking_key);
-        }
-
-        using BasicConnection<Base>::recv;
-
-        // Returns a positive integer if a message was received, or zero if the connection closed
-        pn::ssize_t recv(WSMessage& message, const std::function<void(uint16_t, pn::StringView)>& on_close = {}, bool handle_pings = true, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
-
-        int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr) override {
-            if (!masking_key) {
-                static constexpr char masking_key[4] = {0};
-                return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
-            }
-            return BasicConnection<Base>::ws_close(status_code, reason, masking_key);
+            return BasicWSConnection<Base>::send(message, masking_key);
         }
     };
 
-    using WebSocketClient = BasicWebSocketClient<pn::tcp::Client>;
-    using SecureWebSocketClient = BasicWebSocketClient<pn::tcp::SecureClient>;
+    using WSClient = BasicWSClient<pn::tcp::Client>;
+    using SecureWSClient = BasicWSClient<pn::tcp::SecureClient>;
 
-    int make_ws_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_ws_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_ws_client(SecureWebSocketClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_ws_client(SecureWebSocketClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
 
-    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_websocket_client(SecureWebSocketClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    int make_proxied_websocket_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw
 
 #endif

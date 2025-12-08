@@ -7,7 +7,7 @@
 int main() {
     pn::init();
 
-    pw::SecureWebSocketClient client;
+    pw::SecureWSClient client;
     if (pw::make_ws_client(client, "wss://ws.postman-echo.com/raw") == PN_ERROR) {
         std::cerr << "Error: " << pw::universal_strerror() << std::endl;
         return 1;
@@ -25,7 +25,7 @@ int main() {
 
         {
             pw::WSMessage message;
-            if (long long result = client.recv(message); result == PN_ERROR) {
+            if (pn::ssize_t result = client.recv(message); result == PN_ERROR) {
                 std::cerr << "Error: " << pw::universal_strerror() << std::endl;
                 return 1;
             } else if (!result) {
