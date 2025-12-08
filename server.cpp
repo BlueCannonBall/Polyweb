@@ -139,8 +139,8 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        resp.body.clear();
                         resp.headers.erase("Content-Type");
+                        resp.body.clear();
 
                         if (!resp.headers.count("Connection")) {
                             resp.headers["Connection"] = "upgrade";
