@@ -106,12 +106,12 @@ namespace tp {
         }
     };
 
-    class TaskPool {
+    class TaskList {
     protected:
         std::list<std::weak_ptr<Task>> tasks;
 
     public:
-        ~TaskPool() {
+        ~TaskList() {
             for (const auto& task : tasks) {
                 if (auto task_locked = task.lock()) {
                     task_locked->wait();
@@ -119,7 +119,8 @@ namespace tp {
             }
         }
 
-        void insert(std::shared_ptr<Task> task) {
+        void insert(std::weak_ptr<Task> task) {
+            tasks.push_back(std::move(task));
             for (auto it = tasks.begin(); it != tasks.end();) {
                 if (auto task_locked = it->lock(); !task_locked || task_locked->get_status() != TASK_STATUS_RUNNING) {
                     it = tasks.erase(it);
@@ -127,7 +128,6 @@ namespace tp {
                     ++it;
                 }
             }
-            tasks.emplace_back(std::move(task));
         }
     };
 

@@ -617,7 +617,7 @@ namespace pw {
     template <typename Base>
     class BasicServer : public Base {
     protected:
-        tp::TaskPool task_pool;
+        tp::TaskList task_list;
 
     public:
         std::function<HTTPResponse(uint16_t)> on_error;
@@ -645,7 +645,7 @@ namespace pw {
         BasicServer& operator=(BasicServer&& server) noexcept {
             if (this != &server) {
                 Base::operator=(std::move(server));
-                task_pool = std::move(server.task_pool);
+                task_list = std::move(server.task_list);
                 on_error = std::move(server.on_error);
                 buf_size = std::exchange(server.buf_size, 4'000);
                 header_climit = std::exchange(server.header_climit, 100);
