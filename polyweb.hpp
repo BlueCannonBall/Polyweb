@@ -500,7 +500,7 @@ namespace pw {
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
         int close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
-            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && !ws_closed) ws_close(1001, {});
+            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && this->is_valid() && !ws_closed) ws_close(1001, {});
             return BasicConnection<Base>::close(protocol_layers);
         }
 

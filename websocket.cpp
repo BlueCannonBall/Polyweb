@@ -193,9 +193,10 @@ namespace pw {
         }
 
         if (handle_close && message.opcode == WS_OPCODE_CLOSE) {
-            if (!this->ws_closed && send(message) == PN_ERROR) {
+            if (!ws_closed && send(message) == PN_ERROR) {
                 return PN_ERROR;
             }
+            ws_closed = true;
         } else if (handle_pings && message.opcode == WS_OPCODE_PING) {
             if (send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
                 return PN_ERROR;
@@ -207,11 +208,6 @@ namespace pw {
 
     template <typename Base>
     int BasicWSConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
-        if (!this->is_valid()) {
-            ws_closed = true;
-            return PN_OK;
-        }
-
         WSMessage message(WS_OPCODE_CLOSE);
         message->resize(2 + reason.size());
 #if BYTE_ORDER == BIG_ENDIAN
@@ -220,11 +216,9 @@ namespace pw {
         reverse_memcpy(message->data(), &status_code, 2);
 #endif
         memcpy(message->data() + 2, reason.data(), reason.size());
-
         if (send(message, masking_key) == PN_ERROR) {
             return PN_ERROR;
         }
-
         ws_closed = true;
         return PN_OK;
     }
