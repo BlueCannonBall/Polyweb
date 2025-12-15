@@ -200,9 +200,11 @@ namespace pw {
 
     template <typename Base>
     int BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
+        std::unique_lock<std::mutex> lock(recv_mutex);
         if (message.parse(*this, this->buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
+        lock.unlock();
 
         if (handle_close && message.opcode == WS_OPCODE_CLOSE) {
             if (!ws_closed && send(message) == PN_ERROR) {

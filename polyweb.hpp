@@ -499,7 +499,8 @@ namespace pw {
     template <typename Base>
     class BasicWSConnection : public BasicConnection<Base> {
     protected:
-        std::mutex mutex;
+        std::mutex send_mutex;
+        std::mutex recv_mutex;
 
     public:
         bool ws_closed = false;
@@ -531,7 +532,7 @@ namespace pw {
 
         virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
             auto data = message.build(masking_key);
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard<std::mutex> lock(send_mutex);
             if (pn::ssize_t result = BasicConnection<Base>::sendall(data.data(), data.size()); result == PN_ERROR) {
                 detail::set_last_error(PW_ENET);
                 return PN_ERROR;
