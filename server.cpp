@@ -153,7 +153,7 @@ namespace pw {
                             std::vector<std::string> split_websocket_version = string::split_and_trim(websocket_version_it->second, ',');
 
                             bool found_version = false;
-                            for (auto& version : split_websocket_version) {
+                            for (const auto& version : split_websocket_version) {
                                 if (version == PW_WS_VERSION) {
                                     found_version = true;
                                     break;
