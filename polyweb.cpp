@@ -437,7 +437,7 @@ namespace pw {
         throw std::out_of_range("Invalid status code");
     }
 
-    std::vector<char> HTTPRequest::build() const {
+    std::vector<char> HTTPRequest::build(bool head_only) const {
         std::vector<char> ret;
 
         ret.insert(ret.end(), method.begin(), method.end());
@@ -462,14 +462,95 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
         }
 
-        if (!headers.count("Content-Length") && !body.empty()) {
-            std::string header = "Content-Length: " + std::to_string(body.size()) + "\r\n";
-            ret.insert(ret.end(), header.begin(), header.end());
+        if (body_cb) {
+            if (!headers.count("Transfer-Encoding")) {
+                std::string header = "Transfer-Encoding: chunked\r\n";
+                ret.insert(ret.end(), header.begin(), header.end());
+            }
+            ret.insert(ret.end(), {'\r', '\n'});
+
+            if (!head_only) {
+                std::vector<char> chunk;
+                do {
+                    chunk = body_cb();
+
+                    std::ostringstream ss;
+                    ss << std::hex << chunk.size() << "\r\n";
+
+                    std::string str = ss.str();
+                    ret.insert(ret.end(), str.begin(), str.end());
+
+                    ret.insert(ret.end(), chunk.begin(), chunk.end());
+                    ret.insert(ret.end(), {'\r', '\n'});
+                } while (!chunk.empty());
+            }
+        } else {
+            if (!body.empty() && !headers.count("Content-Length")) {
+                std::string header = "Content-Length: " + std::to_string(body.size()) + "\r\n";
+                ret.insert(ret.end(), header.begin(), header.end());
+            }
+            ret.insert(ret.end(), {'\r', '\n'});
+
+            if (!head_only) {
+                ret.insert(ret.end(), body.begin(), body.end());
+            }
         }
-        ret.insert(ret.end(), {'\r', '\n'});
-        ret.insert(ret.end(), body.begin(), body.end());
 
         return ret;
+    }
+
+    int HTTPRequest::build(pn::tcp::Connection& conn, bool head_only) const {
+        auto data = build(true);
+        if (pn::ssize_t result = conn.sendall(data.data(), data.size()); result == PN_ERROR) {
+            detail::set_last_error(PW_ENET);
+            return PN_ERROR;
+        } else if ((size_t) result != data.size()) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        if (!head_only) {
+            if (body_cb) {
+                for (;;) {
+                    auto chunk = body_cb();
+                    if (!chunk.empty()) {
+                        std::ostringstream ss;
+                        ss << std::hex << chunk.size() << "\r\n";
+
+                        std::string chunk_size_string = ss.str();
+                        chunk.insert(chunk.begin(), chunk_size_string.begin(), chunk_size_string.end());
+                        chunk.insert(chunk.end(), {'\r', '\n'});
+                        if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if ((size_t) result != chunk.size()) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
+                    } else {
+                        static constexpr char end_chunk[] = "0\r\n\r\n";
+                        if (pn::ssize_t result = conn.sendall(end_chunk, 5); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if (result != 5) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
+                        break;
+                    }
+                }
+            } else {
+                if (pn::ssize_t result = conn.sendall(body.data(), body.size()); result == PN_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if ((size_t) result != body.size()) {
+                    detail::set_last_error(PW_EWEB);
+                    return PN_ERROR;
+                }
+            }
+        }
+
+        return PN_OK;
     }
 
     int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
@@ -651,14 +732,95 @@ namespace pw {
             ret.insert(ret.end(), header.begin(), header.end());
         }
 
-        if (!headers.count("Content-Length")) {
-            std::string header = "Content-Length: " + std::to_string(body.size()) + "\r\n";
-            ret.insert(ret.end(), header.begin(), header.end());
+        if (body_cb) {
+            if (!headers.count("Transfer-Encoding")) {
+                std::string header = "Transfer-Encoding: chunked\r\n";
+                ret.insert(ret.end(), header.begin(), header.end());
+            }
+            ret.insert(ret.end(), {'\r', '\n'});
+
+            if (!head_only) {
+                std::vector<char> chunk;
+                do {
+                    chunk = body_cb();
+
+                    std::ostringstream ss;
+                    ss << std::hex << chunk.size() << "\r\n";
+
+                    std::string str = ss.str();
+                    ret.insert(ret.end(), str.begin(), str.end());
+
+                    ret.insert(ret.end(), chunk.begin(), chunk.end());
+                    ret.insert(ret.end(), {'\r', '\n'});
+                } while (!chunk.empty());
+            }
+        } else {
+            if (!headers.count("Content-Length")) {
+                std::string header = "Content-Length: " + std::to_string(body.size()) + "\r\n";
+                ret.insert(ret.end(), header.begin(), header.end());
+            }
+            ret.insert(ret.end(), {'\r', '\n'});
+
+            if (!head_only) {
+                ret.insert(ret.end(), body.begin(), body.end());
+            }
         }
-        ret.insert(ret.end(), {'\r', '\n'});
-        if (!head_only) ret.insert(ret.end(), body.begin(), body.end());
 
         return ret;
+    }
+
+    int HTTPResponse::build(pn::tcp::Connection& conn, bool head_only) const {
+        auto data = build(true);
+        if (pn::ssize_t result = conn.sendall(data.data(), data.size()); result == PN_ERROR) {
+            detail::set_last_error(PW_ENET);
+            return PN_ERROR;
+        } else if ((size_t) result != data.size()) {
+            detail::set_last_error(PW_EWEB);
+            return PN_ERROR;
+        }
+
+        if (!head_only) {
+            if (body_cb) {
+                for (;;) {
+                    auto chunk = body_cb();
+                    if (!chunk.empty()) {
+                        std::ostringstream ss;
+                        ss << std::hex << chunk.size() << "\r\n";
+
+                        std::string chunk_size_string = ss.str();
+                        chunk.insert(chunk.begin(), chunk_size_string.begin(), chunk_size_string.end());
+                        chunk.insert(chunk.end(), {'\r', '\n'});
+                        if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if ((size_t) result != chunk.size()) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
+                    } else {
+                        static constexpr char end_chunk[] = "0\r\n\r\n";
+                        if (pn::ssize_t result = conn.sendall(end_chunk, 5); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if (result != 5) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
+                        break;
+                    }
+                }
+            } else {
+                if (pn::ssize_t result = conn.sendall(body.data(), body.size()); result == PN_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if ((size_t) result != body.size()) {
+                    detail::set_last_error(PW_EWEB);
+                    return PN_ERROR;
+                }
+            }
+        }
+
+        return PN_OK;
     }
 
     int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {

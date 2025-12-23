@@ -4,27 +4,27 @@
 int main() {
     pn::init();
 
-    pw::SecureServer server;
+    pw::Server server;
 
     server.route("/hello_world",
-        pw::SecureHTTPRoute {
-            [](const pw::SecureConnection& conn, const pw::HTTPRequest& req) {
+        pw::HTTPRoute {
+            [](const pw::Connection& conn, const pw::HTTPRequest& req) {
                 return pw::HTTPResponse(200, "Hello, World!", {{"Content-Type", "text/plain"}});
             },
         });
 
     // Since this is a wildcard route, anything may come after /wildcard/
     server.route("/wildcard/",
-        pw::SecureHTTPRoute {
-            [](const pw::SecureConnection& conn, const pw::HTTPRequest& req) {
+        pw::HTTPRoute {
+            [](const pw::Connection& conn, const pw::HTTPRequest& req) {
                 return pw::HTTPResponse(200, req.target, {{"Content-Type", "text/plain"}});
             },
             true,
         });
 
     server.route("/multiply",
-        pw::SecureHTTPRoute {
-            [](const pw::SecureConnection& conn, const pw::HTTPRequest& req) {
+        pw::HTTPRoute {
+            [](const pw::Connection& conn, const pw::HTTPRequest& req) {
                 int x = std::stoi(req.query_parameters->find("x")->second);
                 int y = std::stoi(req.query_parameters->find("y")->second);
                 return pw::HTTPResponse(200, std::to_string(x * y), {{"Content-Type", "text/plain"}});
@@ -32,8 +32,8 @@ int main() {
         });
 
     server.route("/stream",
-        pw::SecureHTTPRoute {
-            [](const pw::SecureConnection& conn, const pw::HTTPRequest& req) {
+        pw::HTTPRoute {
+            [](const pw::Connection& conn, const pw::HTTPRequest& req) {
                 return pw::HTTPResponse(200, [i = 0]() mutable -> std::vector<char> {
                     if (i < 10) {
                         std::string str = std::to_string(i++);
@@ -44,11 +44,7 @@ int main() {
             },
         });
 
-    if (server.bind("0.0.0.0", 443) == PN_ERROR) {
-        std::cerr << "Error: " << pn::universal_strerror() << std::endl;
-        return 1;
-    }
-    if (server.ssl_init("cert.pem", "key.pem", SSL_FILETYPE_PEM) == PN_ERROR) {
+    if (server.bind("0.0.0.0", 8000) == PN_ERROR) {
         std::cerr << "Error: " << pn::universal_strerror() << std::endl;
         return 1;
     }

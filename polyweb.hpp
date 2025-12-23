@@ -284,6 +284,7 @@ namespace pw {
         std::string target;
         HTTPHeaders headers;
         std::vector<char> body;
+        std::function<std::vector<char>()> body_cb;
         QueryParameters query_parameters;
         std::string http_version = "HTTP/1.1";
 
@@ -305,6 +306,12 @@ namespace pw {
             headers(std::move(headers)),
             body(body.begin(), body.end()),
             http_version(std::move(http_version)) {}
+        HTTPRequest(std::string method, std::string target, decltype(body_cb) body_cb, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+            method(std::move(method)),
+            target(std::move(target)),
+            headers(std::move(headers)),
+            body_cb(std::move(body_cb)),
+            http_version(std::move(http_version)) {}
         HTTPRequest(std::string method, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             method(std::move(method)),
             target(std::move(target)),
@@ -312,10 +319,11 @@ namespace pw {
             query_parameters(std::move(query_parameters)),
             http_version(std::move(http_version)) {}
 
-        std::vector<char> build() const;
+        std::vector<char> build(bool head_only = false) const;
+        int build(pn::tcp::Connection& conn, bool head_only = false) const;
 
-        std::string build_string() const {
-            std::vector<char> ret = build();
+        std::string build_string(bool head_only = false) const {
+            std::vector<char> ret = build(head_only);
             return std::string(ret.begin(), ret.end());
         }
 
@@ -338,6 +346,7 @@ namespace pw {
         uint16_t status_code;
         std::string reason_phrase;
         std::vector<char> body;
+        std::function<std::vector<char>()> body_cb;
         HTTPHeaders headers;
         std::string http_version = "HTTP/1.1";
 
@@ -359,6 +368,12 @@ namespace pw {
             body(body.begin(), body.end()),
             headers(std::move(headers)),
             http_version(std::move(http_version)) {}
+        HTTPResponse(uint16_t status_code, decltype(body_cb) body_cb, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+            status_code(status_code),
+            reason_phrase(status_code_to_reason_phrase(status_code)),
+            body_cb(std::move(body_cb)),
+            headers(std::move(headers)),
+            http_version(std::move(http_version)) {}
 
         static HTTPResponse make_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1") {
             HTTPResponse resp(status_code, std::to_string(status_code) + ' ' + status_code_to_reason_phrase(status_code), std::move(headers), std::move(http_version));
@@ -369,6 +384,7 @@ namespace pw {
         }
 
         std::vector<char> build(bool head_only = false) const;
+        int build(pn::tcp::Connection& conn, bool head_only = false) const;
 
         std::string build_string(bool head_only = false) const {
             std::vector<char> ret = build(head_only);
@@ -397,16 +413,16 @@ namespace pw {
 
     class WSMessage {
     public:
-        std::vector<char> data;
         WSOpcode opcode = WS_OPCODE_BINARY;
+        std::vector<char> data;
 
         WSMessage() = default;
         WSMessage(pn::StringView str, WSOpcode opcode = WS_OPCODE_TEXT):
-            data(str.begin(), str.end()),
-            opcode(opcode) {}
+            opcode(opcode),
+            data(str.begin(), str.end()) {}
         WSMessage(std::vector<char> data, WSOpcode opcode = WS_OPCODE_BINARY):
-            data(std::move(data)),
-            opcode(opcode) {}
+            opcode(opcode),
+            data(std::move(data)) {}
         WSMessage(WSOpcode opcode):
             opcode(opcode) {}
 
@@ -429,6 +445,7 @@ namespace pw {
         }
 
         std::vector<char> build(const char* masking_key = nullptr) const;
+
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
 
         std::string to_string() const {
@@ -454,28 +471,12 @@ namespace pw {
 
         using Base::send;
 
-        int send(const HTTPRequest& req) {
-            auto data = req.build();
-            if (pn::ssize_t result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            } else if ((size_t) result != data.size()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-            return PN_OK;
+        int send(const HTTPRequest& req, bool head_only = false) {
+            return req.build(*this, head_only);
         }
 
         int send(const HTTPResponse& resp, bool head_only = false) {
-            auto data = resp.build(head_only);
-            if (pn::ssize_t result = Base::sendall(data.data(), data.size()); result == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            } else if ((size_t) result != data.size()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-            return PN_OK;
+            return resp.build(*this, head_only);
         }
 
         int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", bool head_only = false) {
