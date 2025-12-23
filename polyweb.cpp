@@ -470,19 +470,20 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
 
             if (!head_only) {
-                std::vector<char> chunk;
-                do {
-                    chunk = body_cb();
-
-                    std::ostringstream ss;
-                    ss << std::hex << chunk.size() << "\r\n";
-
-                    std::string str = ss.str();
-                    ret.insert(ret.end(), str.begin(), str.end());
-
-                    ret.insert(ret.end(), chunk.begin(), chunk.end());
-                    ret.insert(ret.end(), {'\r', '\n'});
-                } while (!chunk.empty());
+                for (;;) {
+                    if (auto chunk = body_cb(); !chunk.empty()) {
+                        std::ostringstream ss;
+                        ss << std::hex << chunk.size() << "\r\n";
+                        std::string str = ss.str();
+                        ret.insert(ret.end(), str.begin(), str.end());
+                        ret.insert(ret.end(), chunk.begin(), chunk.end());
+                        ret.insert(ret.end(), {'\r', '\n'});
+                    } else {
+                        static constexpr char end_chunk[] = "0\r\n\r\n";
+                        ret.insert(ret.end(), end_chunk, end_chunk + 5);
+                        break;
+                    }
+                }
             }
         } else {
             if (!body.empty() && !headers.count("Content-Length")) {
@@ -516,9 +517,8 @@ namespace pw {
                     if (!chunk.empty()) {
                         std::ostringstream ss;
                         ss << std::hex << chunk.size() << "\r\n";
-
-                        std::string chunk_size_string = ss.str();
-                        chunk.insert(chunk.begin(), chunk_size_string.begin(), chunk_size_string.end());
+                        std::string str = ss.str();
+                        chunk.insert(chunk.begin(), str.begin(), str.end());
                         chunk.insert(chunk.end(), {'\r', '\n'});
                         if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
@@ -740,19 +740,20 @@ namespace pw {
             ret.insert(ret.end(), {'\r', '\n'});
 
             if (!head_only) {
-                std::vector<char> chunk;
-                do {
-                    chunk = body_cb();
-
-                    std::ostringstream ss;
-                    ss << std::hex << chunk.size() << "\r\n";
-
-                    std::string str = ss.str();
-                    ret.insert(ret.end(), str.begin(), str.end());
-
-                    ret.insert(ret.end(), chunk.begin(), chunk.end());
-                    ret.insert(ret.end(), {'\r', '\n'});
-                } while (!chunk.empty());
+                for (;;) {
+                    if (auto chunk = body_cb(); !chunk.empty()) {
+                        std::ostringstream ss;
+                        ss << std::hex << chunk.size() << "\r\n";
+                        std::string str = ss.str();
+                        ret.insert(ret.end(), str.begin(), str.end());
+                        ret.insert(ret.end(), chunk.begin(), chunk.end());
+                        ret.insert(ret.end(), {'\r', '\n'});
+                    } else {
+                        static constexpr char end_chunk[] = "0\r\n\r\n";
+                        ret.insert(ret.end(), end_chunk, end_chunk + 5);
+                        break;
+                    }
+                }
             }
         } else {
             if (!headers.count("Content-Length")) {
@@ -786,9 +787,8 @@ namespace pw {
                     if (!chunk.empty()) {
                         std::ostringstream ss;
                         ss << std::hex << chunk.size() << "\r\n";
-
-                        std::string chunk_size_string = ss.str();
-                        chunk.insert(chunk.begin(), chunk_size_string.begin(), chunk_size_string.end());
+                        std::string str = ss.str();
+                        chunk.insert(chunk.begin(), str.begin(), str.end());
                         chunk.insert(chunk.end(), {'\r', '\n'});
                         if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
