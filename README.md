@@ -41,7 +41,8 @@ server.route("/stream",
                     return std::vector<char>(str.begin(), str.end());
                 }
                 return {};
-            });
+            },
+                {{"Content-Type", "text/plain"}});
         },
     });
 

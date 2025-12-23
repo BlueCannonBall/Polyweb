@@ -40,7 +40,8 @@ int main() {
                         return std::vector<char>(str.begin(), str.end());
                     }
                     return {};
-                });
+                },
+                    {{"Content-Type", "text/plain"}});
             },
         });
 
