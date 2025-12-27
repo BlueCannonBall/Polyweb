@@ -32,7 +32,7 @@ server.route("/multiply",
         },
     });
 
-server.route("/stream",
+server.route("/send_stream",
     pw::HTTPRoute {
         [](const pw::Connection& conn, const pw::HTTPRequest& req) {
             return pw::HTTPResponse(200, [i = 0]() mutable -> std::vector<char> {
@@ -44,6 +44,24 @@ server.route("/stream",
             },
                 {{"Content-Type", "text/plain"}});
         },
+    });
+
+server.route("/recv_stream",
+    pw::HTTPRoute {
+        [](pw::Connection& conn, pw::HTTPRequest req) {
+            std::vector<char> body;
+            req.recv_cb = [&body](std::vector<char> chunk) {
+                body.insert(body.end(), chunk.begin(), chunk.end());
+                return true;
+            };
+            if (conn.recv(req, PW_HTTP_MESSAGE_PART_BODY) == PN_ERROR) {
+                return pw::HTTPResponse(500, pw::universal_strerror());
+            }
+
+            return pw::HTTPResponse(200, body);
+        },
+        false,
+        false, // tells Polyweb not to parse the body
     });
 
 if (server.bind("0.0.0.0", 8000) == PN_ERROR) {

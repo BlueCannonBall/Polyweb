@@ -41,7 +41,7 @@ namespace pw {
 
     int fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
         if (!req.headers.count("User-Agent")) {
-            req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
+            req.headers["User-Agent"] = PW_AGENT_NAME;
         }
         if (!req.headers.count("Host")) {
             unsigned short default_port[2] = {80, 443};
@@ -76,7 +76,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (client.recv(resp, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            if (client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         } else {
@@ -93,7 +93,7 @@ namespace pw {
                 return PN_ERROR;
             }
 
-            if (client.recv(resp, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+            if (client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
                 return PN_ERROR;
             }
         }
@@ -186,7 +186,7 @@ namespace pw {
         }
 
         if (!req.headers.count("User-Agent")) {
-            req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
+            req.headers["User-Agent"] = PW_AGENT_NAME;
         }
         if (!req.headers.count("Host")) {
             unsigned short default_port[2] = {80, 443};
@@ -236,7 +236,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        if (client.recv(resp, req.method == "HEAD", config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+        if (client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
 

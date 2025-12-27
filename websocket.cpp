@@ -234,7 +234,7 @@ namespace pw {
         HTTPRequest req("GET", std::move(target), std::move(query_parameters), std::move(headers));
 
         if (!req.headers.count("User-Agent")) {
-            req.headers["User-Agent"] = PW_SERVER_CLIENT_NAME;
+            req.headers["User-Agent"] = PW_AGENT_NAME;
         }
         if (!req.headers.count("Host")) {
             unsigned short default_port[2] = {80, 443};

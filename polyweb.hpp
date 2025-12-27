@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#define PW_SERVER_CLIENT_NAME "Polyweb"
+#define PW_AGENT_NAME "Polyweb"
 
 // Errors
 #define PW_ESUCCESS 0
@@ -28,6 +28,14 @@
 
 // Protocol layers
 #define PW_PROTOCOL_LAYER_WS (1 << 16)
+
+// HTTP macros
+#define PW_HTTP_MESSAGE_PART_NONE       0
+#define PW_HTTP_MESSAGE_PART_START_LINE 0b001
+#define PW_HTTP_MESSAGE_PART_HEADERS    0b010
+#define PW_HTTP_MESSAGE_PART_HEAD       0b011
+#define PW_HTTP_MESSAGE_PART_BODY       0b100
+#define PW_HTTP_MESSAGE_PART_ALL        0b111
 
 // WebSocket macros
 #define PW_WS_VERSION "13"
@@ -172,6 +180,8 @@ namespace pw {
     std::wstring xml_escape(pn::WStringView str);
     std::string xml_escape(const std::string& str);
 
+    std::string status_code_to_reason_phrase(uint16_t status_code);
+
     typedef std::unordered_map<std::string, std::string, string::CaseInsensitiveHasher, string::CaseInsensitiveComparer> HTTPHeaders;
 
     class QueryParameters {
@@ -276,15 +286,14 @@ namespace pw {
         return is;
     }
 
-    std::string status_code_to_reason_phrase(uint16_t status_code);
-
     class HTTPRequest {
     public:
         std::string method;
         std::string target;
         HTTPHeaders headers;
         std::vector<char> body;
-        std::function<std::vector<char>()> body_cb;
+        std::function<std::vector<char>()> send_cb;
+        std::function<bool(std::vector<char>)> recv_cb;
         QueryParameters query_parameters;
         std::string http_version = "HTTP/1.1";
 
@@ -306,11 +315,11 @@ namespace pw {
             headers(std::move(headers)),
             body(body.begin(), body.end()),
             http_version(std::move(http_version)) {}
-        HTTPRequest(std::string method, std::string target, decltype(body_cb) body_cb, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+        HTTPRequest(std::string method, std::string target, decltype(send_cb) body_cb, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             method(std::move(method)),
             target(std::move(target)),
             headers(std::move(headers)),
-            body_cb(std::move(body_cb)),
+            send_cb(std::move(body_cb)),
             http_version(std::move(http_version)) {}
         HTTPRequest(std::string method, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             method(std::move(method)),
@@ -319,15 +328,15 @@ namespace pw {
             query_parameters(std::move(query_parameters)),
             http_version(std::move(http_version)) {}
 
-        std::vector<char> build(bool head_only = false) const;
-        int build(pn::tcp::Connection& conn, bool head_only = false) const;
+        std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL) const;
+        int build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
 
-        std::string build_string(bool head_only = false) const {
-            std::vector<char> ret = build(head_only);
+        std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) const {
+            std::vector<char> ret = build(parts);
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
 
         std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -346,7 +355,8 @@ namespace pw {
         uint16_t status_code;
         std::string reason_phrase;
         std::vector<char> body;
-        std::function<std::vector<char>()> body_cb;
+        std::function<std::vector<char>()> send_cb;
+        std::function<bool(std::vector<char>)> recv_cb;
         HTTPHeaders headers;
         std::string http_version = "HTTP/1.1";
 
@@ -368,10 +378,10 @@ namespace pw {
             body(body.begin(), body.end()),
             headers(std::move(headers)),
             http_version(std::move(http_version)) {}
-        HTTPResponse(uint16_t status_code, decltype(body_cb) body_cb, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
+        HTTPResponse(uint16_t status_code, decltype(send_cb) send_cb, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1"):
             status_code(status_code),
             reason_phrase(status_code_to_reason_phrase(status_code)),
-            body_cb(std::move(body_cb)),
+            send_cb(std::move(send_cb)),
             headers(std::move(headers)),
             http_version(std::move(http_version)) {}
 
@@ -383,15 +393,15 @@ namespace pw {
             return resp;
         }
 
-        std::vector<char> build(bool head_only = false) const;
-        int build(pn::tcp::Connection& conn, bool head_only = false) const;
+        std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL) const;
+        int build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
 
-        std::string build_string(bool head_only = false) const {
-            std::vector<char> ret = build(head_only);
+        std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) const {
+            std::vector<char> ret = build(parts);
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, bool head_only = false, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
+        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
 
         std::string body_string() const {
             return std::string(body.begin(), body.end());
@@ -471,26 +481,26 @@ namespace pw {
 
         using Base::send;
 
-        int send(const HTTPRequest& req, bool head_only = false) {
-            return req.build(*this, head_only);
+        int send(const HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+            return req.build(*this, parts);
         }
 
-        int send(const HTTPResponse& resp, bool head_only = false) {
-            return resp.build(*this, head_only);
+        int send(const HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+            return resp.build(*this, parts);
         }
 
-        int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", bool head_only = false) {
-            return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), head_only);
+        int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", int parts = PW_HTTP_MESSAGE_PART_ALL) {
+            return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), parts);
         }
 
         using Base::recv;
 
-        int recv(HTTPRequest& req, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
-            return req.parse(*this, buf_receiver, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        int recv(HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
+            return req.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
 
-        int recv(HTTPResponse& resp, bool head_only = false, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
-            return resp.parse(*this, buf_receiver, head_only, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        int recv(HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
+            return resp.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
     };
 
@@ -554,7 +564,7 @@ namespace pw {
 
     class Route {
     public:
-        bool wildcard = false;
+        bool wildcard;
 
         Route(bool wildcard = false):
             wildcard(wildcard) {}
@@ -563,12 +573,14 @@ namespace pw {
     template <typename T>
     class BasicHTTPRoute : public Route {
     public:
-        std::function<HTTPResponse(const BasicConnection<T>&, const HTTPRequest&)> cb;
+        std::function<HTTPResponse(BasicConnection<T>&, HTTPRequest)> cb;
+        bool parse_body = true;
 
         BasicHTTPRoute() = default;
-        BasicHTTPRoute(decltype(cb) cb, bool wildcard = false):
+        BasicHTTPRoute(decltype(cb) cb, bool wildcard = false, bool parse_body = true):
             Route(wildcard),
-            cb(std::move(cb)) {}
+            cb(std::move(cb)),
+            parse_body(parse_body) {}
     };
 
     using HTTPRoute = BasicHTTPRoute<pn::tcp::Connection>;
@@ -642,8 +654,8 @@ namespace pw {
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
         int handle_conn(connection_type conn) const;
-        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, bool head_only = false, std::string http_version = "HTTP/1.1") const;
-        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, bool head_only = false, std::string http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
     };
 
     using Server = BasicServer<pn::tcp::Server>;
