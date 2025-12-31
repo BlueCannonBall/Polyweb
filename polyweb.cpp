@@ -1,6 +1,7 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <bitset>
+#include <charconv>
 #include <codecvt>
 #include <iomanip>
 #include <iterator>
@@ -649,25 +650,29 @@ namespace pw {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
-
-                        if (std::istringstream ss(chunk_size_string);
-                            !(ss >> std::hex >> chunk_size) || chunk_size > (unsigned long long) body_chunk_rlimit) {
+                        if (auto result = std::from_chars(chunk_size_string.data(), chunk_size_string.data() + chunk_size_string.size(), chunk_size, 16);
+                            result.ec != std::errc {} || result.ptr != chunk_size_string.data() + chunk_size_string.size()) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
-                        } else if (chunk_size) {
+                        }
+
+                        if (chunk_size) {
                             if (recv_cb) {
-                                std::vector<char> chunk(chunk_size);
-                                if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk_size); result == PN_ERROR) {
-                                    detail::set_last_error(PW_ENET);
-                                    return PN_ERROR;
-                                } else if ((unsigned long long) result != chunk_size) {
-                                    detail::set_last_error(PW_EWEB);
-                                    chunk.resize(result);
-                                    return PN_ERROR;
-                                }
-                                if (!recv_cb(std::move(chunk))) {
-                                    detail::set_last_error(PW_EWEB);
-                                    return PN_ERROR;
+                                for (size_t received = 0; received < chunk_size;) {
+                                    std::vector<char> chunk(std::min<size_t>(chunk_size - received, body_chunk_rlimit));
+                                    if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
+                                        detail::set_last_error(PW_ENET);
+                                        return PN_ERROR;
+                                    } else if ((unsigned long long) result != chunk.size()) {
+                                        detail::set_last_error(PW_EWEB);
+                                        return PN_ERROR;
+                                    }
+
+                                    received += chunk.size();
+                                    if (!recv_cb(std::move(chunk))) {
+                                        detail::set_last_error(PW_EWEB);
+                                        return PN_ERROR;
+                                    }
                                 }
                             } else {
                                 size_t end = body.size();
@@ -709,25 +714,29 @@ namespace pw {
                     return PN_ERROR;
                 }
 
-                if (content_length > (unsigned long long) body_rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (content_length) {
+                if (content_length) {
                     if (recv_cb) {
-                        std::vector<char> chunk(content_length);
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), content_length); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != content_length) {
-                            detail::set_last_error(PW_EWEB);
-                            chunk.resize(result);
-                            return PN_ERROR;
-                        }
-                        if (!recv_cb(std::move(chunk))) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        for (size_t received = 0; received < content_length;) {
+                            std::vector<char> chunk(std::min<size_t>(content_length - received, body_chunk_rlimit));
+                            if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
+                                detail::set_last_error(PW_ENET);
+                                return PN_ERROR;
+                            } else if ((unsigned long long) result != chunk.size()) {
+                                detail::set_last_error(PW_EWEB);
+                                return PN_ERROR;
+                            }
+
+                            received += chunk.size();
+                            if (!recv_cb(std::move(chunk))) {
+                                detail::set_last_error(PW_EWEB);
+                                return PN_ERROR;
+                            }
                         }
                     } else {
+                        if (content_length > (unsigned long long) body_rlimit) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
                         body.resize(content_length);
                         if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
@@ -951,25 +960,29 @@ namespace pw {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
-
-                        if (std::istringstream ss(chunk_size_string);
-                            !(ss >> std::hex >> chunk_size) || chunk_size > (unsigned long long) body_chunk_rlimit) {
+                        if (auto result = std::from_chars(chunk_size_string.data(), chunk_size_string.data() + chunk_size_string.size(), chunk_size, 16);
+                            result.ec != std::errc {} || result.ptr != chunk_size_string.data() + chunk_size_string.size()) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
-                        } else if (chunk_size) {
+                        }
+
+                        if (chunk_size) {
                             if (recv_cb) {
-                                std::vector<char> chunk(chunk_size);
-                                if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk_size); result == PN_ERROR) {
-                                    detail::set_last_error(PW_ENET);
-                                    return PN_ERROR;
-                                } else if ((unsigned long long) result != chunk_size) {
-                                    detail::set_last_error(PW_EWEB);
-                                    chunk.resize(result);
-                                    return PN_ERROR;
-                                }
-                                if (!recv_cb(std::move(chunk))) {
-                                    detail::set_last_error(PW_EWEB);
-                                    return PN_ERROR;
+                                for (size_t received = 0; received < chunk_size;) {
+                                    std::vector<char> chunk(std::min<size_t>(chunk_size - received, body_chunk_rlimit));
+                                    if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
+                                        detail::set_last_error(PW_ENET);
+                                        return PN_ERROR;
+                                    } else if ((unsigned long long) result != chunk.size()) {
+                                        detail::set_last_error(PW_EWEB);
+                                        return PN_ERROR;
+                                    }
+
+                                    received += chunk.size();
+                                    if (!recv_cb(std::move(chunk))) {
+                                        detail::set_last_error(PW_EWEB);
+                                        return PN_ERROR;
+                                    }
                                 }
                             } else {
                                 size_t end = body.size();
@@ -1011,25 +1024,29 @@ namespace pw {
                     return PN_ERROR;
                 }
 
-                if (content_length > (unsigned long long) body_rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                } else if (content_length) {
+                if (content_length) {
                     if (recv_cb) {
-                        std::vector<char> chunk(content_length);
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), content_length); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != content_length) {
-                            detail::set_last_error(PW_EWEB);
-                            chunk.resize(result);
-                            return PN_ERROR;
-                        }
-                        if (!recv_cb(std::move(chunk))) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        for (size_t received = 0; received < content_length;) {
+                            std::vector<char> chunk(std::min<size_t>(content_length - received, body_chunk_rlimit));
+                            if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
+                                detail::set_last_error(PW_ENET);
+                                return PN_ERROR;
+                            } else if ((unsigned long long) result != chunk.size()) {
+                                detail::set_last_error(PW_EWEB);
+                                return PN_ERROR;
+                            }
+
+                            received += chunk.size();
+                            if (!recv_cb(std::move(chunk))) {
+                                detail::set_last_error(PW_EWEB);
+                                return PN_ERROR;
+                            }
                         }
                     } else {
+                        if (content_length > (unsigned long long) body_rlimit) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
                         body.resize(content_length);
                         if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
