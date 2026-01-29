@@ -1,3 +1,4 @@
+#include "binary.hpp"
 #include "polyweb.hpp"
 #include <string.h>
 #ifdef POLYWEB_SIMD
@@ -5,130 +6,240 @@
 #endif
 
 namespace pw {
+    namespace detail {
+        void apply_mask(char* dest, const char* src, size_t len, const char* key) {
+            size_t i = 0;
+#ifdef POLYWEB_SIMD
+            int32_t masking_key_int;
+            memcpy(&masking_key_int, key, 4);
+            __m256i mask_vec256 = _mm256_set1_epi32(masking_key_int);
+            for (; i + 32 <= len; i += 32) {
+                __m256i src_v = _mm256_loadu_si256((const __m256i_u*) &src[i]);
+                _mm256_storeu_si256((__m256i_u*) &dest[i], _mm256_xor_si256(src_v, mask_vec256));
+            }
+            __m128i mask_vec128 = _mm_set1_epi32(masking_key_int);
+            for (; i + 16 <= len; i += 16) {
+                __m128i src_v = _mm_loadu_si128((const __m128i_u*) &src[i]);
+                _mm_storeu_si128((__m128i_u*) &dest[i], _mm_xor_si128(src_v, mask_vec128));
+            }
+#endif
+            for (; i < len; ++i) {
+                dest[i] = src[i] ^ key[i % 4];
+            }
+        }
+
+        void apply_mask(char* buf, size_t len, const char* key) {
+            apply_mask(buf, buf, len, key);
+        }
+    } // namespace detail
+
     WSMessage WSMessage::make_close(uint16_t status_code, pn::StringView reason) {
         WSMessage ret(WS_OPCODE_CLOSE);
         ret->resize(2 + reason.size());
-#if BYTE_ORDER == BIG_ENDIAN
-        memcpy(message->data(), &status_code, 2);
-#else
-        reverse_memcpy(ret->data(), &status_code, 2);
-#endif
+        binary::write(ret->begin(), status_code);
         memcpy(ret->data() + 2, reason.data(), reason.size());
         return ret;
     }
 
     std::vector<char> WSMessage::build(const char* masking_key) const {
-        std::vector<char> ret(2);
+        std::vector<char> ret;
 
-        PW_SET_WS_FRAME_FIN(ret);
-        PW_CLEAR_WS_FRAME_RSV1(ret);
-        PW_CLEAR_WS_FRAME_RSV2(ret);
-        PW_CLEAR_WS_FRAME_RSV3(ret);
-        PW_SET_WS_FRAME_OPCODE(ret, opcode);
+        auto write_frame = [this, masking_key, &ret](std::span<const char> chunk, bool is_first, bool is_final) {
+            ret.push_back((is_final ? 0x80 : 0x00) | (is_first ? opcode : WS_OPCODE_CONTINUATION));
 
-        if (data.size() < 126) {
-            PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, data.size());
-        } else if (data.size() <= UINT16_MAX) {
-            PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 126);
-            ret.resize(4);
-            uint16_t size_16 = data.size();
-#if BYTE_ORDER == BIG_ENDIAN
-            memcpy(ret.data() + 2, &size_16, 2);
-#else
-            reverse_memcpy(ret.data() + 2, &size_16, 2);
-#endif
-        } else {
-            PW_SET_WS_FRAME_PAYLOAD_LENGTH(ret, 127);
-            ret.resize(10);
-            uint64_t size_64 = data.size();
-#if BYTE_ORDER == BIG_ENDIAN
-            memcpy(ret.data() + 2, &size_64, 8);
-#else
-            reverse_memcpy(ret.data() + 2, &size_64, 8);
-#endif
-        }
-
-        if (masking_key) {
-            PW_SET_WS_FRAME_MASKED(ret);
-            size_t end = ret.size();
-            ret.resize(end + 4 + data.size());
-            memcpy(&ret[end], masking_key, 4);
-
-            size_t i = 0;
-#ifdef POLYWEB_SIMD
-            int32_t masking_key_int;
-            memcpy(&masking_key_int, masking_key, 4);
-            for (__m256i mask_vec = _mm256_set1_epi32(masking_key_int); i + 32 <= data.size(); i += 32) {
-                __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[i]);
-                __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
-                _mm256_storeu_si256((__m256i_u*) &ret[end + 4 + i], masked_vec);
+            unsigned char mask_bit = masking_key ? 0x80 : 0x00;
+            if (chunk.size() < 126) {
+                ret.push_back(mask_bit | chunk.size());
+            } else if (chunk.size() <= 0xFFFF) {
+                ret.push_back(mask_bit | 126);
+                binary::write<uint16_t>(std::back_inserter(ret), chunk.size());
+            } else {
+                ret.push_back(mask_bit | 127);
+                binary::write<uint64_t>(std::back_inserter(ret), chunk.size());
             }
-            for (__m128i mask_vec = _mm_set1_epi32(masking_key_int); i + 16 <= data.size(); i += 16) {
-                __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[i]);
-                __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
-                _mm_storeu_si128((__m128i_u*) &ret[end + 4 + i], masked_vec);
+
+            if (masking_key) {
+                ret.insert(ret.end(), masking_key, masking_key + 4);
             }
-#endif
-            for (; i < data.size(); ++i) {
-                ret[end + 4 + i] = data[i] ^ masking_key[i % 4];
+
+            if (!chunk.empty()) {
+                size_t end = ret.size();
+                ret.resize(end + chunk.size());
+                if (masking_key) {
+                    detail::apply_mask(ret.data() + end, chunk.data(), chunk.size(), masking_key);
+                } else {
+                    memcpy(ret.data() + end, chunk.data(), chunk.size());
+                }
+            }
+        };
+
+        if (send_cb) {
+            for (bool first = true;; first = false) {
+                auto chunk = send_cb();
+                write_frame(chunk, first, chunk.empty());
+                if (chunk.empty()) break;
             }
         } else {
-            PW_CLEAR_WS_FRAME_MASKED(ret);
-            ret.insert(ret.end(), data.begin(), data.end());
+            write_frame(data, true, true);
         }
 
         return ret;
     }
 
+    int WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) const {
+        if (send_cb) {
+            for (bool first_frame = true;; first_frame = false) {
+                std::vector<char> chunk = send_cb();
+
+                std::vector<char> header = {(char) ((chunk.empty() ? 0x80 : 0x00) | (first_frame ? (uint8_t) opcode : (uint8_t) WS_OPCODE_CONTINUATION))};
+
+                uint8_t mask_bit = masking_key ? 0x80 : 0x00;
+                if (chunk.size() < 126) {
+                    header.push_back(mask_bit | (uint8_t) chunk.size());
+                } else if (chunk.size() <= 0xFFFF) {
+                    header.push_back(mask_bit | 126);
+                    binary::write<uint16_t>(std::back_inserter(header), chunk.size());
+                } else {
+                    header.push_back(mask_bit | 127);
+                    binary::write<uint64_t>(std::back_inserter(header), chunk.size());
+                }
+
+                if (masking_key) {
+                    header.insert(header.end(), masking_key, masking_key + 4);
+                    if (!chunk.empty()) {
+                        detail::apply_mask(chunk.data(), chunk.size(), masking_key);
+                    }
+                }
+
+                if (pn::ssize_t result = conn.sendall(header.data(), header.size()); result == PN_ERROR) {
+                    detail::set_last_error(PW_ENET);
+                    return PN_ERROR;
+                } else if ((size_t) result != header.size()) {
+                    detail::set_last_error(PW_EWEB);
+                    return PN_ERROR;
+                }
+
+                if (!chunk.empty()) {
+                    if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if ((size_t) result != chunk.size()) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    }
+                }
+
+                if (chunk.empty()) break;
+            }
+        } else {
+            std::vector<char> header = {(char) (0x80 | (uint8_t) opcode)};
+
+            uint8_t mask_bit = (masking_key ? 0x80 : 0x00);
+            if (data.size() < 126) {
+                header.push_back(mask_bit | (uint8_t) data.size());
+            } else if (data.size() <= 0xFFFF) {
+                header.push_back(mask_bit | 126);
+                binary::write<uint16_t>(std::back_inserter(header), data.size());
+            } else {
+                header.push_back(mask_bit | 127);
+                binary::write<uint64_t>(std::back_inserter(header), data.size());
+            }
+
+            if (masking_key) {
+                header.insert(header.end(), masking_key, masking_key + 4);
+            }
+
+            if (pn::ssize_t result = conn.sendall(header.data(), header.size()); result == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            } else if ((size_t) result != header.size()) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
+            }
+
+            if (!data.empty()) {
+                if (masking_key) {
+                    auto masked_data = new char[data.size()];
+                    detail::apply_mask(masked_data, data.data(), data.size(), masking_key);
+                    if (pn::ssize_t result = conn.sendall(masked_data, data.size()); result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        delete[] masked_data;
+                        return PN_ERROR;
+                    } else if ((size_t) result != data.size()) {
+                        detail::set_last_error(PW_EWEB);
+                        delete[] masked_data;
+                        return PN_ERROR;
+                    }
+                    delete[] masked_data;
+                } else {
+                    if (pn::ssize_t result = conn.sendall(data.data(), data.size()); result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if ((size_t) result != data.size()) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
+                    }
+                }
+            }
+        }
+
+        return PN_OK;
+    }
+
     int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
         data.clear();
         for (bool fin = false; !fin;) {
-            char frame_header[2];
-            {
-                if (pn::ssize_t result = buf_receiver.recvall(conn, frame_header, 2); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 2) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                }
+            char header[2];
+            if (pn::ssize_t result = buf_receiver.recvall(conn, header, 2); result == PN_ERROR) {
+                detail::set_last_error(PW_ENET);
+                return PN_ERROR;
+            } else if (result != 2) {
+                detail::set_last_error(PW_EWEB);
+                return PN_ERROR;
             }
 
-            fin = PW_GET_WS_FRAME_FIN(frame_header);
-            if (WSOpcode opcode = (WSOpcode) PW_GET_WS_FRAME_OPCODE(frame_header); opcode != WS_OPCODE_CONTINUATION) {
+            fin = header[0] & 0x80;
+            WSOpcode opcode = (WSOpcode) (header[0] & 0x0F);
+            if (opcode != WS_OPCODE_CONTINUATION) {
                 this->opcode = opcode;
             }
-            bool masked = PW_GET_WS_FRAME_MASKED(frame_header);
+            bool masked = header[1] & 0x80;
+            uint8_t len7 = header[1] & 0x7F;
 
-            unsigned long long payload_length;
-            uint8_t payload_length_7 = PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header);
-            if (payload_length_7 == 126) {
-                uint16_t payload_length_16;
-                if (pn::ssize_t result = buf_receiver.recvall(conn, &payload_length_16, 2); result == PN_ERROR) {
+            uint64_t payload_len;
+            if (len7 == 126) {
+                char buf[2];
+                if (pn::ssize_t result = buf_receiver.recvall(conn, buf, 2); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 2) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
-                payload_length = ntohs(payload_length_16);
-            } else if (payload_length_7 == 127) {
-                uint64_t payload_length_64;
-                if (pn::ssize_t result = buf_receiver.recvall(conn, &payload_length_64, 8); result == PN_ERROR) {
+
+                uint16_t len16;
+                binary::read(buf, buf + 2, len16, BIG_ENDIAN);
+                payload_len = len16;
+            } else if (len7 == 127) {
+                char buf[8];
+                if (pn::ssize_t result = buf_receiver.recvall(conn, buf, 8); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 8) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
-                payload_length = ntohll(payload_length_64);
+
+                uint64_t len64;
+                binary::read(buf, buf + 8, len64, BIG_ENDIAN);
+                payload_len = len64;
             } else {
-                payload_length = payload_length_7;
+                payload_len = len7;
             }
 
             char masking_key[4];
             if (masked) {
-                if (pn::ssize_t result = buf_receiver.recvall(conn, &masking_key, 4); result == PN_ERROR) {
+                if (pn::ssize_t result = buf_receiver.recvall(conn, masking_key, 4); result == PN_ERROR) {
                     detail::set_last_error(PW_ENET);
                     return PN_ERROR;
                 } else if (result != 4) {
@@ -137,40 +248,46 @@ namespace pw {
                 }
             }
 
-            if (payload_length) {
-                size_t end = data.size();
-                if (payload_length > (unsigned long long) frame_rlimit || end + payload_length > (unsigned long long) message_rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
-                }
-                data.resize(end + payload_length);
-                if (pn::ssize_t result = buf_receiver.recvall(conn, &data[end], payload_length); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if ((unsigned long long) result != payload_length) {
-                    detail::set_last_error(PW_EWEB);
-                    data.resize(end + result);
-                    return PN_ERROR;
-                }
+            if (payload_len > 0) {
+                if (recv_cb) {
+                    for (size_t received = 0; received < payload_len;) {
+                        std::vector<char> chunk(std::min<size_t>(payload_len - received, frame_rlimit));
+                        if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
+                            detail::set_last_error(PW_ENET);
+                            return PN_ERROR;
+                        } else if ((unsigned long long) result != chunk.size()) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
 
-                if (masked) {
-                    size_t i = 0;
-#ifdef POLYWEB_SIMD
-                    int32_t masking_key_int;
-                    memcpy(&masking_key_int, masking_key, 4);
-                    for (__m256i mask_vec = _mm256_set1_epi32(masking_key_int); i + 32 <= payload_length; i += 32) {
-                        __m256i src_vec = _mm256_loadu_si256((__m256i_u*) &data[end + i]);
-                        __m256i masked_vec = _mm256_xor_si256(src_vec, mask_vec);
-                        _mm256_storeu_si256((__m256i_u*) &data[end + i], masked_vec);
+                        if (masked) {
+                            for (size_t i = 0; i < chunk.size(); ++i) {
+                                chunk[i] ^= masking_key[(received + i) % 4];
+                            }
+                        }
+                        received += chunk.size();
+                        if (!recv_cb(std::move(chunk))) {
+                            detail::set_last_error(PW_EWEB);
+                            return PN_ERROR;
+                        }
                     }
-                    for (__m128i mask_vec = _mm_set1_epi32(masking_key_int); i + 16 <= payload_length; i += 16) {
-                        __m128i src_vec = _mm_loadu_si128((__m128i_u*) &data[end + i]);
-                        __m128i masked_vec = _mm_xor_si128(src_vec, mask_vec);
-                        _mm_storeu_si128((__m128i_u*) &data[end + i], masked_vec);
+                } else {
+                    size_t end = data.size();
+                    if ((end + payload_len) > (uint64_t) message_rlimit) {
+                        detail::set_last_error(PW_EWEB);
+                        return PN_ERROR;
                     }
-#endif
-                    for (; i < payload_length; ++i) {
-                        data[end + i] ^= masking_key[i % 4];
+                    data.resize(end + payload_len);
+                    if (pn::ssize_t result = buf_receiver.recvall(conn, &data[end], payload_len); result == PN_ERROR) {
+                        detail::set_last_error(PW_ENET);
+                        return PN_ERROR;
+                    } else if ((uint64_t) result != payload_len) {
+                        detail::set_last_error(PW_EWEB);
+                        data.resize(end + result);
+                        return PN_ERROR;
+                    }
+                    if (masked) {
+                        detail::apply_mask(&data[end], payload_len, masking_key);
                     }
                 }
             }
@@ -181,11 +298,7 @@ namespace pw {
     uint16_t WSMessage::close_status_code() const {
         uint16_t ret = 0;
         if (data.size() >= 2) {
-#if BYTE_ORDER == BIG_ENDIAN
-            memcpy(&ret, data.data(), 2);
-#else
-            reverse_memcpy(&ret, data.data(), 2);
-#endif
+            binary::read(data.begin(), data.begin() + 2, ret);
         }
         return ret;
     }
@@ -261,7 +374,7 @@ namespace pw {
             return PN_ERROR;
         }
 
-        if (resp.parse(*this, this->buf_receiver, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
+        if (resp.parse(*this, this->buf_receiver, PW_HTTP_MESSAGE_PART_HEAD, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         }
         if (resp.status_code != 101) {
@@ -379,7 +492,7 @@ namespace pw {
         }
 
         HTTPResponse connect_resp;
-        if (connect_resp.parse(client, client.buf_receiver, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
+        if (connect_resp.parse(client, client.buf_receiver, PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
             return PN_ERROR;
         } else if (connect_resp.status_code_category() != 200) {
             detail::set_last_error(PW_EWEB);
@@ -429,6 +542,9 @@ namespace pw {
 
     template class BasicWSConnection<pn::tcp::Connection>;
     template class BasicWSConnection<pn::tcp::SecureConnection>;
+
+    template class BasicWSConnection<pn::tcp::Client>;
+    template class BasicWSConnection<pn::tcp::SecureClient>;
 
     template class BasicWSClient<pn::tcp::Client>;
     template class BasicWSClient<pn::tcp::SecureClient>;

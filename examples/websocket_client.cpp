@@ -25,12 +25,9 @@ int main() {
 
         {
             pw::WSMessage message;
-            if (pn::ssize_t result = client.recv(message); result == PN_ERROR) {
+            if (client.recv(message) == PN_ERROR) {
                 std::cerr << "Error: " << pw::universal_strerror() << std::endl;
                 return 1;
-            } else if (!result) {
-                std::cout << "Connection closed" << std::endl;
-                return 0;
             }
             std::cout << "Received: " << message.to_string() << std::endl;
         }

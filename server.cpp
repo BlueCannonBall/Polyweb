@@ -67,7 +67,7 @@ namespace pw {
                 default:
                     throw std::logic_error("Invalid error");
                 }
-                handle_error(conn, status_code, false);
+                handle_error(conn, status_code, pw::universal_strerror(), false);
                 return PN_ERROR;
             }
 
@@ -85,7 +85,7 @@ namespace pw {
                         if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
                             websocket = true;
                         } else {
-                            if (handle_error(conn, 501, keep_alive, resp_parts, req.http_version) == PN_ERROR) {
+                            if (handle_error(conn, 501, "Unsupported upgrade", keep_alive, resp_parts, req.http_version) == PN_ERROR) {
                                 return PN_ERROR;
                             }
                             if (conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
@@ -132,6 +132,11 @@ namespace pw {
                         } else {
                             resp = HTTPResponse(101);
                         }
+                    } catch (const std::exception& e) {
+                        if (handle_error(conn, 500, e.what(), keep_alive, false, req.http_version) == PN_ERROR) {
+                            return PN_ERROR;
+                        }
+                        continue;
                     } catch (...) {
                         if (handle_error(conn, 500, keep_alive, false, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
@@ -168,7 +173,7 @@ namespace pw {
                             if (found_version) {
                                 resp.headers["Sec-WebSocket-Version"] = PW_WS_VERSION;
                             } else {
-                                if (handle_error(conn, 501, keep_alive, false, req.http_version) == PN_ERROR) {
+                                if (handle_error(conn, 501, "Unsupported WebSocket version", keep_alive, false, req.http_version) == PN_ERROR) {
                                     return PN_ERROR;
                                 }
                                 continue;
@@ -230,7 +235,7 @@ namespace pw {
                             default:
                                 throw std::logic_error("Invalid error");
                             }
-                            handle_error(conn, status_code, false, resp_parts, req.http_version);
+                            handle_error(conn, status_code, pw::universal_strerror(), false, resp_parts, req.http_version);
                             return PN_ERROR;
                         }
                     }
@@ -238,6 +243,14 @@ namespace pw {
                     HTTPResponse resp;
                     try {
                         resp = route.cb(conn, std::move(req));
+                    } catch (const std::exception& e) {
+                        if (handle_error(conn, 500, e.what(), keep_alive, resp_parts, req.http_version) == PN_ERROR) {
+                            return PN_ERROR;
+                        }
+                        if (conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
+                            return PN_ERROR;
+                        }
+                        continue;
                     } catch (...) {
                         if (handle_error(conn, 500, keep_alive, resp_parts, req.http_version) == PN_ERROR) {
                             return PN_ERROR;
@@ -274,10 +287,20 @@ namespace pw {
 
     template <typename Base>
     int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, int parts, std::string http_version) const {
+        return handle_error(conn, status_code, {}, headers, parts, std::move(http_version));
+    }
+
+    template <typename Base>
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, int parts, std::string http_version) const {
+        return handle_error(conn, status_code, {}, keep_alive, parts, std::move(http_version));
+    }
+
+    template <typename Base>
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, const HTTPHeaders& headers, int parts, std::string http_version) const {
         HTTPResponse resp;
         try {
             if (on_error) {
-                resp = on_error(status_code);
+                resp = on_error(status_code, what);
             } else {
                 resp = pw::HTTPResponse::make_basic(status_code);
             }
@@ -302,11 +325,11 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, int parts, std::string http_version) const {
+    int BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, bool keep_alive, int parts, std::string http_version) const {
         HTTPResponse resp;
         try {
             if (on_error) {
-                resp = on_error(status_code);
+                resp = on_error(status_code, what);
             } else {
                 resp = pw::HTTPResponse::make_basic(status_code);
             }

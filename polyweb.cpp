@@ -35,7 +35,6 @@ namespace pw {
                 reverse_memcpy(dest, src, size);
             }
         }
-
     } // namespace detail
 
     void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size) {
@@ -705,19 +704,19 @@ namespace pw {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
-            } else if (auto content_length_it = headers.find("Content-Length"); content_length_it != headers.end()) {
-                unsigned long long content_length;
+            } else if (auto content_len_it = headers.find("Content-Length"); content_len_it != headers.end()) {
+                unsigned long long content_len;
                 try {
-                    content_length = std::stoull(content_length_it->second);
+                    content_len = std::stoull(content_len_it->second);
                 } catch (...) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
 
-                if (content_length) {
+                if (content_len) {
                     if (recv_cb) {
-                        for (size_t received = 0; received < content_length;) {
-                            std::vector<char> chunk(std::min<size_t>(content_length - received, body_chunk_rlimit));
+                        for (size_t received = 0; received < content_len;) {
+                            std::vector<char> chunk(std::min<size_t>(content_len - received, body_chunk_rlimit));
                             if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
                                 detail::set_last_error(PW_ENET);
                                 return PN_ERROR;
@@ -733,15 +732,15 @@ namespace pw {
                             }
                         }
                     } else {
-                        if (content_length > (unsigned long long) body_rlimit) {
+                        if (content_len > (unsigned long long) body_rlimit) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
-                        body.resize(content_length);
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
+                        body.resize(content_len);
+                        if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_len); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PN_ERROR;
-                        } else if ((unsigned long long) result != content_length) {
+                        } else if ((unsigned long long) result != content_len) {
                             detail::set_last_error(PW_EWEB);
                             body.resize(result);
                             return PN_ERROR;
@@ -1015,19 +1014,19 @@ namespace pw {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
-            } else if (auto content_length_it = headers.find("Content-Length"); content_length_it != headers.end()) {
-                unsigned long long content_length;
+            } else if (auto content_len_it = headers.find("Content-Length"); content_len_it != headers.end()) {
+                unsigned long long content_len;
                 try {
-                    content_length = std::stoull(content_length_it->second);
+                    content_len = std::stoull(content_len_it->second);
                 } catch (...) {
                     detail::set_last_error(PW_EWEB);
                     return PN_ERROR;
                 }
 
-                if (content_length) {
+                if (content_len) {
                     if (recv_cb) {
-                        for (size_t received = 0; received < content_length;) {
-                            std::vector<char> chunk(std::min<size_t>(content_length - received, body_chunk_rlimit));
+                        for (size_t received = 0; received < content_len;) {
+                            std::vector<char> chunk(std::min<size_t>(content_len - received, body_chunk_rlimit));
                             if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
                                 detail::set_last_error(PW_ENET);
                                 return PN_ERROR;
@@ -1043,15 +1042,15 @@ namespace pw {
                             }
                         }
                     } else {
-                        if (content_length > (unsigned long long) body_rlimit) {
+                        if (content_len > (unsigned long long) body_rlimit) {
                             detail::set_last_error(PW_EWEB);
                             return PN_ERROR;
                         }
-                        body.resize(content_length);
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_length); result == PN_ERROR) {
+                        body.resize(content_len);
+                        if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_len); result == PN_ERROR) {
                             detail::set_last_error(PW_ENET);
                             return PN_ERROR;
-                        } else if ((unsigned long long) result != content_length) {
+                        } else if ((unsigned long long) result != content_len) {
                             detail::set_last_error(PW_EWEB);
                             body.resize(result);
                             return PN_ERROR;

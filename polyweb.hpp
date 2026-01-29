@@ -41,38 +41,6 @@
 #define PW_WS_VERSION "13"
 #define PW_WS_KEY     "cG9seXdlYiBpcyBncmVhdA==" // polyweb is great
 
-#define PW_GET_WS_FRAME_FIN(frame_header)            (frame_header[0] & 0b10000000)
-#define PW_GET_WS_FRAME_RSV1(frame_header)           (frame_header[0] & 0b01000000)
-#define PW_GET_WS_FRAME_RSV2(frame_header)           (frame_header[0] & 0b00100000)
-#define PW_GET_WS_FRAME_RSV3(frame_header)           (frame_header[0] & 0b00010000)
-#define PW_GET_WS_FRAME_OPCODE(frame_header)         (frame_header[0] & 0b00001111)
-#define PW_GET_WS_FRAME_MASKED(frame_header)         (frame_header[1] & 0b10000000)
-#define PW_GET_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] & 0b01111111)
-
-#define PW_SET_WS_FRAME_FIN(frame_header)                    (frame_header[0] |= 0b10000000)
-#define PW_SET_WS_FRAME_RSV1(frame_header)                   (frame_header[0] |= 0b01000000)
-#define PW_SET_WS_FRAME_RSV2(frame_header)                   (frame_header[0] |= 0b00100000)
-#define PW_SET_WS_FRAME_RSV3(frame_header)                   (frame_header[0] |= 0b00010000)
-#define PW_SET_WS_FRAME_OPCODE(frame_header, opcode)         (frame_header[0] = (frame_header[0] & ~0x0F) | (opcode & ~0xF0))
-#define PW_SET_WS_FRAME_MASKED(frame_header)                 (frame_header[1] |= 0b10000000)
-#define PW_SET_WS_FRAME_PAYLOAD_LENGTH(frame_header, length) (frame_header[1] = (frame_header[1] & ~0x7F) | (length & ~0x80))
-
-#define PW_CLEAR_WS_FRAME_FIN(frame_header)            (frame_header[0] &= ~0b10000000)
-#define PW_CLEAR_WS_FRAME_RSV1(frame_header)           (frame_header[0] &= ~0b01000000)
-#define PW_CLEAR_WS_FRAME_RSV2(frame_header)           (frame_header[0] &= ~0b00100000)
-#define PW_CLEAR_WS_FRAME_RSV3(frame_header)           (frame_header[0] &= ~0b00010000)
-#define PW_CLEAR_WS_FRAME_OPCODE(frame_header)         (frame_header[0] &= ~0x0F)
-#define PW_CLEAR_WS_FRAME_MASKED(frame_header)         (frame_header[1] &= ~0b10000000)
-#define PW_CLEAR_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] &= ~0x7F)
-
-#define PW_TOGGLE_WS_FRAME_FIN(frame_header)            (frame_header[0] ^= 0b10000000)
-#define PW_TOGGLE_WS_FRAME_RSV1(frame_header)           (frame_header[0] ^= 0b01000000)
-#define PW_TOGGLE_WS_FRAME_RSV2(frame_header)           (frame_header[0] ^= 0b00100000)
-#define PW_TOGGLE_WS_FRAME_RSV3(frame_header)           (frame_header[0] ^= 0b00010000)
-#define PW_TOGGLE_WS_FRAME_OPCODE(frame_header)         (frame_header[0] ^= 0x0F)
-#define PW_TOGGLE_WS_FRAME_MASKED(frame_header)         (frame_header[1] ^= 0b10000000)
-#define PW_TOGGLE_WS_FRAME_PAYLOAD_LENGTH(frame_header) (frame_header[1] ^= 0x7F)
-
 namespace pw {
     extern tp::ThreadPool thread_pool;
 
@@ -425,6 +393,8 @@ namespace pw {
     public:
         WSOpcode opcode = WS_OPCODE_BINARY;
         std::vector<char> data;
+        std::function<std::vector<char>()> send_cb;
+        std::function<bool(std::vector<char>)> recv_cb;
 
         WSMessage() = default;
         WSMessage(pn::StringView str, WSOpcode opcode = WS_OPCODE_TEXT):
@@ -433,6 +403,9 @@ namespace pw {
         WSMessage(std::vector<char> data, WSOpcode opcode = WS_OPCODE_BINARY):
             opcode(opcode),
             data(std::move(data)) {}
+        WSMessage(decltype(send_cb) send_cb, WSOpcode opcode = WS_OPCODE_BINARY):
+            opcode(opcode),
+            send_cb(std::move(send_cb)) {}
         WSMessage(WSOpcode opcode):
             opcode(opcode) {}
 
@@ -455,6 +428,7 @@ namespace pw {
         }
 
         std::vector<char> build(const char* masking_key = nullptr) const;
+        int build(pn::tcp::Connection& conn, const char* masking_key = nullptr) const;
 
         int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
 
@@ -542,16 +516,8 @@ namespace pw {
         using BasicConnection<Base>::send;
 
         virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
-            auto data = message.build(masking_key);
             std::lock_guard<std::mutex> lock(send_mutex);
-            if (pn::ssize_t result = BasicConnection<Base>::sendall(data.data(), data.size()); result == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            } else if ((size_t) result != data.size()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
-            }
-            return PN_OK;
+            return message.build(*this, masking_key);
         }
 
         using BasicConnection<Base>::recv;
@@ -611,7 +577,7 @@ namespace pw {
         tp::TaskManager task_manager;
 
     public:
-        std::function<HTTPResponse(uint16_t)> on_error;
+        std::function<HTTPResponse(uint16_t, pn::StringView)> on_error;
         size_t buf_size = 4'000;
         unsigned int header_climit = 100;
         pn::ssize_t header_name_rlimit = 500;
@@ -656,6 +622,8 @@ namespace pw {
         int handle_conn(connection_type conn) const;
         int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
         int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        int handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
     };
 
     using Server = BasicServer<pn::tcp::Server>;
