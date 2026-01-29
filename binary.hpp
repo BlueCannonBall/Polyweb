@@ -1,4 +1,5 @@
 #include "polyweb.hpp"
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 #include <string.h>
@@ -69,15 +70,6 @@ namespace pw {
                 } else {
                     *ret++ = bytes[sizeof(T) - 1 - i];
                 }
-            }
-            return ret;
-        }
-
-        template <detail::ByteOutputIterator OutputIt>
-        OutputIt write(OutputIt ret, const std::string& value, int byte_order = BIG_ENDIAN) {
-            ret = write<uint16_t>(ret, value.size(), byte_order);
-            for (char c : value) {
-                *ret++ = c;
             }
             return ret;
         }
