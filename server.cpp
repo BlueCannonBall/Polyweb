@@ -8,7 +8,7 @@
 
 namespace pw {
     template <typename Base>
-    int BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog) {
+    int BasicServer<Base>::listen(const std::function<bool(typename Base::connection_type&)>& config_cb, int backlog) {
         if (Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
                     task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
@@ -27,7 +27,7 @@ namespace pw {
     }
 
     template <>
-    int SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&)> config_cb, int backlog) {
+    int SecureServer::listen(const std::function<bool(typename pn::tcp::SecureServer::connection_type&)>& config_cb, int backlog) {
         if (pn::tcp::SecureServer::listen([this, config_cb = std::move(config_cb)](typename pn::tcp::SecureServer::connection_type conn) {
                 if (!config_cb || config_cb(conn)) {
                     task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {

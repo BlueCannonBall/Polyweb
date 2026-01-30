@@ -613,7 +613,7 @@ namespace pw {
         }
 
         // Returning false from config_cb allows you to reject a connection very early
-        int listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128);
+        int listen(const std::function<bool(typename Base::connection_type&)>& config_cb = {}, int backlog = 128);
 
     protected:
         std::unordered_map<std::string, http_route_type> http_routes;
