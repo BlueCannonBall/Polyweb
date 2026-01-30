@@ -1,5 +1,6 @@
 #include "binary.hpp"
 #include "polyweb.hpp"
+#include <span>
 #include <string.h>
 #ifdef POLYWEB_SIMD
     #include <x86intrin.h>
