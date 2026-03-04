@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <algorithm>
 
 namespace tp {
     enum TaskStatus {
@@ -128,6 +129,7 @@ namespace tp {
                     return !task || task->get_status() != TASK_STATUS_RUNNING;
                 }),
                     tasks.end());
+                tasks.shrink_to_fit();
                 gc_threshold = std::max<size_t>(64, tasks.size() * 2);
             }
         }
