@@ -497,6 +497,10 @@ namespace pw {
             *this = std::move(conn);
         }
 
+        ~BasicWSConnection() {
+            close();
+        }
+
         BasicWSConnection& operator=(BasicWSConnection&& conn) noexcept {
             if (this != &conn) {
                 BasicConnection<Base>::operator=(std::move(conn));
