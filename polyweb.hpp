@@ -638,6 +638,7 @@ namespace pw {
         std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
         std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
         bool tcp_keep_alive = true;
+        bool tcp_no_delay = true;
 
         int verify_mode = SSL_VERIFY_PEER;
         std::string ca_file;
