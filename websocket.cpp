@@ -3,7 +3,11 @@
 #include <span>
 #include <string.h>
 #ifdef POLYWEB_SIMD
-    #include <x86intrin.h>
+    #ifdef _MSC_VER
+        #include <intrin.h>
+    #else
+        #include <x86intrin.h>
+    #endif
 #endif
 
 namespace pw {
