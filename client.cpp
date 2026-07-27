@@ -28,6 +28,12 @@ namespace pw {
             return PN_ERROR;
         }
 
+        int tcp_no_delay = this->tcp_no_delay;
+        if (conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay, sizeof(int)) == PN_ERROR) {
+            detail::set_last_error(PW_ENET);
+            return PN_ERROR;
+        }
+
         return PN_OK;
     }
 
