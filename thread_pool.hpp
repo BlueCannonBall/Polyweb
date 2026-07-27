@@ -1,6 +1,7 @@
 #ifndef THREAD_POOL_HPP_
 #define THREAD_POOL_HPP_
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <exception>
@@ -11,7 +12,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <algorithm>
 
 namespace tp {
     enum TaskStatus {
@@ -203,7 +203,7 @@ namespace tp {
         std::shared_ptr<Task> schedule(F&& func, bool launch_if_busy = false) {
             auto task = std::make_shared<Task>(std::forward<F>(func));
             std::unique_lock<std::mutex> lock(control_block->mutex);
-            if (launch_if_busy && control_block->busy_thread_count >= control_block->thread_count) {
+            if (launch_if_busy && control_block->queue.size() >= control_block->thread_count - control_block->busy_thread_count) {
                 lock.unlock();
                 std::thread([](std::shared_ptr<Task> task) {
                     task->execute();
