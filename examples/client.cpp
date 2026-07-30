@@ -3,16 +3,16 @@
 #include <iostream>
 
 int main() {
-    pn::init();
+    (void) pn::init();
 
     pw::HTTPResponse resp;
-    if (pw::fetch("https://example.com", resp) == PN_ERROR) {
-        std::cerr << "Error: " << pw::universal_strerror() << std::endl;
+    if (pn::Status result = pw::fetch("https://example.com", resp); !result) {
+        std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;
     }
     assert(resp.status_code == 200);
     std::cout << resp.body_string() << std::endl;
 
-    pn::quit();
+    (void) pn::quit();
     return 0;
 }

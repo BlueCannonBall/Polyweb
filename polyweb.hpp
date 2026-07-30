@@ -3,6 +3,7 @@
 
 #include "Polynet/polynet.hpp"
 #include "Polynet/secure_sockets.hpp"
+#include "error.hpp"
 #include "string.hpp"
 #include "thread_pool.hpp"
 #include <algorithm>
@@ -20,11 +21,6 @@
 #include <vector>
 
 #define PW_AGENT_NAME "Polyweb"
-
-// Errors
-#define PW_ESUCCESS 0
-#define PW_ENET     1
-#define PW_EWEB     2
 
 // Protocol layers
 #define PW_PROTOCOL_LAYER_WS (1 << 16)
@@ -45,27 +41,18 @@ namespace pw {
     extern tp::ThreadPool thread_pool;
 
     namespace detail {
-        extern thread_local int last_error;
-
-        inline void set_last_error(int error) {
-            last_error = error;
-        }
-
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, char end, pn::ssize_t rlimit = 1'000) {
-            for (pn::ssize_t i = 0;; ++i) {
+        pn::Status recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, char end, size_t rlimit = 1'000) {
+            for (size_t i = 0;; ++i) {
                 if (i >= rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP line"));
                 }
 
                 char c;
-                if (pn::ssize_t result = buf_receiver.recv(conn, &c, 1); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 1) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recv(conn, &c, 1); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 1) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP line"));
                 }
 
                 if (c == end) {
@@ -74,30 +61,27 @@ namespace pw {
                 *ret++ = c;
             }
 
-            return PN_OK;
+            return {};
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, pn::ssize_t rlimit = 1'000) {
+        pn::Status recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, const std::vector<char>& end_sequence, size_t rlimit = 1'000) {
             std::vector<char> found_buf;
-            for (pn::ssize_t i = 0, search_pos = 0;; ++i) {
+            for (size_t i = 0, search_pos = 0;; ++i) {
                 if (i >= rlimit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP delimiter"));
                 }
 
                 char c;
-                if (pn::ssize_t result = buf_receiver.recv(conn, &c, 1); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 1) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recv(conn, &c, 1); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 1) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP delimiter"));
                 }
 
                 if (c == end_sequence[search_pos]) {
                     found_buf.push_back(c);
-                    if ((size_t) ++search_pos == end_sequence.size()) {
+                    if (++search_pos == end_sequence.size()) {
                         break;
                     }
                 } else {
@@ -108,32 +92,24 @@ namespace pw {
 
                     if (c == end_sequence[search_pos]) {
                         found_buf.push_back(c);
-                        if ((size_t) ++search_pos == end_sequence.size()) {
+                        if (++search_pos == end_sequence.size()) {
                             break;
                         }
                     }
                 }
             }
 
-            return PN_OK;
+            return {};
         }
 
         template <typename OutputIt>
-        int recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, pn::StringView end_sequence, pn::ssize_t rlimit = 1'000) {
+        pn::Status recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, pn::StringView end_sequence, size_t rlimit = 1'000) {
             return recv_until(conn, buf_receiver, ret, std::vector<char>(end_sequence.begin(), end_sequence.end()), rlimit);
         }
     } // namespace detail
 
     void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size);
     void reverse_memmove(void* dest, const void* src, size_t size);
-
-    inline int get_last_error() {
-        return detail::last_error;
-    }
-
-    std::string strerror(int error = get_last_error());
-
-    std::string universal_strerror(int error = get_last_error());
 
     std::string build_date(time_t rawtime = time(nullptr));
     time_t parse_date(const std::string& date);
@@ -210,13 +186,13 @@ namespace pw {
 
         URLInfo() = default;
         URLInfo(pn::StringView url) { // Avoid using this constructor unless you're certain that the URL is valid!
-            if (parse(url) == PN_ERROR) {
+            if (!parse(url)) {
                 throw std::runtime_error("Invalid URL passed to pw::URLInfo constructor");
             }
         }
 
         std::string build() const;
-        int parse(pn::StringView url);
+        pn::Status parse(pn::StringView url);
 
         std::string hostname() const {
             return host.substr(0, host.find(':'));
@@ -248,7 +224,7 @@ namespace pw {
     }
 
     inline std::istream& operator>>(std::istream& is, URLInfo& url_info) {
-        if (std::string url; (is >> url) && url_info.parse(url) == PN_ERROR) {
+        if (std::string url; (is >> url) && !url_info.parse(url)) {
             is.setstate(std::istream::failbit);
         }
         return is;
@@ -297,14 +273,14 @@ namespace pw {
             http_version(std::move(http_version)) {}
 
         std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL) const;
-        int build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
+        pn::Status build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
 
         std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) const {
             std::vector<char> ret = build(parts);
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -362,14 +338,14 @@ namespace pw {
         }
 
         std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL) const;
-        int build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
+        pn::Status build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
 
         std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) const {
             std::vector<char> ret = build(parts);
             return std::string(ret.begin(), ret.end());
         }
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         std::string body_string() const {
             return std::string(body.begin(), body.end());
@@ -428,9 +404,9 @@ namespace pw {
         }
 
         std::vector<char> build(const char* masking_key = nullptr) const;
-        int build(pn::tcp::Connection& conn, const char* masking_key = nullptr) const;
+        pn::Status build(pn::tcp::Connection& conn, const char* masking_key = nullptr) const;
 
-        int parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
 
         std::string to_string() const {
             return std::string(data.begin(), data.end());
@@ -455,25 +431,25 @@ namespace pw {
 
         using Base::send;
 
-        int send(const HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+        pn::Status send(const HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
             return req.build(*this, parts);
         }
 
-        int send(const HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+        pn::Status send(const HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL) {
             return resp.build(*this, parts);
         }
 
-        int send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", int parts = PW_HTTP_MESSAGE_PART_ALL) {
+        pn::Status send_basic(uint16_t status_code, HTTPHeaders headers = {}, std::string http_version = "HTTP/1.1", int parts = PW_HTTP_MESSAGE_PART_ALL) {
             return send(HTTPResponse::make_basic(status_code, std::move(headers), std::move(http_version)), parts);
         }
 
         using Base::recv;
 
-        int recv(HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
+        pn::Status recv(HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
             return req.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
 
-        int recv(HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000) {
+        pn::Status recv(HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
             return resp.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
     };
@@ -498,7 +474,7 @@ namespace pw {
         }
 
         ~BasicWSConnection() {
-            close();
+            (void) close();
         }
 
         BasicWSConnection& operator=(BasicWSConnection&& conn) noexcept {
@@ -509,24 +485,28 @@ namespace pw {
             return *this;
         }
 
-        virtual int ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
+        virtual pn::Status ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
-        int close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
-            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && this->is_valid() && !ws_closed) ws_close(1001, {});
+        pn::Status close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
+            if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && this->is_valid() && !ws_closed) {
+                if (pn::Status result = ws_close(1001, {}); !result) {
+                    return result;
+                }
+            }
             return BasicConnection<Base>::close(protocol_layers);
         }
 
         using BasicConnection<Base>::send;
 
-        virtual int send(const WSMessage& message, const char* masking_key = nullptr) {
+        virtual pn::Status send(const WSMessage& message, const char* masking_key = nullptr) {
             std::lock_guard<std::mutex> lock(send_mutex);
             return message.build(*this, masking_key);
         }
 
         using BasicConnection<Base>::recv;
 
-        int recv(WSMessage& message, bool handle_close = true, bool handle_pings = true, pn::ssize_t frame_rlimit = 16'000'000, pn::ssize_t message_rlimit = 32'000'000);
+        pn::Status recv(WSMessage& message, bool handle_close = true, bool handle_pings = true, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
     };
 
     using WSConnection = BasicWSConnection<pn::tcp::Connection>;
@@ -584,11 +564,11 @@ namespace pw {
         std::function<HTTPResponse(uint16_t, pn::StringView)> on_error;
         size_t buf_size = 4'000;
         unsigned int header_climit = 100;
-        pn::ssize_t header_name_rlimit = 500;
-        pn::ssize_t header_value_rlimit = 4'000'000;
-        pn::ssize_t body_chunk_rlimit = 16'000'000;
-        pn::ssize_t body_rlimit = 32'000'000;
-        pn::ssize_t misc_rlimit = 1'000;
+        size_t header_name_rlimit = 500;
+        size_t header_value_rlimit = 4'000'000;
+        size_t body_chunk_rlimit = 16'000'000;
+        size_t body_rlimit = 32'000'000;
+        size_t misc_rlimit = 1'000;
 
         typedef BasicConnection<typename Base::connection_type> connection_type;
         typedef BasicWSConnection<typename Base::connection_type> ws_connection_type;
@@ -617,17 +597,17 @@ namespace pw {
         }
 
         // Returning false from config_cb allows you to reject a connection very early
-        int listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128);
+        pn::Status listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128);
 
     protected:
         std::unordered_map<std::string, http_route_type> http_routes;
         std::unordered_map<std::string, ws_route_type> ws_routes;
 
-        int handle_conn(connection_type conn) const;
-        int handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
-        int handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
-        int handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
-        int handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        pn::Status handle_conn(connection_type conn) const;
+        pn::Status handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        pn::Status handle_error(connection_type& conn, uint16_t status_code, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        pn::Status handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, const HTTPHeaders& headers = {}, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
+        pn::Status handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, bool keep_alive, int parts = PW_HTTP_MESSAGE_PART_ALL, std::string http_version = "HTTP/1.1") const;
     };
 
     using Server = BasicServer<pn::tcp::Server>;
@@ -646,30 +626,30 @@ namespace pw {
 
         size_t buf_size = 4'000;
         unsigned int header_climit = 100;
-        pn::ssize_t header_name_rlimit = 500;
-        pn::ssize_t header_value_rlimit = 4'000'000;
-        pn::ssize_t body_chunk_rlimit = 16'000'000;
-        pn::ssize_t body_rlimit = 32'000'000;
-        pn::ssize_t misc_rlimit = 1'000;
+        size_t header_name_rlimit = 500;
+        size_t header_value_rlimit = 4'000'000;
+        size_t body_chunk_rlimit = 16'000'000;
+        size_t body_rlimit = 32'000'000;
+        size_t misc_rlimit = 1'000;
 
-        int configure_sockopts(pn::tcp::Connection& conn) const;
-        int configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const;
+        pn::Status configure_sockopts(pn::tcp::Connection& conn) const;
+        pn::Status configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const;
     };
 
     using Client = BasicConnection<pn::tcp::Client>;
     using SecureClient = BasicConnection<pn::tcp::SecureClient>;
 
-    int fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
-    int fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
+    pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
-    int proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
-    int proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
+    pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWSClient : public BasicWSConnection<Base> {
@@ -678,14 +658,14 @@ namespace pw {
         BasicWSClient(Args&&... args):
             BasicWSConnection<Base>(std::forward<Args>(args)...) {}
 
-        int ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
-        int ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
-        int ws_connect(pn::StringView url, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
-        int ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, unsigned int header_climit = 100, pn::ssize_t header_name_rlimit = 500, pn::ssize_t header_value_rlimit = 4'000'000, pn::ssize_t body_chunk_rlimit = 16'000'000, pn::ssize_t body_rlimit = 32'000'000, pn::ssize_t misc_rlimit = 1'000);
+        pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status ws_connect(pn::StringView url, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
 
         using BasicWSConnection<Base>::send;
 
-        int send(const WSMessage& message, const char* masking_key = nullptr) override {
+        pn::Status send(const WSMessage& message, const char* masking_key = nullptr) override {
             if (!masking_key) {
                 static constexpr char default_masking_key[4] = {0};
                 masking_key = default_masking_key;
@@ -697,15 +677,15 @@ namespace pw {
     using WSClient = BasicWSClient<pn::tcp::Client>;
     using SecureWSClient = BasicWSClient<pn::tcp::SecureClient>;
 
-    int make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
 
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw
 
 #endif
