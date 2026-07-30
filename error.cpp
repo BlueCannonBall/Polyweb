@@ -12,7 +12,7 @@ namespace pw {
                 switch (error) {
                 case PW_ERROR_INVALID_URL: return "Invalid URL";
                 case PW_ERROR_INVALID_HTTP: return "Invalid HTTP message";
-                case PW_ERROR_INVALID_WEBSOCKET: return "Invalid WebSocket message";
+                case PW_ERROR_INVALID_WS: return "Invalid WebSocket message";
                 case PW_ERROR_LIMIT_EXCEEDED: return "Protocol limit exceeded";
                 case PW_ERROR_UNSUPPORTED: return "Unsupported protocol feature";
                 default: return "Unknown Polyweb error";

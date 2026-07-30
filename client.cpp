@@ -58,6 +58,7 @@ namespace pw {
 
         if (secure) {
             SecureClient client;
+            client.http_config = config.http;
             pn::Error config_error;
             if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
                     if (pn::Status result = config.configure_sockopts(client); !result) {
@@ -83,11 +84,12 @@ namespace pw {
                 return result;
             }
 
-            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL); !result) {
                 return result;
             }
         } else {
             Client client;
+            client.http_config = config.http;
             pn::Error config_error;
             if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
                     if (pn::Status result = config.configure_sockopts(client); !result) {
@@ -107,7 +109,7 @@ namespace pw {
                 return result;
             }
 
-            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL); !result) {
                 return result;
             }
         }
@@ -228,6 +230,7 @@ namespace pw {
         }
 
         SecureClient client;
+        client.http_config = config.http;
         client.buf_receiver.capacity = 0;
         pn::Error config_error;
         if (pn::Status result = client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config, &config_error](auto& client) {
@@ -249,7 +252,7 @@ namespace pw {
         }
 
         HTTPResponse connect_resp;
-        if (pn::Status result = client.recv(connect_resp, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+        if (pn::Status result = client.recv(connect_resp, false); !result) {
             return result;
         } else if (connect_resp.status_code_category() != 200) {
             return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
@@ -269,7 +272,7 @@ namespace pw {
             return result;
         }
 
-        if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+        if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL); !result) {
             return result;
         }
 

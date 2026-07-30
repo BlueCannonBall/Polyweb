@@ -505,7 +505,8 @@ namespace pw {
         return {};
     }
 
-    pn::Status HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    pn::Status HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const HTTPMessageConfig& config) {
+        const auto& [header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit] = config;
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
             method.clear();
             if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit); !result) {
@@ -778,7 +779,8 @@ namespace pw {
         return {};
     }
 
-    pn::Status HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+    pn::Status HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const HTTPMessageConfig& config) {
+        const auto& [header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit] = config;
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
             http_version.clear();
             if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit); !result) {

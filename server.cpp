@@ -6,8 +6,8 @@
 #endif
 
 namespace pw {
-    pn::Status HTTPRequestReceiver::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
-        if (pn::Status result = HTTPRequest::parse(conn, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
+    pn::Status HTTPRequestReceiver::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const HTTPMessageConfig& config) {
+        if (pn::Status result = HTTPRequest::parse(conn, buf_receiver, parts, config); !result) {
             return result;
         }
         parts_parsed |= parts;
@@ -19,13 +19,13 @@ namespace pw {
         return Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
             if (!config_cb || config_cb(conn)) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
-                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
+                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_size), config.http));
                 },
                     true));
             }
             return true;
         },
-            backlog);
+            backlog < 0 ? config.backlog : backlog);
     }
 
     template <>
@@ -36,13 +36,13 @@ namespace pw {
                     if (ssl_ctx && !conn.ssl_accept()) {
                         return;
                     }
-                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(buf_size)));
+                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_size), config.http));
                 },
                     true));
             }
             return true;
         },
-            backlog);
+            backlog < 0 ? config.backlog : backlog);
     }
 
     template <typename Base>
@@ -50,14 +50,14 @@ namespace pw {
         bool keep_alive = true;
         do {
             HTTPRequestReceiver req;
-            if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_HEAD, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
+            if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_HEAD); !result) {
                 (void) handle_error(conn, 400, result.error().message(), false);
                 return result;
             }
 
             int resp_parts = req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL;
 
-            bool websocket = false;
+            bool ws = false;
             if (auto connection_it = req.headers.find("Connection"); connection_it != req.headers.end()) {
                 std::vector<std::string> split_connection = string::split_and_trim(string::to_lower_copy(connection_it->second), ',');
                 if (req.http_version == "HTTP/1.1") {
@@ -67,12 +67,12 @@ namespace pw {
                     if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
                         if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
-                            websocket = true;
+                            ws = true;
                         } else {
                             if (pn::Status result = handle_error(conn, 501, "Unsupported upgrade", keep_alive, resp_parts, req.http_version); !result) {
                                 return result;
                             }
-                            if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
+                            if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY); !result) {
                                 return result;
                             }
                             continue;
@@ -105,7 +105,7 @@ namespace pw {
                 }
             }
 
-            if (websocket) {
+            if (ws) {
                 if (!ws_route_target.empty()) {
                     const auto& route = ws_routes.at(ws_route_target);
 
@@ -189,7 +189,7 @@ namespace pw {
                     }
 
                     if (resp.status_code == 101) {
-                        route.on_open(std::move(conn), std::move(req));
+                        route.on_open(ws_connection_type(std::move(conn), config.ws), std::move(req));
                         return {};
                     }
                 } else if (!http_route_target.empty()) {
@@ -205,7 +205,7 @@ namespace pw {
                 if (!http_route_target.empty()) {
                     const auto& route = http_routes.at(http_route_target);
                     if (route.parse_body) {
-                        if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
+                        if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY); !result) {
                             (void) handle_error(conn, 400, result.error().message(), false, resp_parts, req.http_version);
                             return result;
                         }
@@ -216,7 +216,7 @@ namespace pw {
                             req.recv_cb = [](std::vector<char>) {
                                 return true;
                             };
-                            return conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+                            return conn.recv(req, PW_HTTP_MESSAGE_PART_BODY);
                         }
                         return {};
                     };

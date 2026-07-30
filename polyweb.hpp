@@ -230,6 +230,15 @@ namespace pw {
         return is;
     }
 
+    struct HTTPMessageConfig {
+        unsigned int header_climit = 100;
+        size_t header_name_rlimit = 500;
+        size_t header_value_rlimit = 4'000'000;
+        size_t body_chunk_rlimit = 16'000'000;
+        size_t body_rlimit = 32'000'000;
+        size_t misc_rlimit = 1'000;
+    };
+
     class HTTPRequest {
     public:
         std::string method;
@@ -280,7 +289,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, const HTTPMessageConfig& config = {});
 
         std::string body_to_string() const {
             return std::string(body.begin(), body.end());
@@ -298,7 +307,7 @@ namespace pw {
     public:
         int parts_parsed = 0;
 
-        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, const HTTPMessageConfig& config = {});
     };
 
     class HTTPResponse {
@@ -352,7 +361,7 @@ namespace pw {
             return std::string(ret.begin(), ret.end());
         }
 
-        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, const HTTPMessageConfig& config = {});
 
         std::string body_string() const {
             return std::string(body.begin(), body.end());
@@ -370,6 +379,11 @@ namespace pw {
         WS_OPCODE_CLOSE = 0x8,
         WS_OPCODE_PING = 0x9,
         WS_OPCODE_PONG = 0xA,
+    };
+
+    struct WSConfig {
+        size_t frame_rlimit = 16'000'000;
+        size_t message_rlimit = 32'000'000;
     };
 
     class WSMessage {
@@ -413,7 +427,7 @@ namespace pw {
         std::vector<char> build(const char* masking_key = nullptr) const;
         pn::Status build(pn::tcp::Connection& conn, const char* masking_key = nullptr) const;
 
-        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, const WSConfig& config = {});
 
         std::string to_string() const {
             return std::string(data.begin(), data.end());
@@ -427,14 +441,16 @@ namespace pw {
     class BasicConnection : public Base {
     public:
         pn::tcp::BufReceiver buf_receiver;
+        HTTPMessageConfig http_config;
 
         template <typename... Args>
         BasicConnection(Args&&... args):
             Base(std::forward<Args>(args)...) {}
         template <typename... Args>
-        BasicConnection(Base conn, pn::tcp::BufReceiver buf_receiver):
+        BasicConnection(Base conn, pn::tcp::BufReceiver buf_receiver, HTTPMessageConfig http_config = {}):
             Base(std::move(conn)),
-            buf_receiver(std::move(buf_receiver)) {}
+            buf_receiver(std::move(buf_receiver)),
+            http_config(std::move(http_config)) {}
 
         using Base::send;
 
@@ -452,16 +468,16 @@ namespace pw {
 
         using Base::recv;
 
-        pn::Status recv(HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
-            return req.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        pn::Status recv(HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+            return req.parse(*this, buf_receiver, parts, http_config);
         }
 
-        pn::Status recv(HTTPRequestReceiver& req, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
-            return req.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        pn::Status recv(HTTPRequestReceiver& req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+            return req.parse(*this, buf_receiver, parts, http_config);
         }
 
-        pn::Status recv(HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
-            return resp.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        pn::Status recv(HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+            return resp.parse(*this, buf_receiver, parts, http_config);
         }
     };
 
@@ -475,11 +491,15 @@ namespace pw {
         std::mutex recv_mutex;
 
     public:
+        WSConfig ws_config;
         bool ws_closed = false;
 
         template <typename... Args>
         BasicWSConnection(Args&&... args):
             BasicConnection<Base>(std::forward<Args>(args)...) {}
+        BasicWSConnection(BasicConnection<Base> conn, WSConfig ws_config):
+            BasicConnection<Base>(std::move(conn)),
+            ws_config(std::move(ws_config)) {}
         BasicWSConnection(BasicWSConnection&& conn) noexcept {
             *this = std::move(conn);
         }
@@ -492,6 +512,7 @@ namespace pw {
             if (this != &conn) {
                 BasicConnection<Base>::operator=(std::move(conn));
                 ws_closed = std::exchange(conn.ws_closed, false);
+                ws_config = std::move(conn.ws_config);
             }
             return *this;
         }
@@ -517,7 +538,7 @@ namespace pw {
 
         using BasicConnection<Base>::recv;
 
-        pn::Status recv(WSMessage& message, bool handle_close = true, bool handle_pings = true, size_t frame_rlimit = 16'000'000, size_t message_rlimit = 32'000'000);
+        pn::Status recv(WSMessage& message, bool handle_close = true, bool handle_pings = true);
     };
 
     using WSConnection = BasicWSConnection<pn::tcp::Connection>;
@@ -566,6 +587,13 @@ namespace pw {
     using WSRoute = BasicWSRoute<pn::tcp::Connection>;
     using SecureWSRoute = BasicWSRoute<pn::tcp::SecureConnection>;
 
+    struct ServerConfig {
+        size_t buf_size = 4'000;
+        HTTPMessageConfig http;
+        WSConfig ws;
+        int backlog = 128;
+    };
+
     template <typename Base>
     class BasicServer : public Base {
     protected:
@@ -573,13 +601,7 @@ namespace pw {
 
     public:
         std::function<HTTPResponse(uint16_t, pn::StringView)> on_error;
-        size_t buf_size = 4'000;
-        unsigned int header_climit = 100;
-        size_t header_name_rlimit = 500;
-        size_t header_value_rlimit = 4'000'000;
-        size_t body_chunk_rlimit = 16'000'000;
-        size_t body_rlimit = 32'000'000;
-        size_t misc_rlimit = 1'000;
+        ServerConfig config;
 
         typedef BasicConnection<typename Base::connection_type> connection_type;
         typedef BasicWSConnection<typename Base::connection_type> ws_connection_type;
@@ -608,7 +630,7 @@ namespace pw {
         }
 
         // Returning false from config_cb allows you to reject a connection very early
-        pn::Status listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128);
+        pn::Status listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = -1);
 
     protected:
         std::unordered_map<std::string, http_route_type> http_routes;
@@ -636,12 +658,8 @@ namespace pw {
         std::string ca_path;
 
         size_t buf_size = 4'000;
-        unsigned int header_climit = 100;
-        size_t header_name_rlimit = 500;
-        size_t header_value_rlimit = 4'000'000;
-        size_t body_chunk_rlimit = 16'000'000;
-        size_t body_rlimit = 32'000'000;
-        size_t misc_rlimit = 1'000;
+        HTTPMessageConfig http;
+        WSConfig ws;
 
         pn::Status configure_sockopts(pn::tcp::Connection& conn) const;
         pn::Status configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const;
@@ -671,10 +689,10 @@ namespace pw {
         BasicWSClient(Args&&... args):
             BasicWSConnection<Base>(std::forward<Args>(args)...) {}
 
-        pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
-        pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
-        pn::Status ws_connect(pn::StringView url, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
-        pn::Status ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+        pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {});
+        pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {});
+        pn::Status ws_connect(pn::StringView url, HTTPHeaders headers = {});
+        pn::Status ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {});
 
         using BasicWSConnection<Base>::send;
 

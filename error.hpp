@@ -7,7 +7,7 @@ namespace pw {
     enum ErrorType {
         PW_ERROR_INVALID_URL,
         PW_ERROR_INVALID_HTTP,
-        PW_ERROR_INVALID_WEBSOCKET,
+        PW_ERROR_INVALID_WS,
         PW_ERROR_LIMIT_EXCEEDED,
         PW_ERROR_UNSUPPORTED,
     };
