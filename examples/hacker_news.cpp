@@ -10,11 +10,11 @@
 using nlohmann::json;
 
 int main() {
-    pn::init();
+    (void) pn::init();
 
     pw::HTTPResponse resp;
-    if (pw::fetch("https://hacker-news.firebaseio.com/v0/topstories.json", resp) == PN_ERROR) {
-        std::cerr << "Error: " << pw::universal_strerror() << std::endl;
+    if (pn::Status result = pw::fetch("https://hacker-news.firebaseio.com/v0/topstories.json", resp); !result) {
+        std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;
     }
     assert(resp.status_code == 200);
@@ -26,8 +26,8 @@ int main() {
     for (size_t i = 0; i < 10; ++i) {
         tasks.push_back(pw::thread_pool.schedule([&story_ids, i]() {
             pw::HTTPResponse resp;
-            if (pw::fetch("https://hacker-news.firebaseio.com/v0/item/" + std::to_string(story_ids[i].get<int>()) + ".json", resp) == PN_ERROR) {
-                std::cerr << "Error: " << pw::universal_strerror() << std::endl;
+            if (pn::Status result = pw::fetch("https://hacker-news.firebaseio.com/v0/item/" + std::to_string(story_ids[i].get<int>()) + ".json", resp); !result) {
+                std::cerr << "Error: " << result.error().message() << std::endl;
                 exit(1);
             }
             assert(resp.status_code == 200);
@@ -40,6 +40,6 @@ int main() {
         assert(task->wait() == tp::TASK_STATUS_SUCCESS);
     }
 
-    pn::quit();
+    (void) pn::quit();
     return 0;
 }

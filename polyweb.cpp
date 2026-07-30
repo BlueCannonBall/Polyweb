@@ -14,7 +14,6 @@ namespace pw {
     tp::ThreadPool thread_pool(std::max<unsigned int>(std::thread::hardware_concurrency(), 16));
 
     namespace detail {
-        thread_local int last_error = PW_ESUCCESS;
         static constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
         void reverse_memcpy(char* __restrict dest, const char* __restrict src, size_t size) {
@@ -43,35 +42,6 @@ namespace pw {
 
     void reverse_memmove(void* dest, const void* src, size_t size) {
         detail::reverse_memmove((char*) dest, (const char*) src, size);
-    }
-
-    std::string strerror(int error) {
-        const static std::string error_strings[] = {
-            "Success",       // PW_ESUCCESS
-            "Network error", // PW_ENET
-            "Web error",     // PW_EWEB
-        };
-
-        if (error >= 0 && error <= 2) {
-            return error_strings[error];
-        }
-        return "Unknown error";
-    }
-
-    std::string universal_strerror(int error) {
-        std::string base_error = strerror(error);
-        std::string specific_error;
-
-        switch (error) {
-        case PW_ENET:
-            specific_error = pn::universal_strerror();
-            break;
-
-        default:
-            return base_error;
-        }
-
-        return base_error + ": " + specific_error;
     }
 
     std::string build_date(time_t rawtime) {
@@ -370,13 +340,12 @@ namespace pw {
         return ret;
     }
 
-    int URLInfo::parse(pn::StringView url) {
+    pn::Status URLInfo::parse(pn::StringView url) {
         size_t offset = 0;
 
         size_t scheme_host_delimiter_pos;
         if ((scheme_host_delimiter_pos = url.find("://", offset)) == std::string::npos || scheme_host_delimiter_pos == offset) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+            return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL"));
         }
         scheme = url.substr(offset, scheme_host_delimiter_pos - offset);
         offset = scheme_host_delimiter_pos + 3;
@@ -386,8 +355,7 @@ namespace pw {
         if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos &&
             url.find('/', offset) > credentials_host_delimiter_pos) {
             if (credentials_host_delimiter_pos == offset) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL"));
             }
             credentials = percent_decode(url.substr(offset, credentials_host_delimiter_pos - offset));
             offset = credentials_host_delimiter_pos + 1;
@@ -396,15 +364,14 @@ namespace pw {
         size_t path_pos;
         if ((path_pos = url.find('/', offset)) != std::string::npos) {
             if (path_pos == offset) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL"));
             }
             host = url.substr(offset, path_pos - offset);
             offset = path_pos + 1;
         } else {
             host = url.substr(offset);
             path = '/';
-            return PN_OK;
+            return {};
         }
 
         size_t path_query_string_delimiter_pos;
@@ -417,11 +384,11 @@ namespace pw {
             offset = path_query_string_delimiter_pos + 1;
         } else {
             path = '/' + url.substr(offset, url.find('#', offset));
-            return PN_OK;
+            return {};
         }
 
         query_parameters.parse(url.substr(offset, url.find('#', offset)));
-        return PN_OK;
+        return {};
     }
 
     unsigned short URLInfo::port() const {
@@ -501,14 +468,12 @@ namespace pw {
         return ret;
     }
 
-    int HTTPRequest::build(pn::tcp::Connection& conn, int parts) const {
+    pn::Status HTTPRequest::build(pn::tcp::Connection& conn, int parts) const {
         auto data = build(send_cb ? parts & ~PW_HTTP_MESSAGE_PART_BODY : parts);
-        if (pn::ssize_t result = conn.sendall(data.data(), data.size()); result == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
-        } else if ((size_t) result != data.size()) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+        if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
+            return std::unexpected(result.error());
+        } else if (*result != data.size()) {
+            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP message"));
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
@@ -520,48 +485,42 @@ namespace pw {
                     std::string str = ss.str();
                     chunk.insert(chunk.begin(), str.begin(), str.end());
                     chunk.insert(chunk.end(), {'\r', '\n'});
-                    if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((size_t) result != chunk.size()) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != chunk.size()) {
+                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
                     }
                 } else {
                     static constexpr char last_chunk[] = "0\r\n\r\n";
-                    if (pn::ssize_t result = conn.sendall(last_chunk, 5); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if (result != 5) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != 5) {
+                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
                     }
                     break;
                 }
             }
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
+    pn::Status HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
             method.clear();
-            if (detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(method), ' ', misc_rlimit); !result) {
+                return result;
             }
             if (method.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request"));
             }
 
             target.clear();
-            if (detail::recv_until(conn, buf_receiver, std::back_inserter(target), ' ', misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(target), ' ', misc_rlimit); !result) {
+                return result;
             }
             if (target.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request"));
             }
 
             query_parameters->clear();
@@ -574,12 +533,11 @@ namespace pw {
             target = percent_decode(target);
 
             http_version.clear();
-            if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), "\r\n", misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), "\r\n", misc_rlimit); !result) {
+                return result;
             }
             if (http_version.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request"));
             }
         }
 
@@ -587,35 +545,31 @@ namespace pw {
             headers.clear();
             for (unsigned int i = 0;; ++i) {
                 if (i > header_climit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP headers"));
                 }
 
                 std::string header_name;
-                if (detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit) == PN_ERROR) {
-                    return PN_ERROR;
+                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit); !result) {
+                    return result;
                 }
 
                 if (header_name.empty()) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
                 }
 
                 std::string header_value;
-                if (detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit) == PN_ERROR) {
-                    return PN_ERROR;
+                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit); !result) {
+                    return result;
                 }
                 string::trim(header_value);
 
                 headers.insert_or_assign(std::move(header_name), std::move(header_value));
 
                 char crlf[2];
-                if (pn::ssize_t result = buf_receiver.recvall(conn, crlf, 2); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 2) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 2) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
                 }
 
                 if (!memcmp("\r\n", crlf, 2)) {
@@ -632,115 +586,97 @@ namespace pw {
                     unsigned long long chunk_size;
                     do {
                         std::string chunk_size_string;
-                        if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", misc_rlimit) == PN_ERROR) {
-                            return PN_ERROR;
+                        if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", misc_rlimit); !result) {
+                            return result;
                         }
                         if (chunk_size_string.empty()) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
                         }
                         if (auto result = std::from_chars(chunk_size_string.data(), chunk_size_string.data() + chunk_size_string.size(), chunk_size, 16);
                             result.ec != std::errc {} || result.ptr != chunk_size_string.data() + chunk_size_string.size()) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
                         }
 
                         if (chunk_size) {
                             if (recv_cb) {
                                 for (size_t received = 0; received < chunk_size;) {
                                     std::vector<char> chunk(std::min<size_t>(chunk_size - received, body_chunk_rlimit));
-                                    if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
-                                        detail::set_last_error(PW_ENET);
-                                        return PN_ERROR;
-                                    } else if ((unsigned long long) result != chunk.size()) {
-                                        detail::set_last_error(PW_EWEB);
-                                        return PN_ERROR;
+                                    if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
+                                        return std::unexpected(result.error());
+                                    } else if (*result != chunk.size()) {
+                                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
                                     }
 
                                     received += chunk.size();
                                     if (!recv_cb(std::move(chunk))) {
-                                        detail::set_last_error(PW_EWEB);
-                                        return PN_ERROR;
+                                        return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
                                     }
                                 }
                             } else {
                                 size_t end = body.size();
-                                if (end + chunk_size > (unsigned long long) body_rlimit) {
-                                    detail::set_last_error(PW_EWEB);
-                                    return PN_ERROR;
+                                if (end + chunk_size > body_rlimit) {
+                                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP body"));
                                 }
                                 body.resize(end + chunk_size);
-                                if (pn::ssize_t result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
-                                    detail::set_last_error(PW_ENET);
-                                    return PN_ERROR;
-                                } else if ((unsigned long long) result != chunk_size) {
-                                    detail::set_last_error(PW_EWEB);
-                                    body.resize(end + result);
-                                    return PN_ERROR;
+                                if (pn::Result<size_t> result = buf_receiver.recvall(conn, &body[end], chunk_size); !result) {
+                                    return std::unexpected(result.error());
+                                } else if (*result != chunk_size) {
+                                    body.resize(end + *result);
+                                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
                                 }
                             }
                         }
 
                         char crlf[2];
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, crlf, 2); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if (result != 2) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
+                            return std::unexpected(result.error());
+                        } else if (*result != 2) {
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
                         }
                     } while (chunk_size);
                 } else { // Only chunked transfer encoding is supported atm
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "parse HTTP transfer encoding"));
                 }
             } else if (auto content_len_it = headers.find("Content-Length"); content_len_it != headers.end()) {
                 unsigned long long content_len;
                 try {
                     content_len = std::stoull(content_len_it->second);
                 } catch (...) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP content length"));
                 }
 
                 if (content_len) {
                     if (recv_cb) {
                         for (size_t received = 0; received < content_len;) {
                             std::vector<char> chunk(std::min<size_t>(content_len - received, body_chunk_rlimit));
-                            if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
-                                detail::set_last_error(PW_ENET);
-                                return PN_ERROR;
-                            } else if ((unsigned long long) result != chunk.size()) {
-                                detail::set_last_error(PW_EWEB);
-                                return PN_ERROR;
+                            if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
+                                return std::unexpected(result.error());
+                            } else if (*result != chunk.size()) {
+                                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP body"));
                             }
 
                             received += chunk.size();
                             if (!recv_cb(std::move(chunk))) {
-                                detail::set_last_error(PW_EWEB);
-                                return PN_ERROR;
+                                return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
                             }
                         }
                     } else {
-                        if (content_len > (unsigned long long) body_rlimit) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        if (content_len > body_rlimit) {
+                            return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP body"));
                         }
                         body.resize(content_len);
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_len); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != content_len) {
-                            detail::set_last_error(PW_EWEB);
-                            body.resize(result);
-                            return PN_ERROR;
+                        if (pn::Result<size_t> result = buf_receiver.recvall(conn, body.data(), content_len); !result) {
+                            return std::unexpected(result.error());
+                        } else if (*result != content_len) {
+                            body.resize(*result);
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP body"));
                         }
                     }
                 }
             }
         }
 
-        return PN_OK;
+        return {};
     }
 
     std::vector<char> HTTPResponse::build(int parts) const {
@@ -805,14 +741,12 @@ namespace pw {
         return ret;
     }
 
-    int HTTPResponse::build(pn::tcp::Connection& conn, int parts) const {
+    pn::Status HTTPResponse::build(pn::tcp::Connection& conn, int parts) const {
         auto data = build(send_cb ? parts & ~PW_HTTP_MESSAGE_PART_BODY : parts);
-        if (pn::ssize_t result = conn.sendall(data.data(), data.size()); result == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
-        } else if ((size_t) result != data.size()) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+        if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
+            return std::unexpected(result.error());
+        } else if (*result != data.size()) {
+            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP message"));
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
@@ -824,63 +758,55 @@ namespace pw {
                     std::string str = ss.str();
                     chunk.insert(chunk.begin(), str.begin(), str.end());
                     chunk.insert(chunk.end(), {'\r', '\n'});
-                    if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((size_t) result != chunk.size()) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != chunk.size()) {
+                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
                     }
                 } else {
                     static constexpr char last_chunk[] = "0\r\n\r\n";
-                    if (pn::ssize_t result = conn.sendall(last_chunk, 5); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if (result != 5) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != 5) {
+                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
                     }
                     break;
                 }
             }
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
+    pn::Status HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
             http_version.clear();
-            if (detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(http_version), ' ', misc_rlimit); !result) {
+                return result;
             }
             if (http_version.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response"));
             }
 
             std::string status_code_string;
-            if (detail::recv_until(conn, buf_receiver, std::back_inserter(status_code_string), ' ', misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(status_code_string), ' ', misc_rlimit); !result) {
+                return result;
             }
             if (status_code_string.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response"));
             }
             try {
                 status_code = std::stoi(status_code_string);
             } catch (...) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP status code"));
             }
 
             reason_phrase.clear();
-            if (detail::recv_until(conn, buf_receiver, std::back_inserter(reason_phrase), "\r\n", misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(reason_phrase), "\r\n", misc_rlimit); !result) {
+                return result;
             }
             if (reason_phrase.empty()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response"));
             }
         }
 
@@ -888,34 +814,30 @@ namespace pw {
             headers.clear();
             for (unsigned int i = 0;; ++i) {
                 if (i > header_climit) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP headers"));
                 }
 
                 std::string header_name;
-                if (detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit) == PN_ERROR) {
-                    return PN_ERROR;
+                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit); !result) {
+                    return result;
                 }
                 if (header_name.empty()) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
                 }
 
                 std::string header_value;
-                if (detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit) == PN_ERROR) {
-                    return PN_ERROR;
+                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit); !result) {
+                    return result;
                 }
                 string::trim(header_value);
 
                 headers.insert_or_assign(std::move(header_name), std::move(header_value));
 
                 char crlf[2];
-                if (pn::ssize_t result = buf_receiver.recvall(conn, crlf, 2); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 2) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 2) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
                 }
 
                 if (!memcmp("\r\n", crlf, 2)) {
@@ -932,114 +854,96 @@ namespace pw {
                     unsigned long long chunk_size;
                     do {
                         std::string chunk_size_string;
-                        if (detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", misc_rlimit) == PN_ERROR) {
-                            return PN_ERROR;
+                        if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(chunk_size_string), "\r\n", misc_rlimit); !result) {
+                            return result;
                         }
                         if (chunk_size_string.empty()) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
                         }
                         if (auto result = std::from_chars(chunk_size_string.data(), chunk_size_string.data() + chunk_size_string.size(), chunk_size, 16);
                             result.ec != std::errc {} || result.ptr != chunk_size_string.data() + chunk_size_string.size()) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
                         }
 
                         if (chunk_size) {
                             if (recv_cb) {
                                 for (size_t received = 0; received < chunk_size;) {
                                     std::vector<char> chunk(std::min<size_t>(chunk_size - received, body_chunk_rlimit));
-                                    if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
-                                        detail::set_last_error(PW_ENET);
-                                        return PN_ERROR;
-                                    } else if ((unsigned long long) result != chunk.size()) {
-                                        detail::set_last_error(PW_EWEB);
-                                        return PN_ERROR;
+                                    if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
+                                        return std::unexpected(result.error());
+                                    } else if (*result != chunk.size()) {
+                                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
                                     }
 
                                     received += chunk.size();
                                     if (!recv_cb(std::move(chunk))) {
-                                        detail::set_last_error(PW_EWEB);
-                                        return PN_ERROR;
+                                        return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
                                     }
                                 }
                             } else {
                                 size_t end = body.size();
-                                if (end + chunk_size > (unsigned long long) body_rlimit) {
-                                    detail::set_last_error(PW_EWEB);
-                                    return PN_ERROR;
+                                if (end + chunk_size > body_rlimit) {
+                                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP body"));
                                 }
                                 body.resize(end + chunk_size);
-                                if (pn::ssize_t result = buf_receiver.recvall(conn, &body[end], chunk_size); result == PN_ERROR) {
-                                    detail::set_last_error(PW_ENET);
-                                    return PN_ERROR;
-                                } else if ((unsigned long long) result != chunk_size) {
-                                    detail::set_last_error(PW_EWEB);
-                                    body.resize(end + result);
-                                    return PN_ERROR;
+                                if (pn::Result<size_t> result = buf_receiver.recvall(conn, &body[end], chunk_size); !result) {
+                                    return std::unexpected(result.error());
+                                } else if (*result != chunk_size) {
+                                    body.resize(end + *result);
+                                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
                                 }
                             }
                         }
 
                         char crlf[2];
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, crlf, 2); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if (result != 2) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
+                            return std::unexpected(result.error());
+                        } else if (*result != 2) {
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
                         }
                     } while (chunk_size);
                 } else { // Only chunked transfer encoding is supported atm
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "parse HTTP transfer encoding"));
                 }
             } else if (auto content_len_it = headers.find("Content-Length"); content_len_it != headers.end()) {
                 unsigned long long content_len;
                 try {
                     content_len = std::stoull(content_len_it->second);
                 } catch (...) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP content length"));
                 }
 
                 if (content_len) {
                     if (recv_cb) {
                         for (size_t received = 0; received < content_len;) {
                             std::vector<char> chunk(std::min<size_t>(content_len - received, body_chunk_rlimit));
-                            if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
-                                detail::set_last_error(PW_ENET);
-                                return PN_ERROR;
-                            } else if ((unsigned long long) result != chunk.size()) {
-                                detail::set_last_error(PW_EWEB);
-                                return PN_ERROR;
+                            if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
+                                return std::unexpected(result.error());
+                            } else if (*result != chunk.size()) {
+                                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP body"));
                             }
 
                             received += chunk.size();
                             if (!recv_cb(std::move(chunk))) {
-                                detail::set_last_error(PW_EWEB);
-                                return PN_ERROR;
+                                return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
                             }
                         }
                     } else {
-                        if (content_len > (unsigned long long) body_rlimit) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        if (content_len > body_rlimit) {
+                            return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP body"));
                         }
                         body.resize(content_len);
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, body.data(), content_len); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != content_len) {
-                            detail::set_last_error(PW_EWEB);
-                            body.resize(result);
-                            return PN_ERROR;
+                        if (pn::Result<size_t> result = buf_receiver.recvall(conn, body.data(), content_len); !result) {
+                            return std::unexpected(result.error());
+                        } else if (*result != content_len) {
+                            body.resize(*result);
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP body"));
                         }
                     }
                 }
             }
         }
 
-        return PN_OK;
+        return {};
     }
 } // namespace pw

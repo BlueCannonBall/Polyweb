@@ -1,8 +1,9 @@
 #include "../polyweb.hpp"
 #include <iostream>
+#include <stdlib.h>
 
 int main() {
-    pn::init();
+    (void) pn::init();
 
     pw::SecureServer server;
 
@@ -53,8 +54,8 @@ int main() {
                     body.insert(body.end(), chunk.begin(), chunk.end());
                     return true;
                 };
-                if (conn.recv(req, PW_HTTP_MESSAGE_PART_BODY) == PN_ERROR) {
-                    return pw::HTTPResponse(500, pw::universal_strerror());
+                if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY); !result) {
+                    return pw::HTTPResponse(500, result.error().message());
                 }
 
                 return pw::HTTPResponse(200, body);
@@ -63,21 +64,21 @@ int main() {
             false, // tells Polyweb not to parse the body itself
         });
 
-    if (server.bind("0.0.0.0", 443) == PN_ERROR) {
-        std::cerr << "Error: " << pn::universal_strerror() << std::endl;
+    if (pn::Status result = server.bind("0.0.0.0", 443); !result) {
+        std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;
     }
-    if (server.ssl_init("cert.pem", "key.pem", SSL_FILETYPE_PEM) == PN_ERROR) {
-        std::cerr << "Error: " << pn::universal_strerror() << std::endl;
-        return 1;
-    }
-
-    if (server.listen() == PN_ERROR) {
-        std::cerr << "Error: " << pw::universal_strerror() << std::endl;
+    if (pn::Status result = server.ssl_init("cert.pem", "key.pem", SSL_FILETYPE_PEM); !result) {
+        std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;
     }
 
-    server.close();
-    pn::quit();
+    if (pn::Status result = server.listen(); !result) {
+        std::cerr << "Error: " << result.error().message() << std::endl;
+        return 1;
+    }
+
+    (void) server.close();
+    (void) pn::quit();
     return 0;
 }

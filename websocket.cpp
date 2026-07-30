@@ -91,7 +91,7 @@ namespace pw {
         return ret;
     }
 
-    int WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) const {
+    pn::Status WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) const {
         if (send_cb) {
             for (bool first_frame = true;; first_frame = false) {
                 std::vector<char> chunk = send_cb();
@@ -116,21 +116,17 @@ namespace pw {
                     }
                 }
 
-                if (pn::ssize_t result = conn.sendall(header.data(), header.size()); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if ((size_t) result != header.size()) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != header.size()) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "send WebSocket header"));
                 }
 
                 if (!chunk.empty()) {
-                    if (pn::ssize_t result = conn.sendall(chunk.data(), chunk.size()); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((size_t) result != chunk.size()) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != chunk.size()) {
+                        return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "send WebSocket payload"));
                     }
                 }
 
@@ -154,53 +150,45 @@ namespace pw {
                 header.insert(header.end(), masking_key, masking_key + 4);
             }
 
-            if (pn::ssize_t result = conn.sendall(header.data(), header.size()); result == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            } else if ((size_t) result != header.size()) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+            if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != header.size()) {
+                return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "send WebSocket header"));
             }
 
             if (!data.empty()) {
                 if (masking_key) {
                     auto masked_data = new char[data.size()];
                     detail::apply_mask(masked_data, data.data(), data.size(), masking_key);
-                    if (pn::ssize_t result = conn.sendall(masked_data, data.size()); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
+                    if (pn::Result<size_t> result = conn.sendall(masked_data, data.size()); !result) {
                         delete[] masked_data;
-                        return PN_ERROR;
-                    } else if ((size_t) result != data.size()) {
-                        detail::set_last_error(PW_EWEB);
+                        return std::unexpected(result.error());
+                    } else if (*result != data.size()) {
                         delete[] masked_data;
-                        return PN_ERROR;
+                        return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "send WebSocket payload"));
                     }
                     delete[] masked_data;
                 } else {
-                    if (pn::ssize_t result = conn.sendall(data.data(), data.size()); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((size_t) result != data.size()) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != data.size()) {
+                        return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "send WebSocket payload"));
                     }
                 }
             }
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
+    pn::Status WSMessage::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, size_t frame_rlimit, size_t message_rlimit) {
         data.clear();
         for (bool fin = false; !fin;) {
             char header[2];
-            if (pn::ssize_t result = buf_receiver.recvall(conn, header, 2); result == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
-            } else if (result != 2) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+            if (pn::Result<size_t> result = buf_receiver.recvall(conn, header, 2); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != 2) {
+                return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "parse WebSocket header"));
             }
 
             fin = header[0] & 0x80;
@@ -214,12 +202,10 @@ namespace pw {
             uint64_t payload_len;
             if (len7 == 126) {
                 char buf[2];
-                if (pn::ssize_t result = buf_receiver.recvall(conn, buf, 2); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 2) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, buf, 2); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 2) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "parse WebSocket payload length"));
                 }
 
                 uint16_t len16;
@@ -227,12 +213,10 @@ namespace pw {
                 payload_len = len16;
             } else if (len7 == 127) {
                 char buf[8];
-                if (pn::ssize_t result = buf_receiver.recvall(conn, buf, 8); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 8) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, buf, 8); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 8) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "parse WebSocket payload length"));
                 }
 
                 uint64_t len64;
@@ -244,12 +228,10 @@ namespace pw {
 
             char masking_key[4];
             if (masked) {
-                if (pn::ssize_t result = buf_receiver.recvall(conn, masking_key, 4); result == PN_ERROR) {
-                    detail::set_last_error(PW_ENET);
-                    return PN_ERROR;
-                } else if (result != 4) {
-                    detail::set_last_error(PW_EWEB);
-                    return PN_ERROR;
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, masking_key, 4); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != 4) {
+                    return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "parse WebSocket masking key"));
                 }
             }
 
@@ -257,12 +239,10 @@ namespace pw {
                 if (recv_cb) {
                     for (size_t received = 0; received < payload_len;) {
                         std::vector<char> chunk(std::min<size_t>(payload_len - received, frame_rlimit));
-                        if (pn::ssize_t result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); result == PN_ERROR) {
-                            detail::set_last_error(PW_ENET);
-                            return PN_ERROR;
-                        } else if ((unsigned long long) result != chunk.size()) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                        if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
+                            return std::unexpected(result.error());
+                        } else if (*result != chunk.size()) {
+                            return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "read WebSocket payload"));
                         }
 
                         if (masked) {
@@ -272,24 +252,20 @@ namespace pw {
                         }
                         received += chunk.size();
                         if (!recv_cb(std::move(chunk))) {
-                            detail::set_last_error(PW_EWEB);
-                            return PN_ERROR;
+                            return std::unexpected(pn::make_user_callback_error("receive WebSocket body"));
                         }
                     }
                 } else {
                     size_t end = data.size();
-                    if ((end + payload_len) > (uint64_t) message_rlimit) {
-                        detail::set_last_error(PW_EWEB);
-                        return PN_ERROR;
+                    if ((end + payload_len) > message_rlimit) {
+                        return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read WebSocket payload"));
                     }
                     data.resize(end + payload_len);
-                    if (pn::ssize_t result = buf_receiver.recvall(conn, &data[end], payload_len); result == PN_ERROR) {
-                        detail::set_last_error(PW_ENET);
-                        return PN_ERROR;
-                    } else if ((uint64_t) result != payload_len) {
-                        detail::set_last_error(PW_EWEB);
-                        data.resize(end + result);
-                        return PN_ERROR;
+                    if (pn::Result<size_t> result = buf_receiver.recvall(conn, &data[end], payload_len); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != payload_len) {
+                        data.resize(end + *result);
+                        return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "read WebSocket payload"));
                     }
                     if (masked) {
                         detail::apply_mask(&data[end], payload_len, masking_key);
@@ -297,7 +273,7 @@ namespace pw {
                 }
             }
         }
-        return PN_OK;
+        return {};
     }
 
     uint16_t WSMessage::close_status_code() const {
@@ -317,38 +293,40 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings, pn::ssize_t frame_rlimit, pn::ssize_t message_rlimit) {
+    pn::Status BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings, size_t frame_rlimit, size_t message_rlimit) {
         std::unique_lock<std::mutex> lock(recv_mutex);
-        if (message.parse(*this, this->buf_receiver, frame_rlimit, message_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = message.parse(*this, this->buf_receiver, frame_rlimit, message_rlimit); !result) {
+            return result;
         }
         lock.unlock();
 
         if (handle_close && message.opcode == WS_OPCODE_CLOSE) {
-            if (!ws_closed && send(message) == PN_ERROR) {
-                return PN_ERROR;
+            if (!ws_closed) {
+                if (pn::Status result = send(message); !result) {
+                    return result;
+                }
             }
             ws_closed = true;
         } else if (handle_pings && message.opcode == WS_OPCODE_PING) {
-            if (send(WSMessage(std::move(message.data), WS_OPCODE_PONG)) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = send(WSMessage(std::move(message.data), WS_OPCODE_PONG)); !result) {
+                return result;
             }
         }
 
-        return PN_OK;
+        return {};
     }
 
     template <typename Base>
-    int BasicWSConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
-        if (send(WSMessage::make_close(status_code, reason), masking_key) == PN_ERROR) {
-            return PN_ERROR;
+    pn::Status BasicWSConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
+        if (pn::Status result = send(WSMessage::make_close(status_code, reason), masking_key); !result) {
+            return result;
         }
         ws_closed = true;
-        return PN_OK;
+        return {};
     }
 
     template <typename Base>
-    int BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         HTTPRequest req("GET", std::move(target), std::move(query_parameters), std::move(headers));
 
         if (!req.headers.count("User-Agent")) {
@@ -375,32 +353,31 @@ namespace pw {
             req.headers["Sec-WebSocket-Key"] = PW_WS_KEY;
         }
 
-        if (send(req) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = send(req); !result) {
+            return result;
         }
 
-        if (resp.parse(*this, this->buf_receiver, PW_HTTP_MESSAGE_PART_HEAD, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = resp.parse(*this, this->buf_receiver, PW_HTTP_MESSAGE_PART_HEAD, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
+            return result;
         }
         if (resp.status_code != 101) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+            return std::unexpected(make_error(PW_ERROR_INVALID_WEBSOCKET, "WebSocket handshake status code"));
         }
 
-        return PN_OK;
+        return {};
     }
 
     template <typename Base>
-    int BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters, HTTPHeaders headers, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers), header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
     template <typename Base>
-    int BasicWSClient<Base>::ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         if (!url_info.credentials.empty() && !headers.count("WWW-Authenticate")) {
@@ -411,45 +388,52 @@ namespace pw {
     }
 
     template <typename Base>
-    int BasicWSClient<Base>::ws_connect(pn::StringView url, HTTPHeaders headers, unsigned int header_climit, pn::ssize_t header_name_rlimit, pn::ssize_t header_value_rlimit, pn::ssize_t body_chunk_rlimit, pn::ssize_t body_rlimit, pn::ssize_t misc_rlimit) {
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView url, HTTPHeaders headers, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
         HTTPResponse resp;
         return ws_connect(url, resp, std::move(headers), header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
     }
 
-    int make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
-        if (client.connect(hostname, port, [&config](auto& client) {
-                return config.configure_sockopts(client) == PN_OK;
-            }) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+        pn::Error config_error;
+        if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
+                if (pn::Status result = config.configure_sockopts(client); !result) {
+                    config_error = result.error();
+                    return false;
+                }
+                return true;
+            });
+            !result) {
+            if (config_error) {
+                return std::unexpected(config_error);
+            }
+            return result;
         }
 
         if (secure) {
-            if (config.configure_ssl(client, hostname) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+                return result;
             }
-            if (client.ssl_connect() == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
+            if (pn::Status result = client.ssl_connect(); !result) {
+                return result;
             }
         }
 
-        if (client.ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers), config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers), config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            return result;
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_ws_client(client, hostname, port, secure, std::move(target), resp, std::move(query_parameters), std::move(headers), config);
     }
 
-    int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         if (!url_info.credentials.empty() && !headers.count("WWW-Authenticate")) {
@@ -459,19 +443,18 @@ namespace pw {
         return make_ws_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", std::move(url_info.path), resp, std::move(url_info.query_parameters), std::move(headers), config);
     }
 
-    int make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_ws_client(client, url, resp, std::move(headers), config);
     }
 
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo proxy_url_info;
-        if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = proxy_url_info.parse(proxy_url); !result) {
+            return result;
         }
         if (proxy_url_info.scheme != "http") {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
         }
 
         HTTPRequest connect_req("CONNECT",
@@ -485,52 +468,58 @@ namespace pw {
         }
 
         client.buf_receiver.capacity = 0;
-        if (client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config](auto& client) {
-                return config.configure_sockopts(client) == PN_OK;
-            }) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+        pn::Error config_error;
+        if (pn::Status result = client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config, &config_error](auto& client) {
+                if (pn::Status result = config.configure_sockopts(client); !result) {
+                    config_error = result.error();
+                    return false;
+                }
+                return true;
+            });
+            !result) {
+            if (config_error) {
+                return std::unexpected(config_error);
+            }
+            return result;
         }
 
-        if (client.send(connect_req) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.send(connect_req); !result) {
+            return result;
         }
 
         HTTPResponse connect_resp;
-        if (connect_resp.parse(client, client.buf_receiver, PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = connect_resp.parse(client, client.buf_receiver, PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            return result;
         } else if (connect_resp.status_code_category() != 200) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
         }
         client.buf_receiver.capacity = config.buf_size;
 
         if (secure) {
-            if (config.configure_ssl(client, hostname) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+                return result;
             }
-            if (client.ssl_connect() == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
+            if (pn::Status result = client.ssl_connect(); !result) {
+                return result;
             }
         }
 
-        if (client.ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers), config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers), config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            return result;
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_proxied_ws_client(client, hostname, port, secure, std::move(target), proxy_url, resp, std::move(query_parameters), std::move(headers), config);
     }
 
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         if (!url_info.credentials.empty() && !headers.count("WWW-Authenticate")) {
@@ -540,7 +529,7 @@ namespace pw {
         return make_proxied_ws_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", std::move(url_info.path), proxy_url, resp, std::move(url_info.query_parameters), std::move(headers), config);
     }
 
-    int make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_proxied_ws_client(client, url, proxy_url, resp, std::move(headers), config);
     }

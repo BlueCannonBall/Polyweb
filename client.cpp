@@ -1,7 +1,7 @@
 #include "polyweb.hpp"
 
 namespace pw {
-    int ClientConfig::configure_sockopts(pn::tcp::Connection& conn) const {
+    pn::Status ClientConfig::configure_sockopts(pn::tcp::Connection& conn) const {
 #ifdef _WIN32
         DWORD send_timeout = this->send_timeout.count();
         DWORD recv_timeout = this->recv_timeout.count();
@@ -13,39 +13,34 @@ namespace pw {
         recv_timeout.tv_sec = this->recv_timeout.count() / 1000;
         recv_timeout.tv_usec = (this->recv_timeout.count() % 1000) * 1000;
 #endif
-        if (conn.setsockopt(SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof send_timeout) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof send_timeout); !result) {
+            return result;
         }
-        if (conn.setsockopt(SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof recv_timeout) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof recv_timeout); !result) {
+            return result;
         }
 
         int tcp_keep_alive = this->tcp_keep_alive;
-        if (conn.setsockopt(SOL_SOCKET, SO_KEEPALIVE, &tcp_keep_alive, sizeof(int)) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_KEEPALIVE, &tcp_keep_alive, sizeof(int)); !result) {
+            return result;
         }
 
         int tcp_no_delay = this->tcp_no_delay;
-        if (conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay, sizeof(int)) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+        if (pn::Status result = conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay, sizeof(int)); !result) {
+            return result;
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int ClientConfig::configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const {
-        if (client.ssl_init(hostname, verify_mode, ca_file, ca_path) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+    pn::Status ClientConfig::configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const {
+        if (pn::Status result = client.ssl_init(hostname, verify_mode, ca_file, ca_path); !result) {
+            return result;
         }
-        return PN_OK;
+        return {};
     }
 
-    int fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
+    pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
         if (!req.headers.count("User-Agent")) {
             req.headers["User-Agent"] = PW_AGENT_NAME;
         }
@@ -63,56 +58,68 @@ namespace pw {
 
         if (secure) {
             SecureClient client;
-            pn::tcp::BufReceiver buf_receiver(config.buf_size);
-            if (client.connect(hostname, port, [&config](auto& client) {
-                    return config.configure_sockopts(client) == PN_OK;
-                }) == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
+            pn::Error config_error;
+            if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
+                    if (pn::Status result = config.configure_sockopts(client); !result) {
+                        config_error = result.error();
+                        return false;
+                    }
+                    return true;
+                });
+                !result) {
+                if (config_error) {
+                    return std::unexpected(config_error);
+                }
+                return result;
             }
-            if (config.configure_ssl(client, hostname) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+                return result;
             }
-            if (client.ssl_connect() == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
+            if (pn::Status result = client.ssl_connect(); !result) {
+                return result;
             }
 
-            if (client.send(req) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = client.send(req); !result) {
+                return result;
             }
 
-            if (client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+                return result;
             }
         } else {
             Client client;
-            pn::tcp::BufReceiver buf_receiver(config.buf_size);
-            if (client.connect(hostname, port, [&config](auto& client) {
-                    return config.configure_sockopts(client) == PN_OK;
-                }) == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
+            pn::Error config_error;
+            if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
+                    if (pn::Status result = config.configure_sockopts(client); !result) {
+                        config_error = result.error();
+                        return false;
+                    }
+                    return true;
+                });
+                !result) {
+                if (config_error) {
+                    return std::unexpected(config_error);
+                }
+                return result;
             }
 
-            if (client.send(req) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = client.send(req); !result) {
+                return result;
             }
 
-            if (client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+                return result;
             }
         }
 
         HTTPHeaders::iterator location_it;
         if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
             URLInfo url_info;
-            if (url_info.parse(location_it->second) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = url_info.parse(location_it->second); !result) {
+                return result;
             }
             if (secure && string::iequals(url_info.scheme, "http")) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "follow redirect"));
             }
             if (!url_info.credentials.empty()) {
                 req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -120,17 +127,17 @@ namespace pw {
             return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects - 1);
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         return fetch("GET", url, resp, std::move(headers), config, max_redirects, std::move(http_version));
     }
 
-    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), std::move(url_info.query_parameters), std::move(headers), std::move(http_version));
@@ -141,10 +148,10 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
     }
 
-    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), std::move(body), std::move(headers), std::move(http_version));
@@ -156,10 +163,10 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
     }
 
-    int fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), body, std::move(headers), std::move(http_version));
@@ -171,14 +178,13 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
+    pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
         URLInfo proxy_url_info;
-        if (proxy_url_info.parse(proxy_url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = proxy_url_info.parse(proxy_url); !result) {
+            return result;
         }
         if (proxy_url_info.scheme != "http") {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
         }
 
         HTTPRequest connect_req("CONNECT",
@@ -207,54 +213,59 @@ namespace pw {
         }
 
         SecureClient client;
-        pn::tcp::BufReceiver buf_receiver(0);
-        if (client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config](auto& client) {
-                return config.configure_sockopts(client) == PN_OK;
-            }) == PN_ERROR) {
-            detail::set_last_error(PW_ENET);
-            return PN_ERROR;
+        client.buf_receiver.capacity = 0;
+        pn::Error config_error;
+        if (pn::Status result = client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config, &config_error](auto& client) {
+                if (pn::Status result = config.configure_sockopts(client); !result) {
+                    config_error = result.error();
+                    return false;
+                }
+                return true;
+            });
+            !result) {
+            if (config_error) {
+                return std::unexpected(config_error);
+            }
+            return result;
         }
 
-        if (client.send(connect_req) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.send(connect_req); !result) {
+            return result;
         }
 
         HTTPResponse connect_resp;
-        if (client.recv(connect_resp, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.recv(connect_resp, false, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            return result;
         } else if (connect_resp.status_code_category() != 200) {
-            detail::set_last_error(PW_EWEB);
-            return PN_ERROR;
+            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
         }
-        buf_receiver.capacity = config.buf_size;
+        client.buf_receiver.capacity = config.buf_size;
 
         if (secure) {
-            if (config.configure_ssl(client, hostname) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+                return result;
             }
-            if (client.ssl_connect() == PN_ERROR) {
-                detail::set_last_error(PW_ENET);
-                return PN_ERROR;
+            if (pn::Status result = client.ssl_connect(); !result) {
+                return result;
             }
         }
 
-        if (client.send(req) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.send(req); !result) {
+            return result;
         }
 
-        if (client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL, config.header_climit, config.header_name_rlimit, config.header_value_rlimit, config.body_chunk_rlimit, config.body_rlimit, config.misc_rlimit); !result) {
+            return result;
         }
 
         HTTPHeaders::iterator location_it;
         if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
             URLInfo url_info;
-            if (url_info.parse(location_it->second) == PN_ERROR) {
-                return PN_ERROR;
+            if (pn::Status result = url_info.parse(location_it->second); !result) {
+                return result;
             }
             if (secure && string::iequals(url_info.scheme, "http")) {
-                detail::set_last_error(PW_EWEB);
-                return PN_ERROR;
+                return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "follow redirect"));
             }
             if (!url_info.credentials.empty()) {
                 req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -262,17 +273,17 @@ namespace pw {
             return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects - 1);
         }
 
-        return PN_OK;
+        return {};
     }
 
-    int proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         return proxied_fetch("GET", url, proxy_url, resp, std::move(headers), config, max_redirects, std::move(http_version));
     }
 
-    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), std::move(url_info.query_parameters), std::move(headers), std::move(http_version));
@@ -283,10 +294,10 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), std::move(body), std::move(headers), std::move(http_version));
@@ -298,10 +309,10 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
     }
 
-    int proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
         URLInfo url_info;
-        if (url_info.parse(url) == PN_ERROR) {
-            return PN_ERROR;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), body, std::move(headers), std::move(http_version));

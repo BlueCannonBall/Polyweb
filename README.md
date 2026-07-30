@@ -3,7 +3,7 @@ A web framework utilizing Polynet.
 
 ## Quick Examples
 ```cpp
-pn::init();
+(void) pn::init();
 
 pw::Server server;
 
@@ -54,8 +54,8 @@ server.route("/recv_stream",
                 body.insert(body.end(), chunk.begin(), chunk.end());
                 return true;
             };
-            if (conn.recv(req, PW_HTTP_MESSAGE_PART_BODY) == PN_ERROR) {
-                return pw::HTTPResponse(500, pw::universal_strerror());
+            if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY); !result) {
+                return pw::HTTPResponse(500, result.error().message());
             }
 
             return pw::HTTPResponse(200, body);
@@ -64,17 +64,17 @@ server.route("/recv_stream",
         false, // tells Polyweb not to parse the body
     });
 
-if (server.bind("0.0.0.0", 8000) == PN_ERROR) {
-    std::cerr << "Error: " << pn::universal_strerror() << std::endl;
+if (pn::Status result = server.bind("0.0.0.0", 8000); !result) {
+    std::cerr << "Error: " << result.error().message() << std::endl;
     exit(EXIT_FAILURE);
 }
 
-if (server.listen() == PN_ERROR) {
-    std::cerr << "Error: " << pw::universal_strerror() << std::endl;
+if (pn::Status result = server.listen(); !result) {
+    std::cerr << "Error: " << result.error().message() << std::endl;
     exit(EXIT_FAILURE);
 }
 
-server.close();
-pn::quit();
+(void) server.close();
+(void) pn::quit();
 ```
-Note that Polyweb functions/methods throw Polyweb errors while methods inherited from Polynet throw Polynet errors. Do not do anything with the `conn` argument unless you know what you are doing. See `polyweb.hpp` to check out more ways to use Polyweb.
+Note that Polyweb and Polynet functions return `pn::Status` (`pn::Result<void>`) or `pn::Result<T>` (`std::expected<T, pn::Error>`). Error messages can be retrieved via `.error().message()`. Do not do anything with the `conn` argument unless you know what you are doing. See `polyweb.hpp` to check out more ways to use Polyweb.
