@@ -48,7 +48,7 @@ int main() {
 
     server.route("/recv_stream",
         pw::SecureHTTPRoute {
-            [](pw::SecureConnection& conn, pw::HTTPRequest req) {
+            [](pw::SecureConnection& conn, pw::HTTPRequestReceiver& req) {
                 std::vector<char> body;
                 req.recv_cb = [&body](std::vector<char> chunk) {
                     body.insert(body.end(), chunk.begin(), chunk.end());

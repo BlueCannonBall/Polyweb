@@ -6,6 +6,14 @@
 #endif
 
 namespace pw {
+    pn::Status HTTPRequestReceiver::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, unsigned int header_climit, size_t header_name_rlimit, size_t header_value_rlimit, size_t body_chunk_rlimit, size_t body_rlimit, size_t misc_rlimit) {
+        if (pn::Status result = HTTPRequest::parse(conn, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
+            return result;
+        }
+        parts_parsed |= parts;
+        return {};
+    }
+
     template <typename Base>
     pn::Status BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog) {
         return Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
@@ -41,7 +49,7 @@ namespace pw {
     pn::Status BasicServer<Base>::handle_conn(connection_type conn) const {
         bool keep_alive = true;
         do {
-            HTTPRequest req;
+            HTTPRequestReceiver req;
             if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_HEAD, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
                 (void) handle_error(conn, 400, result.error().message(), false);
                 return result;
@@ -203,25 +211,47 @@ namespace pw {
                         }
                     }
 
+                    auto discard_body = [&]() -> pn::Status {
+                        if (!(req.parts_parsed & PW_HTTP_MESSAGE_PART_BODY)) {
+                            req.recv_cb = [](std::vector<char>) {
+                                return true;
+                            };
+                            return conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+                        }
+                        return {};
+                    };
+
                     HTTPResponse resp;
                     try {
-                        resp = route.cb(conn, std::move(req));
+                        resp = route.cb(conn, req);
                     } catch (const std::exception& e) {
+                        pn::Status discard_result = discard_body();
+                        if (!discard_result) {
+                            keep_alive = false;
+                        }
                         if (pn::Status result = handle_error(conn, 500, e.what(), keep_alive, resp_parts, req.http_version); !result) {
                             return result;
                         }
-                        if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
-                            return result;
+                        if (!discard_result) {
+                            return discard_result;
                         }
                         continue;
                     } catch (...) {
+                        pn::Status discard_result = discard_body();
+                        if (!discard_result) {
+                            keep_alive = false;
+                        }
                         if (pn::Status result = handle_error(conn, 500, keep_alive, resp_parts, req.http_version); !result) {
                             return result;
                         }
-                        if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_BODY, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit); !result) {
-                            return result;
+                        if (!discard_result) {
+                            return discard_result;
                         }
                         continue;
+                    }
+
+                    if (pn::Status result = discard_body(); !result) {
+                        keep_alive = false;
                     }
 
                     if (!resp.headers.count("Server")) {

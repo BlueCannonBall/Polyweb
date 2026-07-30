@@ -178,6 +178,21 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
     }
 
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+        URLInfo url_info;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
+        }
+
+        HTTPRequest req(std::move(method), std::move(url_info.path), std::move(body_cb), std::move(headers), std::move(http_version));
+        req.query_parameters = url_info.query_parameters;
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        }
+
+        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
+    }
+
     pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
         URLInfo proxy_url_info;
         if (pn::Status result = proxy_url_info.parse(proxy_url); !result) {
@@ -316,6 +331,21 @@ namespace pw {
         }
 
         HTTPRequest req(std::move(method), std::move(url_info.path), body, std::move(headers), std::move(http_version));
+        req.query_parameters = url_info.query_parameters;
+        if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
+            req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
+        }
+
+        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
+    }
+
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+        URLInfo url_info;
+        if (pn::Status result = url_info.parse(url); !result) {
+            return result;
+        }
+
+        HTTPRequest req(std::move(method), std::move(url_info.path), std::move(body_cb), std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());

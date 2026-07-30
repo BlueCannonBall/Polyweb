@@ -294,6 +294,13 @@ namespace pw {
         }
     };
 
+    class HTTPRequestReceiver : public HTTPRequest {
+    public:
+        int parts_parsed = 0;
+
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000);
+    };
+
     class HTTPResponse {
     public:
         uint16_t status_code;
@@ -449,6 +456,10 @@ namespace pw {
             return req.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
 
+        pn::Status recv(HTTPRequestReceiver& req, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
+            return req.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
+        }
+
         pn::Status recv(HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL, unsigned int header_climit = 100, size_t header_name_rlimit = 500, size_t header_value_rlimit = 4'000'000, size_t body_chunk_rlimit = 16'000'000, size_t body_rlimit = 32'000'000, size_t misc_rlimit = 1'000) {
             return resp.parse(*this, buf_receiver, parts, header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit);
         }
@@ -523,7 +534,7 @@ namespace pw {
     template <typename T>
     class BasicHTTPRoute : public Route {
     public:
-        std::function<HTTPResponse(BasicConnection<T>&, HTTPRequest)> cb;
+        std::function<HTTPResponse(BasicConnection<T>&, HTTPRequestReceiver&)> cb;
         bool parse_body = true;
 
         BasicHTTPRoute() = default;
@@ -546,7 +557,7 @@ namespace pw {
         BasicWSRoute(decltype(on_open) on_open, bool wildcard = false):
             Route(wildcard),
             on_open(std::move(on_open)) {}
-        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, bool wildcard = false, bool handle_pings = true):
+        BasicWSRoute(decltype(on_connect) on_connect, decltype(on_open) on_open, bool wildcard = false):
             Route(wildcard),
             on_connect(std::move(on_connect)),
             on_open(std::move(on_open)) {}
@@ -644,12 +655,14 @@ namespace pw {
     pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
     pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
     pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
     pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
     pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWSClient : public BasicWSConnection<Base> {

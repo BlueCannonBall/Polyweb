@@ -48,7 +48,7 @@ server.route("/send_stream",
 
 server.route("/recv_stream",
     pw::HTTPRoute {
-        [](pw::Connection& conn, pw::HTTPRequest req) {
+        [](pw::Connection& conn, pw::HTTPRequestReceiver& req) {
             std::vector<char> body;
             req.recv_cb = [&body](std::vector<char> chunk) {
                 body.insert(body.end(), chunk.begin(), chunk.end());
