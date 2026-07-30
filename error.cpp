@@ -15,6 +15,8 @@ namespace pw {
                 case PW_ERROR_INVALID_WS: return "Invalid WebSocket message";
                 case PW_ERROR_LIMIT_EXCEEDED: return "Protocol limit exceeded";
                 case PW_ERROR_UNSUPPORTED: return "Unsupported protocol feature";
+                case PW_ERROR_PROXY_CONNECT_REJECTED: return "HTTP proxy rejected CONNECT request";
+                case PW_ERROR_WS_HANDSHAKE_REJECTED: return "WebSocket handshake rejected";
                 default: return "Unknown Polyweb error";
                 }
             }

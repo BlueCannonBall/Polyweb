@@ -345,7 +345,7 @@ namespace pw {
 
         size_t scheme_host_delimiter_pos;
         if ((scheme_host_delimiter_pos = url.find("://", offset)) == std::string::npos || scheme_host_delimiter_pos == offset) {
-            return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL"));
+            return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL scheme"));
         }
         scheme = url.substr(offset, scheme_host_delimiter_pos - offset);
         offset = scheme_host_delimiter_pos + 3;
@@ -355,7 +355,7 @@ namespace pw {
         if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos &&
             url.find('/', offset) > credentials_host_delimiter_pos) {
             if (credentials_host_delimiter_pos == offset) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL credentials"));
             }
             credentials = percent_decode(url.substr(offset, credentials_host_delimiter_pos - offset));
             offset = credentials_host_delimiter_pos + 1;
@@ -364,7 +364,7 @@ namespace pw {
         size_t path_pos;
         if ((path_pos = url.find('/', offset)) != std::string::npos) {
             if (path_pos == offset) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_URL, "parse URL host"));
             }
             host = url.substr(offset, path_pos - offset);
             offset = path_pos + 1;
@@ -473,7 +473,7 @@ namespace pw {
         if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
             return std::unexpected(result.error());
         } else if (*result != data.size()) {
-            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP message"));
+            return std::unexpected(make_short_write_error("write HTTP message"));
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
@@ -488,14 +488,14 @@ namespace pw {
                     if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != chunk.size()) {
-                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
+                        return std::unexpected(make_short_write_error("write HTTP chunk"));
                     }
                 } else {
                     static constexpr char last_chunk[] = "0\r\n\r\n";
                     if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != 5) {
-                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
+                        return std::unexpected(make_short_write_error("write HTTP chunk terminator"));
                     }
                     break;
                 }
@@ -513,7 +513,7 @@ namespace pw {
                 return result;
             }
             if (method.empty()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request method"));
             }
 
             target.clear();
@@ -521,7 +521,7 @@ namespace pw {
                 return result;
             }
             if (target.empty()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request target"));
             }
 
             query_parameters->clear();
@@ -538,7 +538,7 @@ namespace pw {
                 return result;
             }
             if (http_version.empty()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP request version"));
             }
         }
 
@@ -546,7 +546,7 @@ namespace pw {
             headers.clear();
             for (unsigned int i = 0;; ++i) {
                 if (i > header_climit) {
-                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP headers"));
+                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP header count"));
                 }
 
                 std::string header_name;
@@ -555,7 +555,7 @@ namespace pw {
                 }
 
                 if (header_name.empty()) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP header name"));
                 }
 
                 std::string header_value;
@@ -570,7 +570,7 @@ namespace pw {
                 if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
                     return std::unexpected(result.error());
                 } else if (*result != 2) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
                 }
 
                 if (!memcmp("\r\n", crlf, 2)) {
@@ -591,11 +591,11 @@ namespace pw {
                             return result;
                         }
                         if (chunk_size_string.empty()) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk size"));
                         }
                         if (auto result = std::from_chars(chunk_size_string.data(), chunk_size_string.data() + chunk_size_string.size(), chunk_size, 16);
                             result.ec != std::errc {} || result.ptr != chunk_size_string.data() + chunk_size_string.size()) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk size"));
                         }
 
                         if (chunk_size) {
@@ -610,7 +610,7 @@ namespace pw {
 
                                     received += chunk.size();
                                     if (!recv_cb(std::move(chunk))) {
-                                        return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
+                                        return std::unexpected(pn::make_user_callback_error("process HTTP body callback"));
                                     }
                                 }
                             } else {
@@ -632,7 +632,7 @@ namespace pw {
                         if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
                             return std::unexpected(result.error());
                         } else if (*result != 2) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk terminator"));
                         }
                     } while (chunk_size);
                 } else { // Only chunked transfer encoding is supported atm
@@ -658,7 +658,7 @@ namespace pw {
 
                             received += chunk.size();
                             if (!recv_cb(std::move(chunk))) {
-                                return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
+                                return std::unexpected(pn::make_user_callback_error("process HTTP body callback"));
                             }
                         }
                     } else {
@@ -747,7 +747,7 @@ namespace pw {
         if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
             return std::unexpected(result.error());
         } else if (*result != data.size()) {
-            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP message"));
+            return std::unexpected(make_short_write_error("write HTTP message"));
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
@@ -762,14 +762,14 @@ namespace pw {
                     if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != chunk.size()) {
-                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
+                        return std::unexpected(make_short_write_error("write HTTP chunk"));
                     }
                 } else {
                     static constexpr char last_chunk[] = "0\r\n\r\n";
                     if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != 5) {
-                        return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "send HTTP chunk"));
+                        return std::unexpected(make_short_write_error("write HTTP chunk terminator"));
                     }
                     break;
                 }
@@ -787,7 +787,7 @@ namespace pw {
                 return result;
             }
             if (http_version.empty()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response version"));
             }
 
             std::string status_code_string;
@@ -795,7 +795,7 @@ namespace pw {
                 return result;
             }
             if (status_code_string.empty()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response status code"));
             }
             try {
                 status_code = std::stoi(status_code_string);
@@ -808,7 +808,7 @@ namespace pw {
                 return result;
             }
             if (reason_phrase.empty()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response"));
+                return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP response reason phrase"));
             }
         }
 
@@ -816,7 +816,7 @@ namespace pw {
             headers.clear();
             for (unsigned int i = 0;; ++i) {
                 if (i > header_climit) {
-                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP headers"));
+                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP header count"));
                 }
 
                 std::string header_name;
@@ -824,7 +824,7 @@ namespace pw {
                     return result;
                 }
                 if (header_name.empty()) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP header name"));
                 }
 
                 std::string header_value;
@@ -839,7 +839,7 @@ namespace pw {
                 if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
                     return std::unexpected(result.error());
                 } else if (*result != 2) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP headers"));
+                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
                 }
 
                 if (!memcmp("\r\n", crlf, 2)) {
@@ -860,11 +860,11 @@ namespace pw {
                             return result;
                         }
                         if (chunk_size_string.empty()) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk size"));
                         }
                         if (auto result = std::from_chars(chunk_size_string.data(), chunk_size_string.data() + chunk_size_string.size(), chunk_size, 16);
                             result.ec != std::errc {} || result.ptr != chunk_size_string.data() + chunk_size_string.size()) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk"));
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "parse HTTP chunk size"));
                         }
 
                         if (chunk_size) {
@@ -879,7 +879,7 @@ namespace pw {
 
                                     received += chunk.size();
                                     if (!recv_cb(std::move(chunk))) {
-                                        return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
+                                        return std::unexpected(pn::make_user_callback_error("process HTTP body callback"));
                                     }
                                 }
                             } else {
@@ -901,7 +901,7 @@ namespace pw {
                         if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, 2); !result) {
                             return std::unexpected(result.error());
                         } else if (*result != 2) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk"));
+                            return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP chunk terminator"));
                         }
                     } while (chunk_size);
                 } else { // Only chunked transfer encoding is supported atm
@@ -927,7 +927,7 @@ namespace pw {
 
                             received += chunk.size();
                             if (!recv_cb(std::move(chunk))) {
-                                return std::unexpected(pn::make_user_callback_error("receive HTTP body"));
+                                return std::unexpected(pn::make_user_callback_error("process HTTP body callback"));
                             }
                         }
                     } else {

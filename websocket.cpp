@@ -119,14 +119,14 @@ namespace pw {
                 if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
                     return std::unexpected(result.error());
                 } else if (*result != header.size()) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_WS, "send WebSocket header"));
+                    return std::unexpected(make_short_write_error("write WebSocket header"));
                 }
 
                 if (!chunk.empty()) {
                     if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != chunk.size()) {
-                        return std::unexpected(make_error(PW_ERROR_INVALID_WS, "send WebSocket payload"));
+                        return std::unexpected(make_short_write_error("write WebSocket payload"));
                     }
                 }
 
@@ -153,7 +153,7 @@ namespace pw {
             if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
                 return std::unexpected(result.error());
             } else if (*result != header.size()) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_WS, "send WebSocket header"));
+                return std::unexpected(make_short_write_error("write WebSocket header"));
             }
 
             if (!data.empty()) {
@@ -165,14 +165,14 @@ namespace pw {
                         return std::unexpected(result.error());
                     } else if (*result != data.size()) {
                         delete[] masked_data;
-                        return std::unexpected(make_error(PW_ERROR_INVALID_WS, "send WebSocket payload"));
+                        return std::unexpected(make_short_write_error("write WebSocket payload"));
                     }
                     delete[] masked_data;
                 } else {
                     if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != data.size()) {
-                        return std::unexpected(make_error(PW_ERROR_INVALID_WS, "send WebSocket payload"));
+                        return std::unexpected(make_short_write_error("write WebSocket payload"));
                     }
                 }
             }
@@ -253,7 +253,7 @@ namespace pw {
                         }
                         received += chunk.size();
                         if (!recv_cb(std::move(chunk))) {
-                            return std::unexpected(pn::make_user_callback_error("receive WebSocket body"));
+                            return std::unexpected(pn::make_user_callback_error("process WebSocket message callback"));
                         }
                     }
                 } else {
@@ -362,7 +362,7 @@ namespace pw {
             return result;
         }
         if (resp.status_code != 101) {
-            return std::unexpected(make_error(PW_ERROR_INVALID_WS, "WebSocket handshake status code"));
+            return std::unexpected(make_error(PW_ERROR_WS_HANDSHAKE_REJECTED, "validate WebSocket handshake response"));
         }
 
         return {};
@@ -459,7 +459,7 @@ namespace pw {
             return result;
         }
         if (proxy_url_info.scheme != "http") {
-            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
+            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "use non-HTTP proxy"));
         }
 
         HTTPRequest connect_req("CONNECT",
@@ -496,7 +496,7 @@ namespace pw {
         if (pn::Status result = client.recv(connect_resp); !result) {
             return result;
         } else if (connect_resp.status_code_category() != 200) {
-            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "connect to HTTP proxy"));
+            return std::unexpected(make_error(PW_ERROR_PROXY_CONNECT_REJECTED, "perform HTTP proxy CONNECT"));
         }
         client.buf_receiver.capacity = config.buf_size;
 
