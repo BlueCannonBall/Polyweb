@@ -245,8 +245,8 @@ namespace pw {
         std::string target;
         HTTPHeaders headers;
         std::vector<char> body;
-        std::function<std::vector<char>()> send_cb;
-        std::function<bool(std::vector<char>)> recv_cb;
+        std::move_only_function<std::vector<char>()> send_cb;
+        std::move_only_function<bool(std::vector<char>)> recv_cb;
         QueryParameters query_parameters;
         std::string http_version = "HTTP/1.1";
 
@@ -281,10 +281,10 @@ namespace pw {
             query_parameters(std::move(query_parameters)),
             http_version(std::move(http_version)) {}
 
-        std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL) const;
-        pn::Status build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
+        std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL);
+        pn::Status build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL);
 
-        std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) const {
+        std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) {
             std::vector<char> ret = build(parts);
             return std::string(ret.begin(), ret.end());
         }
@@ -315,8 +315,8 @@ namespace pw {
         uint16_t status_code;
         std::string reason_phrase;
         std::vector<char> body;
-        std::function<std::vector<char>()> send_cb;
-        std::function<bool(std::vector<char>)> recv_cb;
+        std::move_only_function<std::vector<char>()> send_cb;
+        std::move_only_function<bool(std::vector<char>)> recv_cb;
         HTTPHeaders headers;
         std::string http_version = "HTTP/1.1";
 
@@ -353,10 +353,10 @@ namespace pw {
             return resp;
         }
 
-        std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL) const;
-        pn::Status build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL) const;
+        std::vector<char> build(int parts = PW_HTTP_MESSAGE_PART_ALL);
+        pn::Status build(pn::tcp::Connection& conn, int parts = PW_HTTP_MESSAGE_PART_ALL);
 
-        std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) const {
+        std::string build_string(int parts = PW_HTTP_MESSAGE_PART_ALL) {
             std::vector<char> ret = build(parts);
             return std::string(ret.begin(), ret.end());
         }
@@ -390,8 +390,8 @@ namespace pw {
     public:
         WSOpcode opcode = WS_OPCODE_BINARY;
         std::vector<char> data;
-        std::function<std::vector<char>()> send_cb;
-        std::function<bool(std::vector<char>)> recv_cb;
+        std::move_only_function<std::vector<char>()> send_cb;
+        std::move_only_function<bool(std::vector<char>)> recv_cb;
 
         WSMessage() = default;
         WSMessage(pn::StringView str, WSOpcode opcode = WS_OPCODE_TEXT):
@@ -424,8 +424,8 @@ namespace pw {
             return &data;
         }
 
-        std::vector<char> build(const char* masking_key = nullptr) const;
-        pn::Status build(pn::tcp::Connection& conn, const char* masking_key = nullptr) const;
+        std::vector<char> build(const char* masking_key = nullptr);
+        pn::Status build(pn::tcp::Connection& conn, const char* masking_key = nullptr);
 
         pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, const WSConfig& config = {});
 
@@ -454,11 +454,11 @@ namespace pw {
 
         using Base::send;
 
-        pn::Status send(const HTTPRequest& req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+        pn::Status send(HTTPRequest req, int parts = PW_HTTP_MESSAGE_PART_ALL) {
             return req.build(*this, parts);
         }
 
-        pn::Status send(const HTTPResponse& resp, int parts = PW_HTTP_MESSAGE_PART_ALL) {
+        pn::Status send(HTTPResponse resp, int parts = PW_HTTP_MESSAGE_PART_ALL) {
             return resp.build(*this, parts);
         }
 
@@ -528,7 +528,7 @@ namespace pw {
 
         using BasicConnection<Base>::send;
 
-        virtual pn::Status send(const WSMessage& message, const char* masking_key = nullptr) {
+        virtual pn::Status send(WSMessage message, const char* masking_key = nullptr) {
             std::lock_guard<std::mutex> lock(send_mutex);
             return message.build(*this, masking_key);
         }
@@ -665,19 +665,19 @@ namespace pw {
     using Client = BasicConnection<pn::tcp::Client>;
     using SecureClient = BasicConnection<pn::tcp::SecureClient>;
 
-    pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
-    pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {});
+    pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::move_only_function<std::vector<char>()> body_cb, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
 
-    pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {}, unsigned short max_redirects = 5);
-    pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers = {}, const ClientConfig& = {}, unsigned short max_redirects = 5, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {});
+    pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::move_only_function<std::vector<char>()> body_cb, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWSClient : public BasicWSConnection<Base> {
@@ -693,12 +693,12 @@ namespace pw {
 
         using BasicWSConnection<Base>::send;
 
-        pn::Status send(const WSMessage& message, const char* masking_key = nullptr) override {
+        pn::Status send(WSMessage message, const char* masking_key = nullptr) override {
             if (!masking_key) {
                 static constexpr char default_masking_key[4] = {0};
                 masking_key = default_masking_key;
             }
-            return BasicWSConnection<Base>::send(message, masking_key);
+            return BasicWSConnection<Base>::send(std::move(message), masking_key);
         }
     };
 

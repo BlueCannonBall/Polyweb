@@ -184,11 +184,12 @@ namespace pw {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
                     }
 
-                    if (pn::Status result = conn.send(resp); !result) {
+                    bool ws_open = resp.status_code == 101;
+                    if (pn::Status result = conn.send(std::move(resp)); !result) {
                         return result;
                     }
 
-                    if (resp.status_code == 101) {
+                    if (ws_open) {
                         route.on_open(ws_connection_type(std::move(conn), config.ws), std::move(req));
                         return {};
                     }
@@ -261,7 +262,7 @@ namespace pw {
                         resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
                     }
 
-                    if (pn::Status result = conn.send(resp, resp_parts); !result) {
+                    if (pn::Status result = conn.send(std::move(resp), resp_parts); !result) {
                         return result;
                     }
                 } else if (!ws_route_target.empty()) {
@@ -310,7 +311,7 @@ namespace pw {
             resp.headers.insert(header);
         }
 
-        return conn.send(resp, parts);
+        return conn.send(std::move(resp), parts);
     }
 
     template <typename Base>
@@ -334,7 +335,7 @@ namespace pw {
             resp.headers["Connection"] = keep_alive ? "keep-alive" : "close";
         }
 
-        return conn.send(resp, parts);
+        return conn.send(std::move(resp), parts);
     }
 
     template class BasicServer<pn::tcp::Server>;

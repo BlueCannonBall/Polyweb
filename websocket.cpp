@@ -46,7 +46,7 @@ namespace pw {
         return ret;
     }
 
-    std::vector<char> WSMessage::build(const char* masking_key) const {
+    std::vector<char> WSMessage::build(const char* masking_key) {
         std::vector<char> ret;
 
         auto write_frame = [this, masking_key, &ret](std::span<const char> chunk, bool is_first, bool is_final) {
@@ -91,7 +91,7 @@ namespace pw {
         return ret;
     }
 
-    pn::Status WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) const {
+    pn::Status WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) {
         if (send_cb) {
             for (bool first_frame = true;; first_frame = false) {
                 std::vector<char> chunk = send_cb();
@@ -301,13 +301,13 @@ namespace pw {
 
         if (handle_close && message.opcode == WS_OPCODE_CLOSE) {
             if (!ws_closed) {
-                if (pn::Status result = send(message); !result) {
+                if (pn::Status result = send(WSMessage(message.data, WS_OPCODE_CLOSE)); !result) {
                     return result;
                 }
             }
             ws_closed = true;
         } else if (handle_pings && message.opcode == WS_OPCODE_PING) {
-            if (pn::Status result = send(WSMessage(std::move(message.data), WS_OPCODE_PONG)); !result) {
+            if (pn::Status result = send(WSMessage(message.data, WS_OPCODE_PONG)); !result) {
                 return result;
             }
         }
@@ -352,7 +352,7 @@ namespace pw {
             req.headers["Sec-WebSocket-Key"] = PW_WS_KEY;
         }
 
-        if (pn::Status result = send(req); !result) {
+        if (pn::Status result = send(std::move(req)); !result) {
             return result;
         }
 
@@ -486,7 +486,7 @@ namespace pw {
             return result;
         }
 
-        if (pn::Status result = client.send(connect_req); !result) {
+        if (pn::Status result = client.send(std::move(connect_req)); !result) {
             return result;
         }
 

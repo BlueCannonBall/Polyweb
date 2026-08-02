@@ -16,7 +16,7 @@ int main() {
     for (int i = 0;; ++i, std::this_thread::sleep_for(std::chrono::seconds(1))) {
         {
             pw::WSMessage message("Message #" + std::to_string(i));
-            if (pn::Status result = client.send(message); !result) {
+            if (pn::Status result = client.send(std::move(message)); !result) {
                 std::cerr << "Error: " << result.error().message() << std::endl;
                 return 1;
             }

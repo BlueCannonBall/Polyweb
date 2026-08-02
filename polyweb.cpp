@@ -404,7 +404,7 @@ namespace pw {
         }
     }
 
-    std::vector<char> HTTPRequest::build(int parts) const {
+    std::vector<char> HTTPRequest::build(int parts) {
         std::vector<char> ret;
 
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
@@ -468,7 +468,7 @@ namespace pw {
         return ret;
     }
 
-    pn::Status HTTPRequest::build(pn::tcp::Connection& conn, int parts) const {
+    pn::Status HTTPRequest::build(pn::tcp::Connection& conn, int parts) {
         auto data = build(send_cb ? parts & ~PW_HTTP_MESSAGE_PART_BODY : parts);
         if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
             return std::unexpected(result.error());
@@ -680,7 +680,7 @@ namespace pw {
         return {};
     }
 
-    std::vector<char> HTTPResponse::build(int parts) const {
+    std::vector<char> HTTPResponse::build(int parts) {
         std::vector<char> ret;
 
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
@@ -742,7 +742,7 @@ namespace pw {
         return ret;
     }
 
-    pn::Status HTTPResponse::build(pn::tcp::Connection& conn, int parts) const {
+    pn::Status HTTPResponse::build(pn::tcp::Connection& conn, int parts) {
         auto data = build(send_cb ? parts & ~PW_HTTP_MESSAGE_PART_BODY : parts);
         if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
             return std::unexpected(result.error());

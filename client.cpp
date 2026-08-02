@@ -40,7 +40,7 @@ namespace pw {
         return {};
     }
 
-    pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
+    pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config) {
         if (!req.headers.count("User-Agent")) {
             req.headers["User-Agent"] = PW_AGENT_NAME;
         }
@@ -56,6 +56,7 @@ namespace pw {
             req.headers["Connection"] = "close";
         }
 
+        int resp_parts = req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL;
         if (secure) {
             SecureClient client;
             client.http_config = config.http;
@@ -80,11 +81,11 @@ namespace pw {
                 return result;
             }
 
-            if (pn::Status result = client.send(req); !result) {
+            if (pn::Status result = client.send(std::move(req)); !result) {
                 return result;
             }
 
-            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL); !result) {
+            if (pn::Status result = client.recv(resp, resp_parts); !result) {
                 return result;
             }
         } else {
@@ -105,38 +106,23 @@ namespace pw {
                 return result;
             }
 
-            if (pn::Status result = client.send(req); !result) {
+            if (pn::Status result = client.send(std::move(req)); !result) {
                 return result;
             }
 
-            if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL); !result) {
+            if (pn::Status result = client.recv(resp, resp_parts); !result) {
                 return result;
             }
-        }
-
-        HTTPHeaders::iterator location_it;
-        if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
-            URLInfo url_info;
-            if (pn::Status result = url_info.parse(location_it->second); !result) {
-                return result;
-            }
-            if (secure && string::iequals(url_info.scheme, "http")) {
-                return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "follow HTTPS-to-HTTP redirect"));
-            }
-            if (!url_info.credentials.empty()) {
-                req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
-            }
-            return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects - 1);
         }
 
         return {};
     }
 
-    pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
-        return fetch("GET", url, resp, std::move(headers), config, max_redirects, std::move(http_version));
+    pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
+        return fetch("GET", url, resp, std::move(headers), config, std::move(http_version));
     }
 
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -147,10 +133,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config);
     }
 
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -162,10 +148,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config);
     }
 
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -177,10 +163,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config);
     }
 
-    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, HTTPResponse& resp, std::move_only_function<std::vector<char>()> body_cb, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -192,10 +178,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config, max_redirects);
+        return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config);
     }
 
-    pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config, unsigned short max_redirects) {
+    pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, HTTPRequest req, HTTPResponse& resp, const ClientConfig& config) {
         URLInfo proxy_url_info;
         if (pn::Status result = proxy_url_info.parse(proxy_url); !result) {
             return result;
@@ -247,7 +233,7 @@ namespace pw {
             return result;
         }
 
-        if (pn::Status result = client.send(connect_req); !result) {
+        if (pn::Status result = client.send(std::move(connect_req)); !result) {
             return result;
         }
 
@@ -268,37 +254,23 @@ namespace pw {
             }
         }
 
-        if (pn::Status result = client.send(req); !result) {
+        int resp_parts = req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL;
+        if (pn::Status result = client.send(std::move(req)); !result) {
             return result;
         }
 
-        if (pn::Status result = client.recv(resp, req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL); !result) {
+        if (pn::Status result = client.recv(resp, resp_parts); !result) {
             return result;
-        }
-
-        HTTPHeaders::iterator location_it;
-        if (max_redirects && resp.status_code_category() == 300 && (location_it = resp.headers.find("Location")) != resp.headers.end()) {
-            URLInfo url_info;
-            if (pn::Status result = url_info.parse(location_it->second); !result) {
-                return result;
-            }
-            if (secure && string::iequals(url_info.scheme, "http")) {
-                return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "follow HTTPS-to-HTTP redirect"));
-            }
-            if (!url_info.credentials.empty()) {
-                req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
-            }
-            return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects - 1);
         }
 
         return {};
     }
 
-    pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
-        return proxied_fetch("GET", url, proxy_url, resp, std::move(headers), config, max_redirects, std::move(http_version));
+    pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
+        return proxied_fetch("GET", url, proxy_url, resp, std::move(headers), config, std::move(http_version));
     }
 
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -309,10 +281,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
+        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config);
     }
 
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::vector<char> body, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -324,10 +296,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
+        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config);
     }
 
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, pn::StringView body, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -339,10 +311,10 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
+        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config);
     }
 
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::function<std::vector<char>()> body_cb, HTTPHeaders headers, const ClientConfig& config, unsigned short max_redirects, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, std::move_only_function<std::vector<char>()> body_cb, HTTPHeaders headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -354,6 +326,6 @@ namespace pw {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
         }
 
-        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config, max_redirects);
+        return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config);
     }
 }; // namespace pw
