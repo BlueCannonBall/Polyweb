@@ -119,14 +119,14 @@ namespace pw {
                 if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
                     return std::unexpected(result.error());
                 } else if (*result != header.size()) {
-                    return std::unexpected(make_short_write_error("write WebSocket header"));
+                    return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket header"});
                 }
 
                 if (!chunk.empty()) {
                     if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != chunk.size()) {
-                        return std::unexpected(make_short_write_error("write WebSocket payload"));
+                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket payload"});
                     }
                 }
 
@@ -153,7 +153,7 @@ namespace pw {
             if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
                 return std::unexpected(result.error());
             } else if (*result != header.size()) {
-                return std::unexpected(make_short_write_error("write WebSocket header"));
+                return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket header"});
             }
 
             if (!data.empty()) {
@@ -165,14 +165,14 @@ namespace pw {
                         return std::unexpected(result.error());
                     } else if (*result != data.size()) {
                         delete[] masked_data;
-                        return std::unexpected(make_short_write_error("write WebSocket payload"));
+                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket payload"});
                     }
                     delete[] masked_data;
                 } else {
                     if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != data.size()) {
-                        return std::unexpected(make_short_write_error("write WebSocket payload"));
+                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket payload"});
                     }
                 }
             }
@@ -186,10 +186,10 @@ namespace pw {
         data.clear();
         for (bool fin = false; !fin;) {
             char header[2];
-            if (pn::Result<size_t> result = buf_receiver.recvall(conn, header, 2); !result) {
+            if (pn::Result<size_t> result = buf_receiver.recvall(conn, header, sizeof header); !result) {
                 return std::unexpected(result.error());
-            } else if (*result != 2) {
-                return std::unexpected(make_error(PW_ERROR_INVALID_WS, "parse WebSocket header"));
+            } else if (*result != sizeof header) {
+                return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "parse WebSocket header"));
             }
 
             fin = header[0] & 0x80;
@@ -203,10 +203,10 @@ namespace pw {
             uint64_t payload_len;
             if (len7 == 126) {
                 char buf[2];
-                if (pn::Result<size_t> result = buf_receiver.recvall(conn, buf, 2); !result) {
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, buf, sizeof buf); !result) {
                     return std::unexpected(result.error());
-                } else if (*result != 2) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_WS, "parse WebSocket payload length"));
+                } else if (*result != sizeof buf) {
+                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "parse WebSocket payload length"));
                 }
 
                 uint16_t len16;
@@ -214,10 +214,10 @@ namespace pw {
                 payload_len = len16;
             } else if (len7 == 127) {
                 char buf[8];
-                if (pn::Result<size_t> result = buf_receiver.recvall(conn, buf, 8); !result) {
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, buf, sizeof buf); !result) {
                     return std::unexpected(result.error());
-                } else if (*result != 8) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_WS, "parse WebSocket payload length"));
+                } else if (*result != sizeof buf) {
+                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "parse WebSocket payload length"));
                 }
 
                 uint64_t len64;
@@ -229,10 +229,10 @@ namespace pw {
 
             char masking_key[4];
             if (masked) {
-                if (pn::Result<size_t> result = buf_receiver.recvall(conn, masking_key, 4); !result) {
+                if (pn::Result<size_t> result = buf_receiver.recvall(conn, masking_key, sizeof masking_key); !result) {
                     return std::unexpected(result.error());
-                } else if (*result != 4) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_WS, "parse WebSocket masking key"));
+                } else if (*result != sizeof masking_key) {
+                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "parse WebSocket masking key"));
                 }
             }
 
@@ -243,7 +243,7 @@ namespace pw {
                         if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
                             return std::unexpected(result.error());
                         } else if (*result != chunk.size()) {
-                            return std::unexpected(make_error(PW_ERROR_INVALID_WS, "read WebSocket payload"));
+                            return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "read WebSocket payload"));
                         }
 
                         if (masked) {
@@ -253,20 +253,20 @@ namespace pw {
                         }
                         received += chunk.size();
                         if (!recv_cb(std::move(chunk))) {
-                            return std::unexpected(pn::make_user_callback_error("process WebSocket message callback"));
+                            return std::unexpected(pn::make_polynet_error(pn::PN_ERROR_USER_CALLBACK, "process WebSocket message callback"));
                         }
                     }
                 } else {
                     size_t end = data.size();
                     if ((end + payload_len) > message_rlimit) {
-                        return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read WebSocket payload"));
+                        return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "read WebSocket payload"));
                     }
                     data.resize(end + payload_len);
                     if (pn::Result<size_t> result = buf_receiver.recvall(conn, &data[end], payload_len); !result) {
                         return std::unexpected(result.error());
                     } else if (*result != payload_len) {
                         data.resize(end + *result);
-                        return std::unexpected(make_error(PW_ERROR_INVALID_WS, "read WebSocket payload"));
+                        return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "read WebSocket payload"));
                     }
                     if (masked) {
                         detail::apply_mask(&data[end], payload_len, masking_key);
@@ -295,11 +295,9 @@ namespace pw {
 
     template <typename Base>
     pn::Status BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings) {
-        std::unique_lock<std::mutex> lock(recv_mutex);
         if (pn::Status result = message.parse(*this, this->buf_receiver, ws_config); !result) {
             return result;
         }
-        lock.unlock();
 
         if (handle_close && message.opcode == WS_OPCODE_CLOSE) {
             if (!ws_closed) {
@@ -362,7 +360,7 @@ namespace pw {
             return result;
         }
         if (resp.status_code != 101) {
-            return std::unexpected(make_error(PW_ERROR_WS_HANDSHAKE_REJECTED, "validate WebSocket handshake response"));
+            return std::unexpected(make_polyweb_error(PW_ERROR_WS_HANDSHAKE_REJECTED, "validate WebSocket handshake response"));
         }
 
         return {};
@@ -459,7 +457,7 @@ namespace pw {
             return result;
         }
         if (proxy_url_info.scheme != "http") {
-            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "use non-HTTP proxy"));
+            return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "use non-HTTP proxy"));
         }
 
         HTTPRequest connect_req("CONNECT",
@@ -496,9 +494,9 @@ namespace pw {
         if (pn::Status result = client.recv(connect_resp); !result) {
             return result;
         } else if (connect_resp.status_code_category() != 200) {
-            return std::unexpected(make_error(PW_ERROR_PROXY_CONNECT_REJECTED, "perform HTTP proxy CONNECT"));
+            return std::unexpected(make_polyweb_error(PW_ERROR_PROXY_CONNECT_REJECTED, "perform HTTP proxy CONNECT"));
         }
-        client.buf_receiver.capacity = config.buf_size;
+        client.buf_receiver.capacity = config.buf_capacity;
 
         if (secure) {
             if (pn::Status result = config.configure_ssl(client, hostname); !result) {

@@ -121,7 +121,7 @@ namespace pw {
                 return result;
             }
             if (secure && string::iequals(url_info.scheme, "http")) {
-                return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "follow HTTPS-to-HTTP redirect"));
+                return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "follow HTTPS-to-HTTP redirect"));
             }
             if (!url_info.credentials.empty()) {
                 req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -201,7 +201,7 @@ namespace pw {
             return result;
         }
         if (proxy_url_info.scheme != "http") {
-            return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "use non-HTTP proxy"));
+            return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "use non-HTTP proxy"));
         }
 
         HTTPRequest connect_req("CONNECT",
@@ -255,9 +255,9 @@ namespace pw {
         if (pn::Status result = client.recv(connect_resp, false); !result) {
             return result;
         } else if (connect_resp.status_code_category() != 200) {
-            return std::unexpected(make_error(PW_ERROR_PROXY_CONNECT_REJECTED, "perform HTTP proxy CONNECT"));
+            return std::unexpected(make_polyweb_error(PW_ERROR_PROXY_CONNECT_REJECTED, "perform HTTP proxy CONNECT"));
         }
-        client.buf_receiver.capacity = config.buf_size;
+        client.buf_receiver.capacity = config.buf_capacity;
 
         if (secure) {
             if (pn::Status result = config.configure_ssl(client, hostname); !result) {
@@ -283,7 +283,7 @@ namespace pw {
                 return result;
             }
             if (secure && string::iequals(url_info.scheme, "http")) {
-                return std::unexpected(make_error(PW_ERROR_UNSUPPORTED, "follow HTTPS-to-HTTP redirect"));
+                return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "follow HTTPS-to-HTTP redirect"));
             }
             if (!url_info.credentials.empty()) {
                 req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());

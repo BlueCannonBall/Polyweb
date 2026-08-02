@@ -20,12 +20,8 @@ namespace pw {
         return {error, polyweb_category()};
     }
 
-    inline pn::Error make_error(ErrorType error, pn::StringView operation) {
+    inline pn::Error make_polyweb_error(ErrorType error, pn::StringView operation = {}) {
         return {polyweb_error_code(error), operation};
-    }
-
-    inline pn::Error make_short_write_error(pn::StringView operation) {
-        return {std::make_error_code(std::errc::io_error), operation};
     }
 } // namespace pw
 

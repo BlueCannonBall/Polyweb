@@ -19,7 +19,7 @@ namespace pw {
         return Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
             if (!config_cb || config_cb(conn)) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
-                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_size), config.http));
+                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
                 },
                     true));
             }
@@ -36,7 +36,7 @@ namespace pw {
                     if (ssl_ctx && !conn.ssl_accept()) {
                         return;
                     }
-                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_size), config.http));
+                    (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
                 },
                     true));
             }

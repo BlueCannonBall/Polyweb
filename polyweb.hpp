@@ -45,14 +45,14 @@ namespace pw {
         pn::Status recv_until(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, OutputIt ret, char end, size_t rlimit = 1'000) {
             for (size_t i = 0;; ++i) {
                 if (i >= rlimit) {
-                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP line"));
+                    return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP line"));
                 }
 
                 char c;
-                if (pn::Result<size_t> result = buf_receiver.recv(conn, &c, 1); !result) {
+                if (pn::Result<size_t> result = buf_receiver.recv(conn, &c, sizeof c); !result) {
                     return std::unexpected(result.error());
-                } else if (*result != 1) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP line"));
+                } else if (*result != sizeof c) {
+                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "read HTTP line"));
                 }
 
                 if (c == end) {
@@ -69,14 +69,14 @@ namespace pw {
             std::vector<char> found_buf;
             for (size_t i = 0, search_pos = 0;; ++i) {
                 if (i >= rlimit) {
-                    return std::unexpected(make_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP delimiter"));
+                    return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP delimiter"));
                 }
 
                 char c;
-                if (pn::Result<size_t> result = buf_receiver.recv(conn, &c, 1); !result) {
+                if (pn::Result<size_t> result = buf_receiver.recv(conn, &c, sizeof c); !result) {
                     return std::unexpected(result.error());
-                } else if (*result != 1) {
-                    return std::unexpected(make_error(PW_ERROR_INVALID_HTTP, "read HTTP delimiter"));
+                } else if (*result != sizeof c) {
+                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "read HTTP delimiter"));
                 }
 
                 if (c == end_sequence[search_pos]) {
@@ -488,7 +488,6 @@ namespace pw {
     class BasicWSConnection : public BasicConnection<Base> {
     protected:
         std::mutex send_mutex;
-        std::mutex recv_mutex;
 
     public:
         WSConfig ws_config;
@@ -504,10 +503,6 @@ namespace pw {
             *this = std::move(conn);
         }
 
-        ~BasicWSConnection() {
-            (void) close();
-        }
-
         BasicWSConnection& operator=(BasicWSConnection&& conn) noexcept {
             if (this != &conn) {
                 BasicConnection<Base>::operator=(std::move(conn));
@@ -517,14 +512,16 @@ namespace pw {
             return *this;
         }
 
+        ~BasicWSConnection() {
+            (void) close();
+        }
+
         virtual pn::Status ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key = nullptr);
 
         // This function can optionally do a WebSocket close, but it would only be somewhat graceful
         pn::Status close(int protocol_layers = PN_PROTOCOL_LAYER_DEFAULT) override {
             if ((protocol_layers & PW_PROTOCOL_LAYER_WS) && this->is_valid() && !ws_closed) {
-                if (pn::Status result = ws_close(1001, {}); !result) {
-                    return result;
-                }
+                (void) ws_close(1001, {});
             }
             return BasicConnection<Base>::close(protocol_layers);
         }
@@ -588,7 +585,7 @@ namespace pw {
     using SecureWSRoute = BasicWSRoute<pn::tcp::SecureConnection>;
 
     struct ServerConfig {
-        size_t buf_size = 4'000;
+        size_t buf_capacity = 4'000;
         HTTPMessageConfig http;
         WSConfig ws;
         int backlog = 128;
@@ -657,7 +654,7 @@ namespace pw {
         std::string ca_file;
         std::string ca_path;
 
-        size_t buf_size = 4'000;
+        size_t buf_capacity = 4'000;
         HTTPMessageConfig http;
         WSConfig ws;
 
