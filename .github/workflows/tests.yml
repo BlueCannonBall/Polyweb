@@ -58,13 +58,11 @@ jobs:
       - name: Install GNU Make and OpenSSL
         shell: pwsh
         run: |
-          choco install make --yes --no-progress
-          $vcpkg = (Get-Command vcpkg -ErrorAction Stop).Source
-          & $vcpkg install openssl:x64-windows
-          $installed = Join-Path (Split-Path $vcpkg -Parent) "installed\x64-windows"
-          "INCLUDE=$installed\include;$env:INCLUDE" >> $env:GITHUB_ENV
-          "LIB=$installed\lib;$env:LIB" >> $env:GITHUB_ENV
-          "PATH=$installed\bin;$env:PATH" >> $env:GITHUB_ENV
+          choco install make openssl.light --yes --no-progress --params '"/InstallDir:C:\OpenSSL-Win64"'
+          $openssl = "C:\OpenSSL-Win64"
+          "INCLUDE=$openssl\include;$env:INCLUDE" >> $env:GITHUB_ENV
+          "LIB=$openssl\lib;$env:LIB" >> $env:GITHUB_ENV
+          "PATH=$openssl\bin;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Build and run tests
         shell: bash
