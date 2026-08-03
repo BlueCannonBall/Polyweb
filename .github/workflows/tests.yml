@@ -55,18 +55,20 @@ jobs:
         with:
           arch: x64
 
-      - name: Install GNU Make and OpenSSL
+      - name: Install GNU Make and OpenSSL development files
         shell: pwsh
         run: |
-          choco install make openssl.light --yes --no-progress --params '"/InstallDir:C:\OpenSSL-Win64"'
-          $openssl = "C:\OpenSSL-Win64"
+          choco install make openssl --yes --no-progress
+          $openssl = "C:\Program Files\OpenSSL-Win64"
           if (!(Test-Path "$openssl\include\openssl\err.h")) {
             throw "OpenSSL headers were not installed at $openssl\include"
           }
-          if (!(Test-Path "$openssl\lib\libssl.lib") -or !(Test-Path "$openssl\lib\libcrypto.lib")) {
-            throw "OpenSSL libraries were not installed at $openssl\lib"
+          $library = "$openssl\lib\VC\x64\MD"
+          if (!(Test-Path "$library\libssl.lib") -or !(Test-Path "$library\libcrypto.lib")) {
+            throw "OpenSSL libraries were not installed at $library"
           }
-          "OPENSSL_ROOT_DIR=$openssl" >> $env:GITHUB_ENV
+          "OPENSSL_INCLUDE_DIR=$openssl\include" >> $env:GITHUB_ENV
+          "OPENSSL_LIBRARY_DIR=$library" >> $env:GITHUB_ENV
           "PATH=$openssl\bin;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Build and run tests
