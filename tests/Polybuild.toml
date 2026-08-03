@@ -16,6 +16,9 @@ link-time-flags = "-fsanitize=address,undefined"
 compilation-flags = "-Wall -Wextra -Wpedantic -std=c++23 -pthread -fsanitize=thread -fno-omit-frame-pointer"
 link-time-flags = "-fsanitize=thread"
 
+[env.OS.Windows_NT.paths]
+library = ["\"$(OPENSSL_ROOT_DIR)\"/lib"]
+
 [env.OS.Windows_NT.options]
-compilation-flags = "/W4 /std:c++latest /EHsc"
+compilation-flags = "/W4 /std:c++latest /EHsc /I\"$(OPENSSL_ROOT_DIR)\"/include"
 libraries = ["libssl.lib", "libcrypto.lib", "ws2_32.lib"]

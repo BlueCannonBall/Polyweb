@@ -60,8 +60,13 @@ jobs:
         run: |
           choco install make openssl.light --yes --no-progress --params '"/InstallDir:C:\OpenSSL-Win64"'
           $openssl = "C:\OpenSSL-Win64"
-          "INCLUDE=$openssl\include;$env:INCLUDE" >> $env:GITHUB_ENV
-          "LIB=$openssl\lib;$env:LIB" >> $env:GITHUB_ENV
+          if (!(Test-Path "$openssl\include\openssl\err.h")) {
+            throw "OpenSSL headers were not installed at $openssl\include"
+          }
+          if (!(Test-Path "$openssl\lib\libssl.lib") -or !(Test-Path "$openssl\lib\libcrypto.lib")) {
+            throw "OpenSSL libraries were not installed at $openssl\lib"
+          }
+          "OPENSSL_ROOT_DIR=$openssl" >> $env:GITHUB_ENV
           "PATH=$openssl\bin;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Build and run tests
