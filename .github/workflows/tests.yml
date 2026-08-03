@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debug
+          - name: ASan and UBSan
+            sanitizer: ASAN
+          - name: TSan
+            sanitizer: TSAN
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install OpenSSL development files
+        run: sudo apt-get update && sudo apt-get install --yes libssl-dev
+
+      - name: Build and run tests
+        working-directory: tests
+        env:
+          CCACHE_DISABLE: "1"
+          ASAN: ${{ matrix.sanitizer == 'ASAN' && '1' || '' }}
+          TSAN: ${{ matrix.sanitizer == 'TSAN' && '1' || '' }}
+          ASAN_OPTIONS: detect_leaks=1
+          TSAN_OPTIONS: halt_on_error=1
+        run: |
+          make clean
+          make MODE=debug
+          ./polyweb-tests
