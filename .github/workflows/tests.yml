@@ -69,7 +69,7 @@ jobs:
           if (!(Test-Path "$openssl\include\openssl\err.h")) {
             throw "OpenSSL headers were not installed at $openssl\include"
           }
-          $library = "$openssl\lib"
+          $library = "$openssl\lib\VC\x64\MD"
           if (!(Test-Path "$library\libssl.lib") -or !(Test-Path "$library\libcrypto.lib")) {
             throw "OpenSSL libraries were not installed at $library"
           }
