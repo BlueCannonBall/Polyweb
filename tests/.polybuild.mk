@@ -59,7 +59,7 @@ ifeq ($(OS),Windows_NT)
 	c_compiler := "$(CC)"
 	cpp_compiler := "$(CXX)"
 	c_compilation_flags := $(CFLAGS) $(active_debug_compilation_flag) $(include_path_flag).. $(include_path_flag)../Polynet $(active_dynamic_flag)
-	cpp_compilation_flags := /W4 /std:c++23 /EHsc $(active_debug_compilation_flag) $(include_path_flag).. $(include_path_flag)../Polynet $(active_dynamic_flag)
+	cpp_compilation_flags := /W4 /std:c++latest /EHsc $(active_debug_compilation_flag) $(include_path_flag).. $(include_path_flag)../Polynet $(active_dynamic_flag)
 	link_time_flags := $(LDFLAGS)
 	libraries := $(library_flag)"libssl.lib" $(library_flag)"libcrypto.lib" $(library_flag)"ws2_32.lib"
 endif

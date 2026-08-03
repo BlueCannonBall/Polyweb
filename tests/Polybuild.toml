@@ -17,5 +17,5 @@ compilation-flags = "-Wall -Wextra -Wpedantic -std=c++23 -pthread -fsanitize=thr
 link-time-flags = "-fsanitize=thread"
 
 [env.OS.Windows_NT.options]
-compilation-flags = "/W4 /std:c++23 /EHsc"
+compilation-flags = "/W4 /std:c++latest /EHsc"
 libraries = ["libssl.lib", "libcrypto.lib", "ws2_32.lib"]
