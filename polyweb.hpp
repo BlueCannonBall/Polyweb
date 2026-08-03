@@ -144,19 +144,19 @@ namespace pw {
             return map;
         }
 
-        const map_type& operator*() const {
+        const map_type& operator*() const noexcept {
             return map;
         }
 
-        map_type& operator*() {
+        map_type& operator*() noexcept {
             return map;
         }
 
-        const map_type* operator->() const {
+        const map_type* operator->() const noexcept {
             return &map;
         }
 
-        map_type* operator->() {
+        map_type* operator->() noexcept {
             return &map;
         }
 
@@ -367,7 +367,7 @@ namespace pw {
             return std::string(body.begin(), body.end());
         }
 
-        uint16_t status_code_category() const {
+        constexpr uint16_t status_code_category() const noexcept {
             return status_code / 100 * 100;
         }
     };
@@ -403,24 +403,24 @@ namespace pw {
         WSMessage(decltype(send_cb) send_cb, WSOpcode opcode = WS_OPCODE_BINARY):
             opcode(opcode),
             send_cb(std::move(send_cb)) {}
-        WSMessage(WSOpcode opcode):
+        WSMessage(WSOpcode opcode) noexcept:
             opcode(opcode) {}
 
         static WSMessage make_close(uint16_t status_code, pn::StringView reason);
 
-        const std::vector<char>& operator*() const {
+        const std::vector<char>& operator*() const noexcept {
             return data;
         }
 
-        std::vector<char>& operator*() {
+        std::vector<char>& operator*() noexcept {
             return data;
         }
 
-        const std::vector<char>* operator->() const {
+        const std::vector<char>* operator->() const noexcept {
             return &data;
         }
 
-        std::vector<char>* operator->() {
+        std::vector<char>* operator->() noexcept {
             return &data;
         }
 
@@ -499,11 +499,11 @@ namespace pw {
         BasicWSConnection(BasicConnection<Base> conn, WSConfig ws_config):
             BasicConnection<Base>(std::move(conn)),
             ws_config(std::move(ws_config)) {}
-        BasicWSConnection(BasicWSConnection&& conn) noexcept {
+        BasicWSConnection(BasicWSConnection&& conn) {
             *this = std::move(conn);
         }
 
-        BasicWSConnection& operator=(BasicWSConnection&& conn) noexcept {
+        BasicWSConnection& operator=(BasicWSConnection&& conn) {
             if (this != &conn) {
                 BasicConnection<Base>::operator=(std::move(conn));
                 ws_closed = std::exchange(conn.ws_closed, false);

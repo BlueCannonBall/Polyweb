@@ -23,7 +23,7 @@ namespace pw {
         };
     } // namespace detail
 
-    const std::error_category& polyweb_category() {
+    const std::error_category& polyweb_category() noexcept {
         static detail::PolywebCategory category;
         return category;
     }

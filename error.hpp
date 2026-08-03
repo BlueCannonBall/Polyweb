@@ -14,13 +14,13 @@ namespace pw {
         PW_ERROR_WS_HANDSHAKE_REJECTED,
     };
 
-    const std::error_category& polyweb_category();
+    const std::error_category& polyweb_category() noexcept;
 
-    inline std::error_code polyweb_error_code(ErrorType error) {
+    inline std::error_code polyweb_error_code(ErrorType error) noexcept {
         return {error, polyweb_category()};
     }
 
-    inline pn::Error make_polyweb_error(ErrorType error, pn::StringView operation = {}) {
+    inline pn::Error make_polyweb_error(ErrorType error, pn::StringView operation = {}) noexcept {
         return {polyweb_error_code(error), operation};
     }
 } // namespace pw
