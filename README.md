@@ -1,6 +1,19 @@
 # Polyweb
 A web framework utilizing Polynet.
 
+## Tests
+
+The test suite uses [Polybuild](https://github.com/BlueCannonBall/Polybuild) and runs entirely against local scripted connections and loopback TLS:
+
+```sh
+cd tests
+polybuild
+make MODE=debug
+./polyweb-tests
+```
+
+Use `ASAN=1` or `TSAN=1` with `make` to build the AddressSanitizer/UndefinedBehaviorSanitizer or ThreadSanitizer configurations, respectively. Re-run `polybuild` after changing `tests/Polybuild.toml`.
+
 ## Quick Examples
 ```cpp
 (void) pn::init();

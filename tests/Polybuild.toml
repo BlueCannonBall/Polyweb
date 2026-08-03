@@ -1,0 +1,21 @@
+[paths]
+output = "polyweb-tests"
+source = [".", "..", "../Polynet"]
+include = ["..", "../Polynet"]
+artifact = "obj"
+
+[options]
+compilation-flags = "-Wall -Wextra -Wpedantic -std=c++23 -pthread"
+libraries = ["ssl", "crypto"]
+
+[env.ASAN."1".options]
+compilation-flags = "-Wall -Wextra -Wpedantic -std=c++23 -pthread -fsanitize=address,undefined -fno-omit-frame-pointer"
+link-time-flags = "-fsanitize=address,undefined"
+
+[env.TSAN."1".options]
+compilation-flags = "-Wall -Wextra -Wpedantic -std=c++23 -pthread -fsanitize=thread -fno-omit-frame-pointer"
+link-time-flags = "-fsanitize=thread"
+
+[env.OS.Windows_NT.options]
+compilation-flags = "/W4 /std:c++23 /EHsc"
+libraries = ["libssl.lib", "libcrypto.lib", "ws2_32.lib"]
