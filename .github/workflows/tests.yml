@@ -59,11 +59,17 @@ jobs:
         shell: pwsh
         run: |
           choco install make openssl --yes --no-progress
-          $openssl = "C:\Program Files\OpenSSL-Win64"
+          $openssl = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" |
+            ForEach-Object { Get-ItemProperty $_.PSPath } |
+            Where-Object { $_.DisplayName -like "OpenSSL*" -and $_.InstallLocation } |
+            Select-Object -First 1 -ExpandProperty InstallLocation
+          if (!$openssl) {
+            throw "Could not locate the OpenSSL installation"
+          }
           if (!(Test-Path "$openssl\include\openssl\err.h")) {
             throw "OpenSSL headers were not installed at $openssl\include"
           }
-          $library = "$openssl\lib\VC\x64\MD"
+          $library = "$openssl\lib"
           if (!(Test-Path "$library\libssl.lib") -or !(Test-Path "$library\libcrypto.lib")) {
             throw "OpenSSL libraries were not installed at $library"
           }
