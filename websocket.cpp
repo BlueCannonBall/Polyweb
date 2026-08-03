@@ -222,6 +222,9 @@ namespace pw {
 
                 uint64_t len64;
                 binary::read(buf, buf + 8, len64, BIG_ENDIAN);
+                if (len64 & (1ULL << 63)) {
+                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "parse WebSocket payload length"));
+                }
                 payload_len = len64;
             } else {
                 payload_len = len7;
@@ -238,8 +241,8 @@ namespace pw {
 
             if (payload_len > 0) {
                 if (recv_cb) {
-                    for (size_t received = 0; received < payload_len;) {
-                        std::vector<char> chunk(std::min<size_t>(payload_len - received, frame_rlimit));
+                    for (uint64_t received = 0; received < payload_len;) {
+                        std::vector<char> chunk(std::min<uint64_t>(payload_len - received, frame_rlimit));
                         if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
                             return std::unexpected(result.error());
                         } else if (*result != chunk.size()) {
@@ -258,7 +261,7 @@ namespace pw {
                     }
                 } else {
                     size_t end = data.size();
-                    if ((end + payload_len) > message_rlimit) {
+                    if (payload_len > message_rlimit - end) {
                         return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "read WebSocket payload"));
                     }
                     data.resize(end + payload_len);

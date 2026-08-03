@@ -544,39 +544,49 @@ namespace pw {
 
         if (parts & PW_HTTP_MESSAGE_PART_HEADERS) {
             headers.clear();
-            for (unsigned int i = 0;; ++i) {
-                if (i > header_climit) {
-                    return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP header count"));
-                }
 
-                std::string header_name;
-                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit); !result) {
-                    return result;
-                }
+            char crlf[2];
+            if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, sizeof crlf); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != sizeof crlf) {
+                return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
+            }
 
-                if (header_name.empty()) {
-                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header name"));
-                }
+            if (memcmp("\r\n", crlf, sizeof crlf)) {
+                buf_receiver.rewind(crlf, sizeof crlf);
 
-                std::string header_value;
-                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit); !result) {
-                    return result;
-                }
-                string::trim(header_value);
+                for (unsigned int i = 0;; ++i) {
+                    if (i >= header_climit) {
+                        return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP header count"));
+                    }
 
-                headers.insert_or_assign(std::move(header_name), std::move(header_value));
+                    std::string header_name;
+                    if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit); !result) {
+                        return result;
+                    }
+                    if (header_name.empty()) {
+                        return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header name"));
+                    }
 
-                char crlf[2];
-                if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, sizeof crlf); !result) {
-                    return std::unexpected(result.error());
-                } else if (*result != sizeof crlf) {
-                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
-                }
+                    std::string header_value;
+                    if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit); !result) {
+                        return result;
+                    }
+                    string::trim(header_value);
 
-                if (!memcmp("\r\n", crlf, 2)) {
-                    break;
+                    headers.insert_or_assign(std::move(header_name), std::move(header_value));
+
+                    if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, sizeof crlf); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != sizeof crlf) {
+                        return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
+                    }
+
+                    if (!memcmp("\r\n", crlf, sizeof crlf)) {
+                        break;
+                    }
+                    buf_receiver.rewind(crlf, sizeof crlf);
                 }
-                buf_receiver.rewind(crlf, 2);
             }
         }
 
@@ -600,8 +610,8 @@ namespace pw {
 
                         if (chunk_size) {
                             if (recv_cb) {
-                                for (size_t received = 0; received < chunk_size;) {
-                                    std::vector<char> chunk(std::min<size_t>(chunk_size - received, body_chunk_rlimit));
+                                for (unsigned long long received = 0; received < chunk_size;) {
+                                    std::vector<char> chunk(std::min<unsigned long long>(chunk_size - received, body_chunk_rlimit));
                                     if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
                                         return std::unexpected(result.error());
                                     } else if (*result != chunk.size()) {
@@ -615,7 +625,7 @@ namespace pw {
                                 }
                             } else {
                                 size_t end = body.size();
-                                if (end + chunk_size > body_rlimit) {
+                                if (chunk_size > body_rlimit - end) {
                                     return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP body"));
                                 }
                                 body.resize(end + chunk_size);
@@ -648,8 +658,8 @@ namespace pw {
 
                 if (content_len) {
                     if (recv_cb) {
-                        for (size_t received = 0; received < content_len;) {
-                            std::vector<char> chunk(std::min<size_t>(content_len - received, body_chunk_rlimit));
+                        for (unsigned long long received = 0; received < content_len;) {
+                            std::vector<char> chunk(std::min<unsigned long long>(content_len - received, body_chunk_rlimit));
                             if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
                                 return std::unexpected(result.error());
                             } else if (*result != chunk.size()) {
@@ -797,9 +807,8 @@ namespace pw {
             if (status_code_string.empty()) {
                 return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP response status code"));
             }
-            try {
-                status_code = std::stoi(status_code_string);
-            } catch (...) {
+            if (auto result = std::from_chars(status_code_string.data(), status_code_string.data() + status_code_string.size(), status_code);
+                result.ec != std::errc {} || result.ptr != status_code_string.data() + status_code_string.size() || status_code > 999) {
                 return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP status code"));
             }
 
@@ -814,38 +823,49 @@ namespace pw {
 
         if (parts & PW_HTTP_MESSAGE_PART_HEADERS) {
             headers.clear();
-            for (unsigned int i = 0;; ++i) {
-                if (i > header_climit) {
-                    return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP header count"));
-                }
 
-                std::string header_name;
-                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit); !result) {
-                    return result;
-                }
-                if (header_name.empty()) {
-                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header name"));
-                }
+            char crlf[2];
+            if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, sizeof crlf); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != sizeof crlf) {
+                return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
+            }
 
-                std::string header_value;
-                if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit); !result) {
-                    return result;
-                }
-                string::trim(header_value);
+            if (memcmp("\r\n", crlf, sizeof crlf)) {
+                buf_receiver.rewind(crlf, sizeof crlf);
 
-                headers.insert_or_assign(std::move(header_name), std::move(header_value));
+                for (unsigned int i = 0;; ++i) {
+                    if (i >= header_climit) {
+                        return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "parse HTTP header count"));
+                    }
 
-                char crlf[2];
-                if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, sizeof crlf); !result) {
-                    return std::unexpected(result.error());
-                } else if (*result != sizeof crlf) {
-                    return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
-                }
+                    std::string header_name;
+                    if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_name), ':', header_name_rlimit); !result) {
+                        return result;
+                    }
+                    if (header_name.empty()) {
+                        return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header name"));
+                    }
 
-                if (!memcmp("\r\n", crlf, 2)) {
-                    break;
+                    std::string header_value;
+                    if (pn::Status result = detail::recv_until(conn, buf_receiver, std::back_inserter(header_value), "\r\n", header_value_rlimit); !result) {
+                        return result;
+                    }
+                    string::trim(header_value);
+
+                    headers.insert_or_assign(std::move(header_name), std::move(header_value));
+
+                    if (pn::Result<size_t> result = buf_receiver.recvall(conn, crlf, sizeof crlf); !result) {
+                        return std::unexpected(result.error());
+                    } else if (*result != sizeof crlf) {
+                        return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_HTTP, "parse HTTP header terminator"));
+                    }
+
+                    if (!memcmp("\r\n", crlf, sizeof crlf)) {
+                        break;
+                    }
+                    buf_receiver.rewind(crlf, sizeof crlf);
                 }
-                buf_receiver.rewind(crlf, 2);
             }
         }
 
@@ -869,8 +889,8 @@ namespace pw {
 
                         if (chunk_size) {
                             if (recv_cb) {
-                                for (size_t received = 0; received < chunk_size;) {
-                                    std::vector<char> chunk(std::min<size_t>(chunk_size - received, body_chunk_rlimit));
+                                for (unsigned long long received = 0; received < chunk_size;) {
+                                    std::vector<char> chunk(std::min<unsigned long long>(chunk_size - received, body_chunk_rlimit));
                                     if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
                                         return std::unexpected(result.error());
                                     } else if (*result != chunk.size()) {
@@ -884,7 +904,7 @@ namespace pw {
                                 }
                             } else {
                                 size_t end = body.size();
-                                if (end + chunk_size > body_rlimit) {
+                                if (chunk_size > body_rlimit - end) {
                                     return std::unexpected(make_polyweb_error(PW_ERROR_LIMIT_EXCEEDED, "read HTTP body"));
                                 }
                                 body.resize(end + chunk_size);
@@ -917,8 +937,8 @@ namespace pw {
 
                 if (content_len) {
                     if (recv_cb) {
-                        for (size_t received = 0; received < content_len;) {
-                            std::vector<char> chunk(std::min<size_t>(content_len - received, body_chunk_rlimit));
+                        for (unsigned long long received = 0; received < content_len;) {
+                            std::vector<char> chunk(std::min<unsigned long long>(content_len - received, body_chunk_rlimit));
                             if (pn::Result<size_t> result = buf_receiver.recvall(conn, chunk.data(), chunk.size()); !result) {
                                 return std::unexpected(result.error());
                             } else if (*result != chunk.size()) {

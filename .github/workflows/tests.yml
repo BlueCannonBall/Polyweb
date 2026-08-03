@@ -41,3 +41,37 @@ jobs:
           make clean
           make MODE=debug
           ./polyweb-tests
+
+  windows:
+    name: Windows Debug
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install GNU Make and OpenSSL
+        shell: pwsh
+        run: |
+          choco install make --yes --no-progress
+          $vcpkg = (Get-Command vcpkg -ErrorAction Stop).Source
+          & $vcpkg install openssl:x64-windows
+          $installed = Join-Path (Split-Path $vcpkg -Parent) "installed\x64-windows"
+          "INCLUDE=$installed\include;$env:INCLUDE" >> $env:GITHUB_ENV
+          "LIB=$installed\lib;$env:LIB" >> $env:GITHUB_ENV
+          "PATH=$installed\bin;$env:PATH" >> $env:GITHUB_ENV
+
+      - name: Build and run tests
+        shell: bash
+        working-directory: tests
+        env:
+          CCACHE_DISABLE: "1"
+        run: |
+          make clean
+          make MODE=debug
+          ./polyweb-tests.exe

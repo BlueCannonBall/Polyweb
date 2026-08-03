@@ -103,6 +103,12 @@ obj/tls_0$(obj_ext): ./tls.cpp .polybuild.mk ../Polynet/secure_sockets.hpp ../Po
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
 
+obj/transport_0$(obj_ext): ./transport.cpp .polybuild.mk ./support.hpp ../Polynet/polynet.hpp ../Polynet/error.hpp ../Polynet/string.hpp ../string.hpp ./test.hpp
+	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Compiling $@ from $<..."
+	@mkdir -p obj
+	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
+	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
+
 obj/websocket_0$(obj_ext): ./websocket.cpp .polybuild.mk ../polyweb.hpp ../Polynet/polynet.hpp ../Polynet/error.hpp ../Polynet/string.hpp ../string.hpp ../Polynet/secure_sockets.hpp ../error.hpp ../thread_pool.hpp ./support.hpp ./test.hpp
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Compiling $@ from $<..."
 	@mkdir -p obj
@@ -163,7 +169,7 @@ obj/secure_sockets_0$(obj_ext): ../Polynet/secure_sockets.cpp .polybuild.mk ../P
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
 
-objects :=  obj/http_0$(obj_ext) obj/main_0$(obj_ext) obj/tls_0$(obj_ext) obj/websocket_0$(obj_ext) obj/client_0$(obj_ext) obj/error_0$(obj_ext) obj/polyweb_0$(obj_ext) obj/server_0$(obj_ext) obj/string_0$(obj_ext) obj/websocket_1$(obj_ext) obj/error_1$(obj_ext) obj/polynet_0$(obj_ext) obj/secure_sockets_0$(obj_ext)
+objects :=  obj/http_0$(obj_ext) obj/main_0$(obj_ext) obj/tls_0$(obj_ext) obj/transport_0$(obj_ext) obj/websocket_0$(obj_ext) obj/client_0$(obj_ext) obj/error_0$(obj_ext) obj/polyweb_0$(obj_ext) obj/server_0$(obj_ext) obj/string_0$(obj_ext) obj/websocket_1$(obj_ext) obj/error_1$(obj_ext) obj/polynet_0$(obj_ext) obj/secure_sockets_0$(obj_ext)
 polyweb-tests$(out_ext): .polybuild.mk $(objects) $(static_libraries)
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Building $@..."
 	@$(cpp_compiler) $(objects) $(static_libraries) $(cpp_compilation_flags) $(out_path_flag)$@ $(link_flag) $(link_time_flags) $(libraries)
