@@ -7,7 +7,7 @@
 int main() {
     (void) pn::init();
 
-    pw::SecureWSClient client;
+    pw::TLSWSClient client;
     if (pn::Status result = pw::make_ws_client(client, "wss://ws.postman-echo.com/raw"); !result) {
         std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;

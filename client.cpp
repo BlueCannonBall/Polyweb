@@ -33,9 +33,12 @@ namespace pw {
         return {};
     }
 
-    pn::Status ClientConfig::configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const {
-        if (pn::Status result = client.ssl_init(hostname, verify_mode, ca_file, ca_path); !result) {
+    pn::Status ClientConfig::configure_tls(pn::TLSContext& context) const {
+        if (pn::Status result = context.init_client(verify_mode, ca_file, ca_path); !result) {
             return result;
+        }
+        if (tls_config_cb && !tls_config_cb(context.ssl_ctx)) {
+            return std::unexpected(pn::make_polynet_error(pn::PN_ERROR_USER_CALLBACK, "configure TLS context"));
         }
         return {};
     }
@@ -58,7 +61,7 @@ namespace pw {
 
         int resp_parts = req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL;
         if (secure) {
-            SecureClient client;
+            TLSClient client;
             client.http_config = config.http;
             pn::Error config_error;
             if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
@@ -74,10 +77,14 @@ namespace pw {
                 }
                 return result;
             }
-            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+            pn::TLSContext context;
+            if (pn::Status result = config.configure_tls(context); !result) {
                 return result;
             }
-            if (pn::Status result = client.ssl_connect(); !result) {
+            if (pn::Status result = client.tls_init(context, hostname); !result) {
+                return result;
+            }
+            if (pn::Status result = client.tls_connect(); !result) {
                 return result;
             }
 
@@ -215,7 +222,7 @@ namespace pw {
             req.headers["Connection"] = "close";
         }
 
-        SecureClient client;
+        TLSClient client;
         client.http_config = config.http;
         client.buf_receiver.capacity = 0;
         pn::Error config_error;
@@ -246,10 +253,14 @@ namespace pw {
         client.buf_receiver.capacity = config.buf_capacity;
 
         if (secure) {
-            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+            pn::TLSContext context;
+            if (pn::Status result = config.configure_tls(context); !result) {
                 return result;
             }
-            if (pn::Status result = client.ssl_connect(); !result) {
+            if (pn::Status result = client.tls_init(context, hostname); !result) {
+                return result;
+            }
+            if (pn::Status result = client.tls_connect(); !result) {
                 return result;
             }
         }

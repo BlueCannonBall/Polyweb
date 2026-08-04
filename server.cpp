@@ -15,7 +15,9 @@ namespace pw {
     }
 
     template <typename Base>
-    pn::Status BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog) {
+    pn::Status BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog)
+        requires(!std::is_same_v<Base, pn::tcp::TLSServer>)
+    {
         return Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
             if (!config_cb || config_cb(conn)) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
@@ -25,15 +27,15 @@ namespace pw {
             }
             return true;
         },
-            backlog < 0 ? config.backlog : backlog);
+            backlog);
     }
 
     template <>
-    pn::Status SecureServer::listen(std::function<bool(typename pn::tcp::SecureServer::connection_type&)> config_cb, int backlog) {
-        return pn::tcp::SecureServer::listen([this, config_cb = std::move(config_cb)](typename pn::tcp::SecureServer::connection_type conn) {
+    pn::Status TLSServer::listen(const pn::TLSContext& context, std::function<bool(typename pn::tcp::TLSServer::connection_type&)> config_cb, int backlog) {
+        return pn::tcp::TLSServer::listen(context, [this, config_cb = std::move(config_cb)](typename pn::tcp::TLSServer::connection_type conn) {
             if (!config_cb || config_cb(conn)) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
-                    if (ssl_ctx && !conn.ssl_accept()) {
+                    if (!conn.tls_accept()) {
                         return;
                     }
                     (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
@@ -42,7 +44,7 @@ namespace pw {
             }
             return true;
         },
-            backlog < 0 ? config.backlog : backlog);
+            backlog);
     }
 
     template <typename Base>
@@ -339,5 +341,5 @@ namespace pw {
     }
 
     template class BasicServer<pn::tcp::Server>;
-    template class BasicServer<pn::tcp::SecureServer>;
+    template class BasicServer<pn::tcp::TLSServer>;
 } // namespace pw

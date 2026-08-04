@@ -2,7 +2,7 @@
 #define POLYWEB_HPP_
 
 #include "Polynet/polynet.hpp"
-#include "Polynet/secure_sockets.hpp"
+#include "Polynet/tls.hpp"
 #include "error.hpp"
 #include "string.hpp"
 #include "thread_pool.hpp"
@@ -443,10 +443,8 @@ namespace pw {
         pn::tcp::BufReceiver buf_receiver;
         HTTPMessageConfig http_config;
 
-        template <typename... Args>
-        BasicConnection(Args&&... args):
-            Base(std::forward<Args>(args)...) {}
-        template <typename... Args>
+        using Base::Base;
+
         BasicConnection(Base conn, pn::tcp::BufReceiver buf_receiver, HTTPMessageConfig http_config = {}):
             Base(std::move(conn)),
             buf_receiver(std::move(buf_receiver)),
@@ -482,7 +480,7 @@ namespace pw {
     };
 
     using Connection = BasicConnection<pn::tcp::Connection>;
-    using SecureConnection = BasicConnection<pn::tcp::SecureConnection>;
+    using TLSConnection = BasicConnection<pn::tcp::TLSConnection>;
 
     template <typename Base>
     class BasicWSConnection : public BasicConnection<Base> {
@@ -493,9 +491,7 @@ namespace pw {
         WSConfig ws_config;
         bool ws_closed = false;
 
-        template <typename... Args>
-        BasicWSConnection(Args&&... args):
-            BasicConnection<Base>(std::forward<Args>(args)...) {}
+        using BasicConnection<Base>::BasicConnection;
         BasicWSConnection(BasicConnection<Base> conn, WSConfig ws_config):
             BasicConnection<Base>(std::move(conn)),
             ws_config(std::move(ws_config)) {}
@@ -539,7 +535,7 @@ namespace pw {
     };
 
     using WSConnection = BasicWSConnection<pn::tcp::Connection>;
-    using SecureWSConnection = BasicWSConnection<pn::tcp::SecureConnection>;
+    using TLSWSConnection = BasicWSConnection<pn::tcp::TLSConnection>;
 
     class Route {
     public:
@@ -563,7 +559,7 @@ namespace pw {
     };
 
     using HTTPRoute = BasicHTTPRoute<pn::tcp::Connection>;
-    using SecureHTTPRoute = BasicHTTPRoute<pn::tcp::SecureConnection>;
+    using TLSHTTPRoute = BasicHTTPRoute<pn::tcp::TLSConnection>;
 
     template <typename T>
     class BasicWSRoute : public Route {
@@ -582,13 +578,12 @@ namespace pw {
     };
 
     using WSRoute = BasicWSRoute<pn::tcp::Connection>;
-    using SecureWSRoute = BasicWSRoute<pn::tcp::SecureConnection>;
+    using TLSWSRoute = BasicWSRoute<pn::tcp::TLSConnection>;
 
     struct ServerConfig {
         size_t buf_capacity = 4'000;
         HTTPMessageConfig http;
         WSConfig ws;
-        int backlog = 128;
     };
 
     template <typename Base>
@@ -606,9 +601,7 @@ namespace pw {
         typedef BasicHTTPRoute<typename Base::connection_type> http_route_type;
         typedef BasicWSRoute<typename Base::connection_type> ws_route_type;
 
-        template <typename... Args>
-        BasicServer(Args&&... args):
-            Base(std::forward<Args>(args)...) {}
+        using Base::Base;
 
         void route(std::string target, http_route_type route) {
             http_routes.insert_or_assign(std::move(target), std::move(route));
@@ -627,7 +620,11 @@ namespace pw {
         }
 
         // Returning false from config_cb allows you to reject a connection very early
-        pn::Status listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = -1);
+        pn::Status listen(std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128)
+            requires(!std::is_same_v<Base, pn::tcp::TLSServer>);
+
+        pn::Status listen(const pn::TLSContext& context, std::function<bool(typename Base::connection_type&)> config_cb = {}, int backlog = 128)
+            requires std::is_same_v<Base, pn::tcp::TLSServer>;
 
     protected:
         std::unordered_map<std::string, http_route_type> http_routes;
@@ -641,7 +638,7 @@ namespace pw {
     };
 
     using Server = BasicServer<pn::tcp::Server>;
-    using SecureServer = BasicServer<pn::tcp::SecureServer>;
+    using TLSServer = BasicServer<pn::tcp::TLSServer>;
 
     class ClientConfig {
     public:
@@ -653,17 +650,18 @@ namespace pw {
         int verify_mode = SSL_VERIFY_PEER;
         std::string ca_file;
         std::string ca_path;
+        std::function<bool(SSL_CTX*)> tls_config_cb; // Applied to the TLS context once it is built
 
         size_t buf_capacity = 4'000;
         HTTPMessageConfig http;
         WSConfig ws;
 
         pn::Status configure_sockopts(pn::tcp::Connection& conn) const;
-        pn::Status configure_ssl(pn::tcp::SecureClient& client, pn::StringView hostname) const;
+        pn::Status configure_tls(pn::TLSContext& context) const;
     };
 
     using Client = BasicConnection<pn::tcp::Client>;
-    using SecureClient = BasicConnection<pn::tcp::SecureClient>;
+    using TLSClient = BasicConnection<pn::tcp::TLSClient>;
 
     pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, HTTPRequest req, HTTPResponse& resp, const ClientConfig& = {});
     pn::Status fetch(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
@@ -682,9 +680,7 @@ namespace pw {
     template <typename Base>
     class BasicWSClient : public BasicWSConnection<Base> {
     public:
-        template <typename... Args>
-        BasicWSClient(Args&&... args):
-            BasicWSConnection<Base>(std::forward<Args>(args)...) {}
+        using BasicWSConnection<Base>::BasicWSConnection;
 
         pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {});
         pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {});
@@ -703,17 +699,17 @@ namespace pw {
     };
 
     using WSClient = BasicWSClient<pn::tcp::Client>;
-    using SecureWSClient = BasicWSClient<pn::tcp::SecureClient>;
+    using TLSWSClient = BasicWSClient<pn::tcp::TLSClient>;
 
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
 
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers = {}, const ClientConfig& config = {});
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers = {}, const ClientConfig& config = {});
 } // namespace pw
 
 #endif

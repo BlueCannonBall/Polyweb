@@ -395,7 +395,7 @@ namespace pw {
         return ws_connect(url, resp, std::move(headers));
     }
 
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         client.http_config = config.http;
         client.ws_config = config.ws;
         pn::Error config_error;
@@ -414,10 +414,14 @@ namespace pw {
         }
 
         if (secure) {
-            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+            pn::TLSContext context;
+            if (pn::Status result = config.configure_tls(context); !result) {
                 return result;
             }
-            if (pn::Status result = client.ssl_connect(); !result) {
+            if (pn::Status result = client.tls_init(context, hostname); !result) {
+                return result;
+            }
+            if (pn::Status result = client.tls_connect(); !result) {
                 return result;
             }
         }
@@ -429,12 +433,12 @@ namespace pw {
         return {};
     }
 
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_ws_client(client, hostname, port, secure, std::move(target), resp, std::move(query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -447,12 +451,12 @@ namespace pw {
         return make_ws_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", std::move(url_info.path), resp, std::move(url_info.query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_ws_client(SecureWSClient& client, pn::StringView url, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_ws_client(client, url, resp, std::move(headers), config);
     }
 
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         client.http_config = config.http;
         client.ws_config = config.ws;
         URLInfo proxy_url_info;
@@ -502,10 +506,14 @@ namespace pw {
         client.buf_receiver.capacity = config.buf_capacity;
 
         if (secure) {
-            if (pn::Status result = config.configure_ssl(client, hostname); !result) {
+            pn::TLSContext context;
+            if (pn::Status result = config.configure_tls(context); !result) {
                 return result;
             }
-            if (pn::Status result = client.ssl_connect(); !result) {
+            if (pn::Status result = client.tls_init(context, hostname); !result) {
+                return result;
+            }
+            if (pn::Status result = client.tls_connect(); !result) {
                 return result;
             }
         }
@@ -517,12 +525,12 @@ namespace pw {
         return {};
     }
 
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_proxied_ws_client(client, hostname, port, secure, std::move(target), proxy_url, resp, std::move(query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -535,17 +543,17 @@ namespace pw {
         return make_proxied_ws_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", std::move(url_info.path), proxy_url, resp, std::move(url_info.query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_proxied_ws_client(SecureWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers, const ClientConfig& config) {
         HTTPResponse resp;
         return make_proxied_ws_client(client, url, proxy_url, resp, std::move(headers), config);
     }
 
     template class BasicWSConnection<pn::tcp::Connection>;
-    template class BasicWSConnection<pn::tcp::SecureConnection>;
+    template class BasicWSConnection<pn::tcp::TLSConnection>;
 
     template class BasicWSConnection<pn::tcp::Client>;
-    template class BasicWSConnection<pn::tcp::SecureClient>;
+    template class BasicWSConnection<pn::tcp::TLSClient>;
 
     template class BasicWSClient<pn::tcp::Client>;
-    template class BasicWSClient<pn::tcp::SecureClient>;
+    template class BasicWSClient<pn::tcp::TLSClient>;
 } // namespace pw

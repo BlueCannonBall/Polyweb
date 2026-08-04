@@ -71,3 +71,111 @@ TEST(buf_receiver_peek_rewind_and_buffer_boundaries) {
     CHECK(receiver.recv(conn, output.data(), 2));
     CHECK(std::string(output.data(), 2) == "ef");
 }
+
+TEST(udp_connected_sockets_send_and_receive) {
+    pn::udp::Server server;
+    CHECK(server.bind("127.0.0.1", (unsigned short) 0));
+
+    struct sockaddr_in server_address = {};
+    socklen_t server_address_length = sizeof server_address;
+    CHECK(::getsockname(server.fd, (struct sockaddr*) &server_address, &server_address_length) == PN_OK);
+
+    pn::udp::Client client;
+    CHECK(client.connect((struct sockaddr*) &server_address, server_address_length));
+
+    // Connected sockets need no address on either call
+    static constexpr char request[] = "ping";
+    CHECK(client.send(request, sizeof request - 1));
+
+    char buf[16];
+    struct sockaddr_storage peer_address = {};
+    socklen_t peer_address_length = sizeof peer_address;
+    pn::Result<size_t> received = server.recvfrom(buf, sizeof buf, (struct sockaddr*) &peer_address, &peer_address_length);
+    CHECK(received);
+    CHECK(*received == sizeof request - 1);
+    CHECK(std::string(buf, *received) == "ping");
+
+    static constexpr char response[] = "pong";
+    CHECK(server.sendto(response, sizeof response - 1, (struct sockaddr*) &peer_address, peer_address_length));
+
+    pn::Result<size_t> echoed = client.recv(buf, sizeof buf);
+    CHECK(echoed);
+    CHECK(*echoed == sizeof response - 1);
+    CHECK(std::string(buf, *echoed) == "pong");
+}
+
+TEST(udp_refuses_a_datagram_it_could_not_send_whole) {
+    pn::udp::Client client;
+    CHECK(client.init(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
+
+    // Silently truncating to a smaller length would send a different message
+    char stub;
+    pn::Result<size_t> result = client.send(&stub, (size_t) INT_MAX + 1);
+    CHECK(!result);
+    CHECK(result.error().code == std::errc::message_size);
+}
+
+TEST(udp_reports_a_datagram_that_did_not_fit) {
+    pn::udp::Server server;
+    CHECK(server.bind("127.0.0.1", (unsigned short) 0));
+
+    struct sockaddr_in server_address = {};
+    socklen_t server_address_length = sizeof server_address;
+    CHECK(::getsockname(server.fd, (struct sockaddr*) &server_address, &server_address_length) == PN_OK);
+
+    pn::udp::Client client;
+    CHECK(client.connect((struct sockaddr*) &server_address, server_address_length));
+
+    std::vector<char> datagram(2000, 'x');
+    char buf[512];
+
+    // A receive that loses part of a datagram must say so rather than look like a short one
+    CHECK(client.send(datagram.data(), datagram.size()));
+    pn::Result<size_t> result = server.recv(buf, sizeof buf);
+    CHECK(!result);
+    CHECK(result.error().code == std::errc::message_size);
+
+    // A datagram that fits is unaffected
+    CHECK(client.send(datagram.data(), sizeof buf));
+    result = server.recv(buf, sizeof buf);
+    CHECK(result);
+    CHECK(*result == sizeof buf);
+}
+
+TEST(udp_peek_leaves_the_datagram_queued) {
+    pn::udp::Server server;
+    CHECK(server.bind("127.0.0.1", (unsigned short) 0));
+
+    struct sockaddr_in server_address = {};
+    socklen_t server_address_length = sizeof server_address;
+    CHECK(::getsockname(server.fd, (struct sockaddr*) &server_address, &server_address_length) == PN_OK);
+
+    pn::udp::Client client;
+    CHECK(client.connect((struct sockaddr*) &server_address, server_address_length));
+
+    static constexpr char datagram[] = "header:payload";
+    CHECK(client.send(datagram, sizeof datagram - 1));
+
+    // Peeking at the front of a datagram must not consume it
+    char header[6];
+    struct sockaddr_storage peer_address = {};
+    socklen_t peer_address_length = sizeof peer_address;
+    pn::Result<size_t> peeked = server.peekfrom(header, sizeof header, (struct sockaddr*) &peer_address, &peer_address_length);
+    CHECK(!peeked); // The datagram does not fit, so it is reported as truncated
+    CHECK(peeked.error().code == std::errc::message_size);
+
+    char buf[64];
+    pn::Result<size_t> received = server.recv(buf, sizeof buf);
+    CHECK(received);
+    CHECK(*received == sizeof datagram - 1);
+    CHECK(std::string(buf, *received) == datagram);
+
+    // And a peek that does fit leaves it for the next receive
+    CHECK(client.send(datagram, sizeof datagram - 1));
+    peeked = server.peek(buf, sizeof buf);
+    CHECK(peeked);
+    CHECK(*peeked == sizeof datagram - 1);
+    received = server.recv(buf, sizeof buf);
+    CHECK(received);
+    CHECK(*received == sizeof datagram - 1);
+}
