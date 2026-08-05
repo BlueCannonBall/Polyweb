@@ -583,8 +583,10 @@ namespace pw {
     using TLSWSRoute = BasicWSRoute<pn::tcp::TLSConnection>;
 
     struct ConnectionConfig {
-        std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
-        std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
+        // A connection may stay request and response, become a WebSocket, or become a long
+        // poll, and only the first of those tolerates a deadline, so none is imposed here
+        std::chrono::milliseconds send_timeout = {};
+        std::chrono::milliseconds recv_timeout = {};
         bool tcp_keep_alive = true; // Reaps peers that vanished without closing, not HTTP keep-alive
         bool tcp_no_delay = true;
 
@@ -592,10 +594,8 @@ namespace pw {
     };
 
     struct ServerConfig {
-        // A server cannot know at accept time whether a connection will stay request and
-        // response, become a WebSocket, or become a long poll, so it waits rather than
-        // impose a deadline that is only right for one of them
-        ConnectionConfig tcp = {.send_timeout = {}, .recv_timeout = {}};
+        // A server cannot know at accept time which of those an accepted connection is
+        ConnectionConfig tcp;
         size_t buf_capacity = 4'000;
         MessageConfig http;
         WSConfig ws;
@@ -663,7 +663,9 @@ namespace pw {
 
     class ClientConfig {
     public:
-        ConnectionConfig tcp;
+        // A client makes one request and knows what it is waiting for, so unlike a server
+        // it can say how long that is worth waiting
+        ConnectionConfig tcp = {.send_timeout = std::chrono::seconds(30), .recv_timeout = std::chrono::seconds(30)};
 
         // Borrowed rather than owned, so one context may serve any number of requests.
         // When it is null a default trust store, built once on first use, is used instead

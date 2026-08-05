@@ -370,6 +370,11 @@ TEST(a_connection_config_applies_the_options_it_names) {
 TEST(a_server_imposes_no_timeout_of_its_own) {
     // A WebSocket idles between messages by design, and handle_conn cannot tell an idle
     // keep-alive connection from a client that sent nothing, so a server waits instead
+    pw::ConnectionConfig config;
+    CHECK(config.recv_timeout == std::chrono::milliseconds(0));
+    CHECK(config.send_timeout == std::chrono::milliseconds(0));
+
+    // A server takes that as it comes, rather than overriding it the way a client does
     pw::ServerConfig server_config;
     CHECK(server_config.tcp.recv_timeout == std::chrono::milliseconds(0));
     CHECK(server_config.tcp.send_timeout == std::chrono::milliseconds(0));
