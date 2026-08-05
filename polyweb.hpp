@@ -592,7 +592,10 @@ namespace pw {
     };
 
     struct ServerConfig {
-        ConnectionConfig tcp;
+        // A server cannot know at accept time whether a connection will stay request and
+        // response, become a WebSocket, or become a long poll, so it waits rather than
+        // impose a deadline that is only right for one of them
+        ConnectionConfig tcp = {.send_timeout = {}, .recv_timeout = {}};
         size_t buf_capacity = 4'000;
         MessageConfig http;
         WSConfig ws;

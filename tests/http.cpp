@@ -354,4 +354,32 @@ TEST(a_connection_config_applies_the_options_it_names) {
     length = sizeof keep_alive;
     CHECK(::getsockopt(client.fd, SOL_SOCKET, SO_KEEPALIVE, (char*) &keep_alive, &length) == PN_OK);
     CHECK(keep_alive != 0);
+
+    // A server's defaults have to leave the socket waiting rather than expiring at once
+    CHECK(pw::ServerConfig().tcp.apply(client));
+    length = sizeof recv_timeout;
+    CHECK(::getsockopt(client.fd, SOL_SOCKET, SO_RCVTIMEO, (char*) &recv_timeout, &length) == PN_OK);
+#ifdef _WIN32
+    CHECK(recv_timeout == 0);
+#else
+    CHECK(recv_timeout.tv_sec == 0);
+    CHECK(recv_timeout.tv_usec == 0);
+#endif
+}
+
+TEST(a_server_imposes_no_timeout_of_its_own) {
+    // A WebSocket idles between messages by design, and handle_conn cannot tell an idle
+    // keep-alive connection from a client that sent nothing, so a server waits instead
+    pw::ServerConfig server_config;
+    CHECK(server_config.tcp.recv_timeout == std::chrono::milliseconds(0));
+    CHECK(server_config.tcp.send_timeout == std::chrono::milliseconds(0));
+
+    // The options that cost a connection nothing are still set for it
+    CHECK(server_config.tcp.tcp_no_delay);
+    CHECK(server_config.tcp.tcp_keep_alive);
+
+    // A client makes one request and knows what it is waiting for
+    pw::ClientConfig client_config;
+    CHECK(client_config.tcp.recv_timeout == std::chrono::seconds(30));
+    CHECK(client_config.tcp.send_timeout == std::chrono::seconds(30));
 }
