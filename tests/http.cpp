@@ -18,6 +18,15 @@ namespace {
         return ntohs(address.sin_port);
     }
 
+    // Winsock writes a single byte for a boolean option rather than a whole int, so the
+    // value starts at zero: a sentinel would survive in the bytes getsockopt never touches
+    bool socket_flag(pn::sockfd_t fd, int level, int option) {
+        int value = 0;
+        socklen_t length = sizeof value;
+        CHECK(::getsockopt(fd, level, option, (char*) &value, &length) == PN_OK);
+        return value;
+    }
+
     pn::Status set_socket_timeout(pn::Socket& socket) {
 #ifdef _WIN32
         DWORD timeout = 10'000;
@@ -345,15 +354,16 @@ TEST(a_connection_config_applies_the_options_it_names) {
     CHECK(recv_timeout.tv_usec == 500'000);
 #endif
 
-    int no_delay = -1;
-    length = sizeof no_delay;
-    CHECK(::getsockopt(client.fd, IPPROTO_TCP, TCP_NODELAY, (char*) &no_delay, &length) == PN_OK);
-    CHECK(no_delay == 0);
+    CHECK(!socket_flag(client.fd, IPPROTO_TCP, TCP_NODELAY));
+    CHECK(socket_flag(client.fd, SOL_SOCKET, SO_KEEPALIVE));
 
-    int keep_alive = -1;
-    length = sizeof keep_alive;
-    CHECK(::getsockopt(client.fd, SOL_SOCKET, SO_KEEPALIVE, (char*) &keep_alive, &length) == PN_OK);
-    CHECK(keep_alive != 0);
+    // Both flags the other way round, so this shows they are carried rather than that
+    // the socket happened to start out matching what was asked for
+    config.tcp_no_delay = true;
+    config.tcp_keep_alive = false;
+    CHECK(config.apply(client));
+    CHECK(socket_flag(client.fd, IPPROTO_TCP, TCP_NODELAY));
+    CHECK(!socket_flag(client.fd, SOL_SOCKET, SO_KEEPALIVE));
 
     // A server's defaults have to leave the socket waiting rather than expiring at once
     CHECK(pw::ServerConfig().tcp.apply(client));
