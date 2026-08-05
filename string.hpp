@@ -7,8 +7,8 @@
 
 namespace pw {
     namespace string {
-        bool starts_with(pn::StringView str, pn::StringView beginning);
-        bool ends_with(pn::StringView str, pn::StringView ending);
+        bool starts_with(pn::StringView str, pn::StringView beginning) noexcept;
+        bool ends_with(pn::StringView str, pn::StringView ending) noexcept;
 
         void trim_right(std::string& str);
         void trim_left(std::string& str);
@@ -18,19 +18,19 @@ namespace pw {
         std::string trim_left_copy(std::string str);
         std::string trim_copy(std::string str);
 
-        void to_lower(std::string& str);
-        void to_upper(std::string& str);
+        void to_lower(std::string& str) noexcept;
+        void to_upper(std::string& str) noexcept;
 
         std::string to_lower_copy(pn::StringView str);
         std::string to_upper_copy(pn::StringView str);
 
-        bool iequals(pn::StringView a, pn::StringView b);
+        bool iequals(pn::StringView a, pn::StringView b) noexcept;
 
         std::vector<std::string> split(pn::StringView str, char delimiter);
         std::vector<std::string> split_and_trim(pn::StringView str, char delimiter);
 
         struct CaseInsensitiveComparer {
-            bool operator()(pn::StringView a, pn::StringView b) const {
+            bool operator()(pn::StringView a, pn::StringView b) const noexcept {
                 return string::iequals(a, b);
             }
         };

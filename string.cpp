@@ -6,7 +6,7 @@
 
 namespace pw {
     namespace string {
-        bool starts_with(pn::StringView str, pn::StringView beginning) {
+        bool starts_with(pn::StringView str, pn::StringView beginning) noexcept {
             if (str.size() < beginning.size() || beginning.empty()) {
                 return false;
             }
@@ -19,7 +19,7 @@ namespace pw {
             return true;
         }
 
-        bool ends_with(pn::StringView str, pn::StringView ending) {
+        bool ends_with(pn::StringView str, pn::StringView ending) noexcept {
             if (str.size() < ending.size() || ending.empty()) {
                 return false;
             }
@@ -69,13 +69,13 @@ namespace pw {
             return str;
         }
 
-        void to_lower(std::string& str) {
+        void to_lower(std::string& str) noexcept {
             std::transform(str.begin(), str.end(), str.begin(), [](char c) -> char {
                 return tolower((unsigned char) c);
             });
         }
 
-        void to_upper(std::string& str) {
+        void to_upper(std::string& str) noexcept {
             std::transform(str.begin(), str.end(), str.begin(), [](char c) -> char {
                 return toupper((unsigned char) c);
             });
@@ -99,7 +99,7 @@ namespace pw {
             return ret;
         }
 
-        bool iequals(pn::StringView a, pn::StringView b) {
+        bool iequals(pn::StringView a, pn::StringView b) noexcept {
             if (a.size() != b.size()) {
                 return false;
             }
