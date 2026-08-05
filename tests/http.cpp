@@ -1,6 +1,11 @@
 #include "polyweb.hpp"
 #include "support.hpp"
 #include "test.hpp"
+#include <chrono>
+#ifndef _WIN32
+    #include <netinet/tcp.h>
+#endif
+#include <openssl/ssl.h>
 #include <string>
 #include <thread>
 #include <vector>
@@ -272,4 +277,81 @@ TEST(closing_a_connection_discards_what_it_had_buffered) {
     // object is used for next would attribute one connection's response to another
     CHECK(connection.close());
     CHECK(connection.buf_receiver.available() == 0);
+}
+
+TEST(the_default_tls_context_is_built_once_and_shared) {
+    // Every request that does not bring its own context must land on the same one,
+    // including when the first several arrive together and race to build it
+    std::vector<const pn::TLSContext*> resolved(8);
+    std::vector<std::thread> threads;
+    for (size_t i = 0; i < resolved.size(); ++i) {
+        threads.emplace_back([&resolved, i] {
+            pw::ClientConfig config;
+            if (pn::Result<const pn::TLSContext*> result = config.resolve_tls_context()) {
+                resolved[i] = *result;
+            }
+        });
+    }
+    for (std::thread& thread : threads) {
+        thread.join();
+    }
+
+    CHECK(resolved.front());
+    CHECK(resolved.front()->is_valid());
+    for (const pn::TLSContext* context : resolved) {
+        CHECK(context == resolved.front());
+    }
+}
+
+TEST(a_client_config_prefers_the_tls_context_it_is_given) {
+    pn::TLSContext context;
+    CHECK(context.init_client(SSL_VERIFY_NONE));
+
+    pw::ClientConfig config;
+    config.tls_context = &context;
+
+    pn::Result<const pn::TLSContext*> resolved = config.resolve_tls_context();
+    CHECK(resolved);
+    CHECK(*resolved == &context);
+}
+
+TEST(a_connection_config_applies_the_options_it_names) {
+    pn::tcp::Server listener;
+    CHECK(listener.bind("127.0.0.1", (unsigned short) 0));
+    CHECK(::listen(listener.fd, 1) == PN_OK);
+
+    // Connected, since TCP_NODELAY means nothing on a socket that is not
+    pn::tcp::Client client;
+    CHECK(client.connect("127.0.0.1", listening_port(listener)));
+
+    pw::ConnectionConfig config;
+    config.recv_timeout = std::chrono::milliseconds(1'500);
+    config.tcp_no_delay = false;
+    config.tcp_keep_alive = true;
+    CHECK(config.apply(client));
+
+#ifdef _WIN32
+    DWORD recv_timeout = 0;
+#else
+    struct timeval recv_timeout = {};
+#endif
+    socklen_t length = sizeof recv_timeout;
+    CHECK(::getsockopt(client.fd, SOL_SOCKET, SO_RCVTIMEO, (char*) &recv_timeout, &length) == PN_OK);
+#ifdef _WIN32
+    CHECK(recv_timeout == 1'500);
+#else
+    // Milliseconds have to survive the trip through timeval's split seconds and microseconds
+    CHECK(recv_timeout.tv_sec == 1);
+    CHECK(recv_timeout.tv_usec == 500'000);
+#endif
+
+    int no_delay = -1;
+    length = sizeof no_delay;
+    CHECK(::getsockopt(client.fd, IPPROTO_TCP, TCP_NODELAY, (char*) &no_delay, &length) == PN_OK);
+    CHECK(no_delay == 0);
+
+    int keep_alive = -1;
+    length = sizeof keep_alive;
+    CHECK(::getsockopt(client.fd, SOL_SOCKET, SO_KEEPALIVE, (char*) &keep_alive, &length) == PN_OK);
+    CHECK(keep_alive != 0);
 }

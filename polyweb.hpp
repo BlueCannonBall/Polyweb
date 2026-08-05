@@ -108,7 +108,6 @@ namespace pw {
         }
     } // namespace detail
 
-
     std::string build_date(time_t rawtime = time(nullptr));
     time_t parse_date(const std::string& date);
 
@@ -431,7 +430,7 @@ namespace pw {
             return std::string(data.begin(), data.end());
         }
 
-        uint16_t close_status_code() const;
+        uint16_t close_status_code() const noexcept;
         std::string close_reason() const;
     };
 
@@ -583,7 +582,17 @@ namespace pw {
     using WSRoute = BasicWSRoute<pn::tcp::Connection>;
     using TLSWSRoute = BasicWSRoute<pn::tcp::TLSConnection>;
 
+    struct ConnectionConfig {
+        std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
+        std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
+        bool tcp_keep_alive = true; // Reaps peers that vanished without closing, not HTTP keep-alive
+        bool tcp_no_delay = true;
+
+        pn::Status apply(pn::tcp::Connection& conn) const;
+    };
+
     struct ServerConfig {
+        ConnectionConfig tcp;
         size_t buf_capacity = 4'000;
         MessageConfig http;
         WSConfig ws;
@@ -622,7 +631,6 @@ namespace pw {
             ws_routes.erase(target);
         }
 
-        // Returning false from config_cb allows you to reject a connection very early
     protected:
         std::unordered_map<std::string, http_route_type> http_routes;
         std::unordered_map<std::string, ws_route_type> ws_routes;
@@ -638,6 +646,7 @@ namespace pw {
     public:
         using BasicServer<pn::tcp::Server>::BasicServer;
 
+        // Returning false from config_cb allows you to reject a connection very early
         pn::Status listen(std::function<bool(pn::tcp::Connection&)> config_cb = {}, int backlog = 128);
     };
 
@@ -645,27 +654,23 @@ namespace pw {
     public:
         using BasicServer<pn::tcp::TLSServer>::BasicServer;
 
+        // Returning false from config_cb allows you to reject a connection very early
         pn::Status listen(const pn::TLSContext& context, std::function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
     };
 
     class ClientConfig {
     public:
-        std::chrono::milliseconds send_timeout = std::chrono::seconds(30);
-        std::chrono::milliseconds recv_timeout = std::chrono::seconds(30);
-        bool tcp_keep_alive = true;
-        bool tcp_no_delay = true;
+        ConnectionConfig tcp;
 
-        int verify_mode = SSL_VERIFY_PEER;
-        std::string ca_file;
-        std::string ca_path;
-        std::function<bool(SSL_CTX*)> tls_config_cb; // Applied to the TLS context once it is built
+        // Borrowed rather than owned, so one context may serve any number of requests.
+        // When it is null a default trust store, built once on first use, is used instead
+        const pn::TLSContext* tls_context = nullptr;
 
         size_t buf_capacity = 4'000;
         MessageConfig http;
         WSConfig ws;
 
-        pn::Status configure_sockopts(pn::tcp::Connection& conn) const;
-        pn::Status configure_tls(pn::TLSContext& context) const;
+        pn::Result<const pn::TLSContext*> resolve_tls_context() const;
     };
 
     using Client = BasicConnection<pn::tcp::Client>;

@@ -280,7 +280,7 @@ namespace pw {
         return {};
     }
 
-    uint16_t WSMessage::close_status_code() const {
+    uint16_t WSMessage::close_status_code() const noexcept {
         uint16_t ret = 0;
         if (data.size() >= 2) {
             binary::read(data.begin(), data.begin() + 2, ret);
@@ -400,7 +400,7 @@ namespace pw {
         client.ws_config = config.ws;
         pn::Error config_error;
         if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
-                if (pn::Status result = config.configure_sockopts(client); !result) {
+                if (pn::Status result = config.tcp.apply(client); !result) {
                     config_error = result.error();
                     return false;
                 }
@@ -414,11 +414,13 @@ namespace pw {
         }
 
         if (secure) {
-            pn::TLSContext context;
-            if (pn::Status result = config.configure_tls(context); !result) {
-                return result;
+            const pn::TLSContext* context;
+            if (pn::Result<const pn::TLSContext*> result = config.resolve_tls_context(); !result) {
+                return std::unexpected(result.error());
+            } else {
+                context = *result;
             }
-            if (pn::Status result = client.tls_init(context, hostname); !result) {
+            if (pn::Status result = client.tls_init(*context, hostname); !result) {
                 return result;
             }
             if (pn::Status result = client.tls_connect(); !result) {
@@ -480,7 +482,7 @@ namespace pw {
         client.buf_receiver.capacity = 0;
         pn::Error config_error;
         if (pn::Status result = client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config, &config_error](auto& client) {
-                if (pn::Status result = config.configure_sockopts(client); !result) {
+                if (pn::Status result = config.tcp.apply(client); !result) {
                     config_error = result.error();
                     return false;
                 }
@@ -506,11 +508,13 @@ namespace pw {
         client.buf_receiver.capacity = config.buf_capacity;
 
         if (secure) {
-            pn::TLSContext context;
-            if (pn::Status result = config.configure_tls(context); !result) {
-                return result;
+            const pn::TLSContext* context;
+            if (pn::Result<const pn::TLSContext*> result = config.resolve_tls_context(); !result) {
+                return std::unexpected(result.error());
+            } else {
+                context = *result;
             }
-            if (pn::Status result = client.tls_init(context, hostname); !result) {
+            if (pn::Status result = client.tls_init(*context, hostname); !result) {
                 return result;
             }
             if (pn::Status result = client.tls_connect(); !result) {

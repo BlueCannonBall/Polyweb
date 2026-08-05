@@ -1,4 +1,7 @@
 #include "polyweb.hpp"
+#ifndef _WIN32
+    #include <netinet/tcp.h>
+#endif
 #include <algorithm>
 #include <bitset>
 #include <charconv>
@@ -16,6 +19,38 @@ namespace pw {
     namespace {
         constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     } // namespace
+
+    pn::Status ConnectionConfig::apply(pn::tcp::Connection& conn) const {
+#ifdef _WIN32
+        DWORD send_timeout = this->send_timeout.count();
+        DWORD recv_timeout = this->recv_timeout.count();
+#else
+        struct timeval send_timeout;
+        send_timeout.tv_sec = this->send_timeout.count() / 1000;
+        send_timeout.tv_usec = (this->send_timeout.count() % 1000) * 1000;
+        struct timeval recv_timeout;
+        recv_timeout.tv_sec = this->recv_timeout.count() / 1000;
+        recv_timeout.tv_usec = (this->recv_timeout.count() % 1000) * 1000;
+#endif
+        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof send_timeout); !result) {
+            return result;
+        }
+        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof recv_timeout); !result) {
+            return result;
+        }
+
+        int tcp_keep_alive = this->tcp_keep_alive;
+        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_KEEPALIVE, &tcp_keep_alive, sizeof tcp_keep_alive); !result) {
+            return result;
+        }
+
+        int tcp_no_delay = this->tcp_no_delay;
+        if (pn::Status result = conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay, sizeof tcp_no_delay); !result) {
+            return result;
+        }
+
+        return {};
+    }
 
     std::string build_date(time_t rawtime) {
 #ifdef _WIN32

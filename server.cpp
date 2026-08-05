@@ -13,7 +13,9 @@ namespace pw {
 
     pn::Status Server::listen(std::function<bool(pn::tcp::Connection&)> config_cb, int backlog) {
         return pn::tcp::Server::listen([this, config_cb = std::move(config_cb)](pn::tcp::Connection conn) {
-            if (!config_cb || config_cb(conn)) {
+            // Configured first so that config_cb, the lower level mechanism, has the last
+            // word. A connection that cannot even be configured is dropped rather than served
+            if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                     (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
                 },
@@ -26,7 +28,9 @@ namespace pw {
 
     pn::Status TLSServer::listen(const pn::TLSContext& context, std::function<bool(pn::tcp::TLSConnection&)> config_cb, int backlog) {
         return pn::tcp::TLSServer::listen(context, [this, config_cb = std::move(config_cb)](pn::tcp::TLSConnection conn) {
-            if (!config_cb || config_cb(conn)) {
+            // Configured first so that config_cb, the lower level mechanism, has the last
+            // word. A connection that cannot even be configured is dropped rather than served
+            if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                     if (!conn.tls_accept()) {
                         return;

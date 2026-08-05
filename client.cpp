@@ -1,49 +1,31 @@
 #include "polyweb.hpp"
-#ifndef _WIN32
-    #include <netinet/tcp.h>
-#endif
 
 namespace pw {
-    pn::Status ClientConfig::configure_sockopts(pn::tcp::Connection& conn) const {
-#ifdef _WIN32
-        DWORD send_timeout = this->send_timeout.count();
-        DWORD recv_timeout = this->recv_timeout.count();
-#else
-        struct timeval send_timeout;
-        send_timeout.tv_sec = this->send_timeout.count() / 1000;
-        send_timeout.tv_usec = (this->send_timeout.count() % 1000) * 1000;
-        struct timeval recv_timeout;
-        recv_timeout.tv_sec = this->recv_timeout.count() / 1000;
-        recv_timeout.tv_usec = (this->recv_timeout.count() % 1000) * 1000;
-#endif
-        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof send_timeout); !result) {
-            return result;
-        }
-        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof recv_timeout); !result) {
-            return result;
-        }
+    namespace {
+        // Parsing the system trust store costs milliseconds, so requests that do not
+        // bring their own context share one built on first use. An SSL_CTX is refcounted
+        // and meant to be handed to many connections at once, which is what makes this
+        // safe. The mutex is held rather than leaving it to a magic static so that a
+        // context that failed to build is retried instead of poisoning every later request
+        pn::Result<const pn::TLSContext*> default_tls_context() {
+            static std::mutex mutex;
+            static pn::TLSContext context;
 
-        int tcp_keep_alive = this->tcp_keep_alive;
-        if (pn::Status result = conn.setsockopt(SOL_SOCKET, SO_KEEPALIVE, &tcp_keep_alive, sizeof(int)); !result) {
-            return result;
+            std::lock_guard<std::mutex> lock(mutex);
+            if (!context.is_valid()) {
+                if (pn::Status result = context.init_client(); !result) {
+                    return std::unexpected(result.error());
+                }
+            }
+            return &context;
         }
+    } // namespace
 
-        int tcp_no_delay = this->tcp_no_delay;
-        if (pn::Status result = conn.setsockopt(IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay, sizeof(int)); !result) {
-            return result;
+    pn::Result<const pn::TLSContext*> ClientConfig::resolve_tls_context() const {
+        if (tls_context) {
+            return tls_context;
         }
-
-        return {};
-    }
-
-    pn::Status ClientConfig::configure_tls(pn::TLSContext& context) const {
-        if (pn::Status result = context.init_client(verify_mode, ca_file, ca_path); !result) {
-            return result;
-        }
-        if (tls_config_cb && !tls_config_cb(context.ssl_ctx)) {
-            return std::unexpected(pn::make_polynet_error(pn::PN_ERROR_USER_CALLBACK, "configure TLS context"));
-        }
-        return {};
+        return default_tls_context();
     }
 
     pn::Status fetch(pn::StringView hostname, unsigned short port, bool secure, Request req, Response& resp, const ClientConfig& config) {
@@ -68,7 +50,7 @@ namespace pw {
             client.http_config = config.http;
             pn::Error config_error;
             if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
-                    if (pn::Status result = config.configure_sockopts(client); !result) {
+                    if (pn::Status result = config.tcp.apply(client); !result) {
                         config_error = result.error();
                         return false;
                     }
@@ -80,11 +62,13 @@ namespace pw {
                 }
                 return result;
             }
-            pn::TLSContext context;
-            if (pn::Status result = config.configure_tls(context); !result) {
-                return result;
+            const pn::TLSContext* context;
+            if (pn::Result<const pn::TLSContext*> result = config.resolve_tls_context(); !result) {
+                return std::unexpected(result.error());
+            } else {
+                context = *result;
             }
-            if (pn::Status result = client.tls_init(context, hostname); !result) {
+            if (pn::Status result = client.tls_init(*context, hostname); !result) {
                 return result;
             }
             if (pn::Status result = client.tls_connect(); !result) {
@@ -103,7 +87,7 @@ namespace pw {
             client.http_config = config.http;
             pn::Error config_error;
             if (pn::Status result = client.connect(hostname, port, [&config, &config_error](auto& client) {
-                    if (pn::Status result = config.configure_sockopts(client); !result) {
+                    if (pn::Status result = config.tcp.apply(client); !result) {
                         config_error = result.error();
                         return false;
                     }
@@ -230,7 +214,7 @@ namespace pw {
         client.buf_receiver.capacity = 0;
         pn::Error config_error;
         if (pn::Status result = client.connect(proxy_url_info.hostname(), proxy_url_info.port(), [&config, &config_error](auto& client) {
-                if (pn::Status result = config.configure_sockopts(client); !result) {
+                if (pn::Status result = config.tcp.apply(client); !result) {
                     config_error = result.error();
                     return false;
                 }
@@ -256,11 +240,13 @@ namespace pw {
         client.buf_receiver.capacity = config.buf_capacity;
 
         if (secure) {
-            pn::TLSContext context;
-            if (pn::Status result = config.configure_tls(context); !result) {
-                return result;
+            const pn::TLSContext* context;
+            if (pn::Result<const pn::TLSContext*> result = config.resolve_tls_context(); !result) {
+                return std::unexpected(result.error());
+            } else {
+                context = *result;
             }
-            if (pn::Status result = client.tls_init(context, hostname); !result) {
+            if (pn::Status result = client.tls_init(*context, hostname); !result) {
                 return result;
             }
             if (pn::Status result = client.tls_connect(); !result) {

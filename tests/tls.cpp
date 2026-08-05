@@ -652,3 +652,77 @@ TEST(tls_context_is_shared_by_two_listeners) {
     CHECK(server_error.empty());
     CHECK(context); // Lending it out neither consumed nor closed it
 }
+
+TEST(one_tls_context_serves_concurrent_handshakes) {
+    // Sharing a context is only worth anything if many connections may use it at once.
+    // Verification is deliberately off: OpenSSL races on the trust store behind a context
+    // during concurrent verification, whether that context is shared or not, so turning it
+    // on here would test libcrypto rather than whether an SSL_CTX may be lent out at all
+    pn::TLSContext server_context = make_server_context();
+    pn::TLSContext client_context;
+    CHECK(client_context.init_client(SSL_VERIFY_NONE));
+
+    pn::tcp::TLSServer server;
+    CHECK(server.bind("127.0.0.1", (unsigned short) 0));
+    CHECK(::listen(server.fd, 16) == PN_OK);
+    uint16_t port = listening_port(server);
+
+    static constexpr size_t connection_count = 8;
+    std::vector<std::string> server_errors(connection_count);
+    std::vector<std::string> client_errors(connection_count);
+
+    std::thread acceptor([&] {
+        std::vector<std::thread> handshakes;
+        for (size_t i = 0; i < connection_count; ++i) {
+            struct sockaddr_storage peer_address = {};
+            socklen_t peer_address_length = sizeof peer_address;
+            pn::sockfd_t fd = ::accept(server.fd, (struct sockaddr*) &peer_address, &peer_address_length);
+            if (fd == PN_INVALID_SOCKFD) {
+                server_errors[i] = pn::make_last_socket_error("accept test connection").message();
+                continue;
+            }
+            handshakes.emplace_back([&server_context, &server_errors, i, fd, peer_address, peer_address_length] {
+                pn::tcp::TLSConnection conn(fd, *(const struct sockaddr*) &peer_address, peer_address_length);
+                if (pn::Status result = set_socket_timeout(conn); !result) {
+                    server_errors[i] = result.error().message();
+                } else if (pn::Status result = conn.tls_init(server_context); !result) {
+                    server_errors[i] = result.error().message();
+                } else if (pn::Status result = conn.tls_accept(); !result) {
+                    server_errors[i] = result.error().message();
+                }
+            });
+        }
+        for (std::thread& handshake : handshakes) {
+            handshake.join();
+        }
+    });
+
+    std::vector<std::thread> clients;
+    for (size_t i = 0; i < connection_count; ++i) {
+        clients.emplace_back([&client_context, &client_errors, port, i] {
+            pn::tcp::TLSClient client;
+            if (pn::Status result = client.connect("127.0.0.1", port); !result) {
+                client_errors[i] = result.error().message();
+            } else if (pn::Status result = set_socket_timeout(client); !result) {
+                client_errors[i] = result.error().message();
+            } else if (pn::Status result = client.tls_init(client_context, "localhost"); !result) {
+                client_errors[i] = result.error().message();
+            } else if (pn::Status result = client.tls_connect(); !result) {
+                client_errors[i] = result.error().message();
+            }
+        });
+    }
+    for (std::thread& client : clients) {
+        client.join();
+    }
+    acceptor.join();
+
+    for (const std::string& error : server_errors) {
+        CHECK(error.empty());
+    }
+    for (const std::string& error : client_errors) {
+        CHECK(error.empty());
+    }
+    CHECK(server_context); // Lending it to eight connections at once neither consumed nor closed it
+    CHECK(client_context);
+}
