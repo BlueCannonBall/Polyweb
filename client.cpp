@@ -1,4 +1,7 @@
 #include "polyweb.hpp"
+#ifndef _WIN32
+    #include <netinet/tcp.h>
+#endif
 
 namespace pw {
     pn::Status ClientConfig::configure_sockopts(pn::tcp::Connection& conn) const {

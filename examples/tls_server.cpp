@@ -1,5 +1,6 @@
 #include "../polyweb.hpp"
 #include <iostream>
+#include <openssl/ssl.h>
 #include <stdlib.h>
 
 int main() {

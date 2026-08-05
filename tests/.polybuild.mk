@@ -145,7 +145,7 @@ obj/string_0$(obj_ext): ../string.cpp .polybuild.mk ../string.hpp ../Polynet/str
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Finished compiling $@ from $<!"
 
-obj/websocket_1$(obj_ext): ../websocket.cpp .polybuild.mk ../binary.hpp ../polyweb.hpp ../Polynet/polynet.hpp ../Polynet/error.hpp ../Polynet/string.hpp ../string.hpp ../Polynet/tls.hpp ../error.hpp ../thread_pool.hpp
+obj/websocket_1$(obj_ext): ../websocket.cpp .polybuild.mk ../binary.hpp ../Polynet/polynet.hpp ../Polynet/error.hpp ../Polynet/string.hpp ../string.hpp ../polyweb.hpp ../Polynet/tls.hpp ../error.hpp ../thread_pool.hpp
 	@printf "\033[1m[POLYBUILD]\033[0m %s\n" "Compiling $@ from $<..."
 	@mkdir -p obj
 	@$(cpp_compiler) $(compile_only_flag) $< $(cpp_compilation_flags) $(obj_path_flag)$@

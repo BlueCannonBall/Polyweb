@@ -1,9 +1,6 @@
 #include "polyweb.hpp"
 #include <algorithm>
 #include <openssl/sha.h>
-#if BYTE_ORDER == BIG_ENDIAN
-    #include <string.h>
-#endif
 
 namespace pw {
     pn::Status RequestReceiver::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const MessageConfig& config) {
