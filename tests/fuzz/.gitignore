@@ -1,0 +1,8 @@
+# The built fuzzers and the corpus libFuzzer grows for itself. The names are anchored so
+# they match the binaries here and not the same names under seeds/
+/corpus/
+/decoders
+/http_request
+/http_response
+/url
+/websocket

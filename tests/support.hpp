@@ -39,7 +39,9 @@ public:
         }
         size_t available = input.size() - input_cursor;
         size_t received = std::min({len, available, chunk_size});
-        memcpy(buf, input.data() + input_cursor, received);
+        if (received) { // memcpy will not take the null an empty vector hands out
+            memcpy(buf, input.data() + input_cursor, received);
+        }
         input_cursor += received;
         return received;
     }
@@ -50,7 +52,9 @@ public:
         }
         size_t available = input.size() - input_cursor;
         size_t received = std::min({len, available, chunk_size});
-        memcpy(buf, input.data() + input_cursor, received);
+        if (received) { // See recv
+            memcpy(buf, input.data() + input_cursor, received);
+        }
         return received;
     }
 };
