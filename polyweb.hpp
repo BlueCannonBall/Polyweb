@@ -108,8 +108,6 @@ namespace pw {
         }
     } // namespace detail
 
-    void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size);
-    void reverse_memmove(void* dest, const void* src, size_t size);
 
     std::string build_date(time_t rawtime = time(nullptr));
     time_t parse_date(const std::string& date);

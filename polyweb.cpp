@@ -15,34 +15,7 @@ namespace pw {
 
     namespace {
         constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-        void reverse_memcpy_(char* __restrict dest, const char* __restrict src, size_t size) {
-            for (size_t i = 0; i < size; ++i) {
-                dest[i] = src[size - 1 - i];
-            }
-        }
-
-        void reverse_memmove_(char* dest, const char* src, size_t size) {
-            if (dest >= src && dest < src + size) {
-                char* buf = new char[size];
-                for (size_t i = 0; i < size; ++i) {
-                    buf[i] = src[size - 1 - i];
-                }
-                memcpy(dest, buf, size);
-                delete[] buf;
-            } else {
-                reverse_memcpy_(dest, src, size);
-            }
-        }
     } // namespace
-
-    void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size) {
-        reverse_memcpy_((char*) dest, (const char*) src, size);
-    }
-
-    void reverse_memmove(void* dest, const void* src, size_t size) {
-        reverse_memmove_((char*) dest, (const char*) src, size);
-    }
 
     std::string build_date(time_t rawtime) {
 #ifdef _WIN32

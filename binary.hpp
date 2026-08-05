@@ -1,7 +1,7 @@
 #ifndef POLYWEB_BINARY_HPP_
 #define POLYWEB_BINARY_HPP_
 
-#include "polyweb.hpp"
+#include "Polynet/polynet.hpp"
 #include <concepts>
 #include <cstddef>
 #include <iterator>
@@ -9,6 +9,29 @@
 #include <type_traits>
 
 namespace pw {
+    inline void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size) {
+        char* __restrict dest_bytes = (char*) dest;
+        const char* __restrict src_bytes = (const char*) src;
+        for (size_t i = 0; i < size; ++i) {
+            dest_bytes[i] = src_bytes[size - 1 - i];
+        }
+    }
+
+    inline void reverse_memmove(void* dest, const void* src, size_t size) {
+        char* dest_bytes = (char*) dest;
+        const char* src_bytes = (const char*) src;
+        if (dest_bytes >= src_bytes && dest_bytes < src_bytes + size) {
+            char* buf = new char[size];
+            for (size_t i = 0; i < size; ++i) {
+                buf[i] = src_bytes[size - 1 - i];
+            }
+            memcpy(dest, buf, size);
+            delete[] buf;
+        } else {
+            reverse_memcpy(dest, src, size);
+        }
+    }
+
     namespace binary {
         namespace detail {
             template <typename T>
