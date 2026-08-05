@@ -1,0 +1,109 @@
+name: Fuzz
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Minute drawn at random rather than picked, since scheduled jobs are delayed most
+    # when everyone reaches for the same round number
+    - cron: '11 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seeds:
+    name: Seeds (${{ matrix.target }})
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [http_request, http_response, websocket, url, decoders]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install OpenSSL development files and Clang
+        run: sudo apt-get update && sudo apt-get install --yes libssl-dev clang
+
+      # A short run from the seeds alone, to catch a change that breaks the parser badly
+      # enough to crash on a message that is known to be good. Finding anything new is the
+      # nightly job's business, since a corpus built from nothing in a minute finds little
+      - name: Fuzz from the seeds
+        working-directory: tests/fuzz
+        run: |
+          ./build.sh ${{ matrix.target }}
+          ./${{ matrix.target }} corpus/${{ matrix.target }} seeds/${{ matrix.target }} \
+            -max_total_time=30 -max_len=8192
+
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crashes-seeds-${{ matrix.target }}
+          path: |
+            tests/fuzz/crash-*
+            tests/fuzz/leak-*
+            tests/fuzz/timeout-*
+            tests/fuzz/oom-*
+          if-no-files-found: ignore
+
+  nightly:
+    name: Nightly (${{ matrix.target }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [http_request, http_response, websocket, url, decoders]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install OpenSSL development files and Clang
+        run: sudo apt-get update && sudo apt-get install --yes libssl-dev clang
+
+      # A cache entry can only be written once, so the key carries the run id and the
+      # prefix restores the newest one there is. A fixed key would freeze the corpus at
+      # whatever the first run produced and quietly never grow it again
+      - name: Restore the corpus
+        uses: actions/cache@v4
+        with:
+          path: tests/fuzz/corpus/${{ matrix.target }}
+          key: fuzz-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-${{ matrix.target }}-
+
+      - name: Fuzz
+        working-directory: tests/fuzz
+        run: |
+          ./build.sh ${{ matrix.target }}
+          ./${{ matrix.target }} corpus/${{ matrix.target }} seeds/${{ matrix.target }} \
+            -max_total_time=600 -max_len=8192
+
+      # Keeps only what still earns its coverage, so the corpus does not grow without
+      # bound and slow down every run after this one
+      - name: Minimise the corpus
+        working-directory: tests/fuzz
+        run: |
+          mkdir -p minimised
+          ./${{ matrix.target }} -merge=1 minimised corpus/${{ matrix.target }} seeds/${{ matrix.target }}
+          rm -rf corpus/${{ matrix.target }}
+          mv minimised corpus/${{ matrix.target }}
+
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crashes-nightly-${{ matrix.target }}
+          path: |
+            tests/fuzz/crash-*
+            tests/fuzz/leak-*
+            tests/fuzz/timeout-*
+            tests/fuzz/oom-*
+          if-no-files-found: ignore
