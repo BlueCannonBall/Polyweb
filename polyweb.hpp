@@ -552,7 +552,7 @@ namespace pw {
     class BasicRoute {
     public:
         bool wildcard = false;
-        std::function<Response(BasicConnection<T>&, RequestReceiver&)> cb;
+        std::move_only_function<Response(BasicConnection<T>&, RequestReceiver&) const> cb;
         bool parse_body = true;
 
         BasicRoute() = default;
@@ -569,8 +569,8 @@ namespace pw {
     class BasicWSRoute {
     public:
         bool wildcard = false;
-        std::function<Response(const BasicConnection<T>&, const Request&)> connect_cb;
-        std::function<void(BasicWSConnection<T>, Request)> open_cb;
+        std::move_only_function<Response(const BasicConnection<T>&, const Request&) const> connect_cb;
+        std::move_only_function<void(BasicWSConnection<T>, Request) const> open_cb;
 
         BasicWSRoute() = default;
         BasicWSRoute(decltype(open_cb) open_cb, bool wildcard = false):
@@ -597,7 +597,7 @@ namespace pw {
         tp::TaskManager task_manager;
 
     public:
-        std::function<Response(uint16_t, pn::StringView)> error_cb;
+        std::move_only_function<Response(uint16_t, pn::StringView) const> error_cb;
         ServerConfig config;
 
         typedef BasicConnection<typename Base::connection_type> connection_type;
