@@ -1,7 +1,7 @@
 #include "error.hpp"
 
 namespace pw {
-    namespace detail {
+    namespace {
         class PolywebCategory : public std::error_category {
         public:
             const char* name() const noexcept override {
@@ -21,10 +21,10 @@ namespace pw {
                 }
             }
         };
-    } // namespace detail
+    } // namespace
 
     const std::error_category& polyweb_category() noexcept {
-        static detail::PolywebCategory category;
+        static PolywebCategory category;
         return category;
     }
 } // namespace pw

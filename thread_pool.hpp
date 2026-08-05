@@ -205,11 +205,20 @@ namespace tp {
             std::unique_lock<std::mutex> lock(control_block->mutex);
             if (launch_if_busy && control_block->queue.size() >= control_block->thread_count - control_block->busy_thread_count) {
                 lock.unlock();
-                std::thread([](std::shared_ptr<Task> task) {
-                    task->execute();
-                },
-                    task)
-                    .detach();
+                std::thread thread;
+                try {
+                    thread = std::thread([](std::shared_ptr<Task> task) {
+                        task->execute();
+                    },
+                        task);
+                } catch (...) { // Nothing was started, so the queue the pool already serves will do
+                    lock.lock();
+                    control_block->queue.push(task);
+                    lock.unlock();
+                    control_block->cv.notify_one();
+                    return task;
+                }
+                thread.detach();
             } else {
                 control_block->queue.push(task);
                 lock.unlock();

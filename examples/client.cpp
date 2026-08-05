@@ -5,7 +5,7 @@
 int main() {
     (void) pn::init();
 
-    pw::HTTPResponse resp;
+    pw::Response resp;
     if (pn::Status result = pw::fetch("https://example.com", resp); !result) {
         std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;

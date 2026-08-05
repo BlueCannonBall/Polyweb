@@ -12,7 +12,7 @@ using nlohmann::json;
 int main() {
     (void) pn::init();
 
-    pw::HTTPResponse resp;
+    pw::Response resp;
     if (pn::Status result = pw::fetch("https://hacker-news.firebaseio.com/v0/topstories.json", resp); !result) {
         std::cerr << "Error: " << result.error().message() << std::endl;
         return 1;
@@ -25,7 +25,7 @@ int main() {
     std::vector<std::shared_ptr<tp::Task>> tasks;
     for (size_t i = 0; i < 10; ++i) {
         tasks.push_back(pw::thread_pool.schedule([&story_ids, i]() {
-            pw::HTTPResponse resp;
+            pw::Response resp;
             if (pn::Status result = pw::fetch("https://hacker-news.firebaseio.com/v0/item/" + std::to_string(story_ids[i].get<int>()) + ".json", resp); !result) {
                 std::cerr << "Error: " << result.error().message() << std::endl;
                 exit(1);

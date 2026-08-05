@@ -59,7 +59,7 @@ TEST(url_parse_and_build) {
 TEST(http_request_parse_handles_fragmented_input) {
     ScriptedConnection conn(to_bytes("POST /submit?name=codex HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\n\r\nhello"));
     pn::tcp::BufReceiver receiver(3);
-    pw::HTTPRequest request;
+    pw::Request request;
 
     CHECK(request.parse(conn, receiver));
     CHECK(request.method == "POST");
@@ -72,8 +72,8 @@ TEST(http_request_parse_handles_fragmented_input) {
 TEST(http_request_parse_handles_empty_headers_and_pipelining) {
     ScriptedConnection conn(to_bytes("GET /one HTTP/1.1\r\n\r\nGET /two HTTP/1.1\r\nHost: example.test\r\n\r\n"), 2);
     pn::tcp::BufReceiver receiver(5);
-    pw::HTTPRequest first;
-    pw::HTTPRequest second;
+    pw::Request first;
+    pw::Request second;
 
     CHECK(first.parse(conn, receiver));
     CHECK(first.target == "/one");
@@ -87,7 +87,7 @@ TEST(http_response_parse_handles_fragmentation_and_empty_headers) {
     for (size_t chunk_size = 1; chunk_size <= 8; ++chunk_size) {
         ScriptedConnection conn(to_bytes("HTTP/1.1 201 Created\r\nContent-Length: 5\r\n\r\nhello"), chunk_size);
         pn::tcp::BufReceiver receiver(3);
-        pw::HTTPResponse response;
+        pw::Response response;
 
         CHECK(response.parse(conn, receiver));
         CHECK(response.status_code == 201);
@@ -97,7 +97,7 @@ TEST(http_response_parse_handles_fragmentation_and_empty_headers) {
 
     ScriptedConnection conn(to_bytes("HTTP/1.1 204 No Content\r\n\r\n"));
     pn::tcp::BufReceiver receiver;
-    pw::HTTPResponse response;
+    pw::Response response;
     CHECK(response.parse(conn, receiver));
     CHECK(response.headers.empty());
 }
@@ -105,7 +105,7 @@ TEST(http_response_parse_handles_fragmentation_and_empty_headers) {
 TEST(http_chunked_receiver_streams_chunks) {
     ScriptedConnection conn(to_bytes("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n"), 2);
     pn::tcp::BufReceiver receiver(4);
-    pw::HTTPRequestReceiver request;
+    pw::RequestReceiver request;
     std::vector<char> body;
     request.recv_cb = [&body](std::vector<char> chunk) {
         body.insert(body.end(), chunk.begin(), chunk.end());
@@ -120,53 +120,53 @@ TEST(http_parsers_reject_malformed_and_limited_messages) {
     {
         ScriptedConnection conn(to_bytes("GET / HTTP/1.1\r\nContent-Length: no\r\n\r\n"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPRequest request;
+        pw::Request request;
         CHECK(!request.parse(conn, receiver));
     }
     {
         ScriptedConnection conn(to_bytes("GET / HTTP/1.1\r\nContent-Length: 5\r\n\r\nabc"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPRequest request;
+        pw::Request request;
         CHECK(!request.parse(conn, receiver));
     }
     {
         ScriptedConnection conn(to_bytes("GET / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\nnope\r\n"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPRequest request;
+        pw::Request request;
         CHECK(!request.parse(conn, receiver));
     }
     {
         ScriptedConnection conn(to_bytes("GET / HTTP/1.1\r\nHost: example.test\r\n\r\n"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPRequest request;
-        pw::HTTPMessageConfig config;
+        pw::Request request;
+        pw::MessageConfig config;
         config.header_climit = 0;
         CHECK(!request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_ALL, config));
     }
     {
         ScriptedConnection conn(to_bytes("GET / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPRequest request;
-        pw::HTTPMessageConfig config;
+        pw::Request request;
+        pw::MessageConfig config;
         config.body_rlimit = 4;
         CHECK(!request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_ALL, config));
     }
     {
         ScriptedConnection conn(to_bytes("HTTP/1.1 200x OK\r\n\r\n"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPResponse response;
+        pw::Response response;
         CHECK(!response.parse(conn, receiver));
     }
     {
         ScriptedConnection conn(to_bytes("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n1\r\na\r\nFFFFFFFFFFFFFFFF\r\n"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPRequest request;
+        pw::Request request;
         CHECK(!request.parse(conn, receiver));
     }
     {
         ScriptedConnection conn(to_bytes("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\na\r\nFFFFFFFFFFFFFFFF\r\n"));
         pn::tcp::BufReceiver receiver;
-        pw::HTTPResponse response;
+        pw::Response response;
         CHECK(!response.parse(conn, receiver));
     }
 }
@@ -174,7 +174,7 @@ TEST(http_parsers_reject_malformed_and_limited_messages) {
 TEST(http_receiver_stops_when_its_callback_rejects_a_chunk) {
     ScriptedConnection conn(to_bytes("POST / HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc"), 2);
     pn::tcp::BufReceiver receiver(3);
-    pw::HTTPRequestReceiver request;
+    pw::RequestReceiver request;
     request.recv_cb = [](std::vector<char>) {
         return false;
     };
@@ -184,7 +184,7 @@ TEST(http_receiver_stops_when_its_callback_rejects_a_chunk) {
 
 TEST(http_chunked_sender_streams_chunks) {
     unsigned int call_count = 0;
-    pw::HTTPRequest request("POST", "/", [&call_count]() -> std::vector<char> {
+    pw::Request request("POST", "/", [&call_count]() -> std::vector<char> {
         switch (call_count++) {
         case 0: return {'o', 'n', 'e'};
         case 1: return {'t', 'w', 'o'};
@@ -196,7 +196,7 @@ TEST(http_chunked_sender_streams_chunks) {
 }
 
 TEST(http_response_status_category) {
-    pw::HTTPResponse response(204);
+    pw::Response response(204);
     CHECK(response.status_code_category() == 200);
 }
 
@@ -220,7 +220,7 @@ TEST(http_client_and_server_loopback) {
             }
 
             pn::tcp::BufReceiver receiver;
-            pw::HTTPRequest request;
+            pw::Request request;
             if (pn::Status result = request.parse(connection, receiver); !result) {
                 server_error = result.error().message();
                 return;
@@ -229,7 +229,7 @@ TEST(http_client_and_server_loopback) {
                 return;
             }
 
-            pw::HTTPResponse response(201, "created", {{"X-Test", "yes"}});
+            pw::Response response(201, "created", {{"X-Test", "yes"}});
             if (pn::Status result = response.build(connection); !result) {
                 server_error = result.error().message();
             }
@@ -239,8 +239,8 @@ TEST(http_client_and_server_loopback) {
     pw::Client client;
     CHECK(client.connect("127.0.0.1", listening_port(listener)));
     CHECK(set_socket_timeout(client));
-    CHECK(client.send(pw::HTTPRequest("POST", "/echo", "hello")));
-    pw::HTTPResponse response;
+    CHECK(client.send(pw::Request("POST", "/echo", "hello")));
+    pw::Response response;
     CHECK(client.recv(response));
 
     server_thread.join();
@@ -248,4 +248,28 @@ TEST(http_client_and_server_loopback) {
     CHECK(response.status_code == 201);
     CHECK(response.headers.at("x-test") == "yes");
     CHECK(response.body_string() == "created");
+}
+
+TEST(closing_a_connection_discards_what_it_had_buffered) {
+    // Two pipelined responses arrive together, so the second stays in the receiver
+    ScriptedConnection conn(to_bytes("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi"
+                                     "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"),
+        4'000); // Delivered in one read, so the second response lands in the receiver
+    pw::BasicConnection<ScriptedConnection> connection(std::move(conn), pn::tcp::BufReceiver());
+
+    pw::Response first;
+    CHECK(connection.recv(first));
+    CHECK(first.status_code == 200);
+    CHECK(connection.buf_receiver.available() != 0);
+
+    size_t buffered = connection.buf_receiver.available();
+
+    // A layer above the byte stream, such as the WebSocket one, leaves it intact
+    CHECK(connection.close(PW_PROTOCOL_LAYER_WS));
+    CHECK(connection.buf_receiver.available() == buffered);
+
+    // Closing the transport makes it stale, and serving that leftover to whatever this
+    // object is used for next would attribute one connection's response to another
+    CHECK(connection.close());
+    CHECK(connection.buf_receiver.available() == 0);
 }

@@ -48,7 +48,8 @@ TEST(websocket_streamed_message_is_fragmented_and_reassembled) {
         case 1: return {'c', 'd'};
         default: return {};
         }
-    }, pw::WS_OPCODE_BINARY);
+    },
+        pw::WS_OPCODE_BINARY);
     ScriptedConnection conn(sent.build(), 1);
     pn::tcp::BufReceiver receiver(2);
     pw::WSMessage received;
@@ -96,8 +97,7 @@ TEST(websocket_rejects_truncated_and_oversized_frames) {
         CHECK(!message.parse(conn, receiver));
     }
     {
-        std::vector<char> frame = {(char) 0x82, 127, (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF,
-            (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF};
+        std::vector<char> frame = {(char) 0x82, 127, (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF, (char) 0xFF};
         ScriptedConnection conn(std::move(frame));
         pn::tcp::BufReceiver receiver;
         pw::WSMessage message;

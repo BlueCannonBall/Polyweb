@@ -6,19 +6,16 @@
 #endif
 
 namespace pw {
-    pn::Status HTTPRequestReceiver::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const HTTPMessageConfig& config) {
-        if (pn::Status result = HTTPRequest::parse(conn, buf_receiver, parts, config); !result) {
+    pn::Status RequestReceiver::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const MessageConfig& config) {
+        if (pn::Status result = Request::parse(conn, buf_receiver, parts, config); !result) {
             return result;
         }
         parts_parsed |= parts;
         return {};
     }
 
-    template <typename Base>
-    pn::Status BasicServer<Base>::listen(std::function<bool(typename Base::connection_type&)> config_cb, int backlog)
-        requires(!std::is_same_v<Base, pn::tcp::TLSServer>)
-    {
-        return Base::listen([this, config_cb = std::move(config_cb)](typename Base::connection_type conn) {
+    pn::Status Server::listen(std::function<bool(pn::tcp::Connection&)> config_cb, int backlog) {
+        return pn::tcp::Server::listen([this, config_cb = std::move(config_cb)](pn::tcp::Connection conn) {
             if (!config_cb || config_cb(conn)) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                     (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
@@ -30,9 +27,8 @@ namespace pw {
             backlog);
     }
 
-    template <>
-    pn::Status TLSServer::listen(const pn::TLSContext& context, std::function<bool(typename pn::tcp::TLSServer::connection_type&)> config_cb, int backlog) {
-        return pn::tcp::TLSServer::listen(context, [this, config_cb = std::move(config_cb)](typename pn::tcp::TLSServer::connection_type conn) {
+    pn::Status TLSServer::listen(const pn::TLSContext& context, std::function<bool(pn::tcp::TLSConnection&)> config_cb, int backlog) {
+        return pn::tcp::TLSServer::listen(context, [this, config_cb = std::move(config_cb)](pn::tcp::TLSConnection conn) {
             if (!config_cb || config_cb(conn)) {
                 task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
                     if (!conn.tls_accept()) {
@@ -51,7 +47,7 @@ namespace pw {
     pn::Status BasicServer<Base>::handle_conn(connection_type conn) const {
         bool keep_alive = true;
         do {
-            HTTPRequestReceiver req;
+            RequestReceiver req;
             if (pn::Status result = conn.recv(req, PW_HTTP_MESSAGE_PART_HEAD); !result) {
                 (void) handle_error(conn, 400, result.error().message(), false);
                 return result;
@@ -65,7 +61,7 @@ namespace pw {
                 if (req.http_version == "HTTP/1.1") {
                     keep_alive = std::find(split_connection.begin(), split_connection.end(), "close") == split_connection.end();
 
-                    HTTPHeaders::iterator upgrade_it;
+                    Headers::iterator upgrade_it;
                     if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
                         if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
@@ -111,12 +107,12 @@ namespace pw {
                 if (!ws_route_target.empty()) {
                     const auto& route = ws_routes.at(ws_route_target);
 
-                    HTTPResponse resp;
+                    Response resp;
                     try {
-                        if (route.on_connect) {
-                            resp = route.on_connect(conn, req);
+                        if (route.connect_cb) {
+                            resp = route.connect_cb(conn, req);
                         } else {
-                            resp = HTTPResponse(101);
+                            resp = Response(101);
                         }
                     } catch (const std::exception& e) {
                         if (pn::Status result = handle_error(conn, 500, e.what(), keep_alive, false, req.http_version); !result) {
@@ -166,7 +162,7 @@ namespace pw {
                             }
                         }
 
-                        HTTPHeaders::iterator websocket_key_it;
+                        Headers::iterator websocket_key_it;
                         if (!resp.headers.count("Sec-WebSocket-Accept") && (websocket_key_it = req.headers.find("Sec-WebSocket-Key")) != req.headers.end()) {
                             std::string websocket_key = string::trim_right_copy(websocket_key_it->second);
                             websocket_key += "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -175,7 +171,7 @@ namespace pw {
                             resp.headers["Sec-WebSocket-Accept"] = base64_encode(digest, SHA_DIGEST_LENGTH);
                         }
 
-                        HTTPHeaders::iterator websocket_protocol_it;
+                        Headers::iterator websocket_protocol_it;
                         if (!resp.headers.count("Sec-WebSocket-Protocol") && (websocket_protocol_it = req.headers.find("Sec-WebSocket-Protocol")) != req.headers.end()) {
                             std::vector<std::string> split_websocket_protocol = string::split(websocket_protocol_it->second, ',');
                             if (!split_websocket_protocol.empty()) {
@@ -192,7 +188,7 @@ namespace pw {
                     }
 
                     if (ws_open) {
-                        route.on_open(ws_connection_type(std::move(conn), config.ws), std::move(req));
+                        route.open_cb(ws_connection_type(std::move(conn), config.ws), std::move(req));
                         return {};
                     }
                 } else if (!http_route_target.empty()) {
@@ -224,7 +220,7 @@ namespace pw {
                         return {};
                     };
 
-                    HTTPResponse resp;
+                    Response resp;
                     try {
                         resp = route.cb(conn, req);
                     } catch (const std::exception& e) {
@@ -282,7 +278,7 @@ namespace pw {
     }
 
     template <typename Base>
-    pn::Status BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const HTTPHeaders& headers, int parts, std::string http_version) const {
+    pn::Status BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, const Headers& headers, int parts, std::string http_version) const {
         return handle_error(conn, status_code, {}, headers, parts, std::move(http_version));
     }
 
@@ -292,16 +288,16 @@ namespace pw {
     }
 
     template <typename Base>
-    pn::Status BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, const HTTPHeaders& headers, int parts, std::string http_version) const {
-        HTTPResponse resp;
+    pn::Status BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, const Headers& headers, int parts, std::string http_version) const {
+        Response resp;
         try {
-            if (on_error) {
-                resp = on_error(status_code, what);
+            if (error_cb) {
+                resp = error_cb(status_code, what);
             } else {
-                resp = pw::HTTPResponse::make_basic(status_code);
+                resp = pw::Response::make_basic(status_code);
             }
         } catch (...) {
-            resp = HTTPResponse::make_basic(500);
+            resp = Response::make_basic(500);
         }
 
         resp.http_version = std::move(http_version);
@@ -318,15 +314,15 @@ namespace pw {
 
     template <typename Base>
     pn::Status BasicServer<Base>::handle_error(connection_type& conn, uint16_t status_code, pn::StringView what, bool keep_alive, int parts, std::string http_version) const {
-        HTTPResponse resp;
+        Response resp;
         try {
-            if (on_error) {
-                resp = on_error(status_code, what);
+            if (error_cb) {
+                resp = error_cb(status_code, what);
             } else {
-                resp = pw::HTTPResponse::make_basic(status_code);
+                resp = pw::Response::make_basic(status_code);
             }
         } catch (...) {
-            resp = HTTPResponse::make_basic(500);
+            resp = Response::make_basic(500);
         }
 
         resp.http_version = std::move(http_version);
@@ -340,6 +336,4 @@ namespace pw {
         return conn.send(std::move(resp), parts);
     }
 
-    template class BasicServer<pn::tcp::Server>;
-    template class BasicServer<pn::tcp::TLSServer>;
 } // namespace pw

@@ -11,7 +11,7 @@
 #endif
 
 namespace pw {
-    namespace detail {
+    namespace {
         void apply_mask(char* dest, const char* src, size_t len, const char* key) {
             size_t i = 0;
 #ifdef POLYWEB_SIMD
@@ -36,7 +36,7 @@ namespace pw {
         void apply_mask(char* buf, size_t len, const char* key) {
             apply_mask(buf, buf, len, key);
         }
-    } // namespace detail
+    } // namespace
 
     WSMessage WSMessage::make_close(uint16_t status_code, pn::StringView reason) {
         WSMessage ret(WS_OPCODE_CLOSE);
@@ -71,7 +71,7 @@ namespace pw {
                 size_t end = ret.size();
                 ret.resize(end + chunk.size());
                 if (masking_key) {
-                    detail::apply_mask(ret.data() + end, chunk.data(), chunk.size(), masking_key);
+                    apply_mask(ret.data() + end, chunk.data(), chunk.size(), masking_key);
                 } else {
                     memcpy(ret.data() + end, chunk.data(), chunk.size());
                 }
@@ -112,7 +112,7 @@ namespace pw {
                 if (masking_key) {
                     header.insert(header.end(), masking_key, masking_key + 4);
                     if (!chunk.empty()) {
-                        detail::apply_mask(chunk.data(), chunk.size(), masking_key);
+                        apply_mask(chunk.data(), chunk.size(), masking_key);
                     }
                 }
 
@@ -159,7 +159,7 @@ namespace pw {
             if (!data.empty()) {
                 if (masking_key) {
                     auto masked_data = new char[data.size()];
-                    detail::apply_mask(masked_data, data.data(), data.size(), masking_key);
+                    apply_mask(masked_data, data.data(), data.size(), masking_key);
                     if (pn::Result<size_t> result = conn.sendall(masked_data, data.size()); !result) {
                         delete[] masked_data;
                         return std::unexpected(result.error());
@@ -272,7 +272,7 @@ namespace pw {
                         return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "read WebSocket payload"));
                     }
                     if (masked) {
-                        detail::apply_mask(&data[end], payload_len, masking_key);
+                        apply_mask(&data[end], payload_len, masking_key);
                     }
                 }
             }
@@ -328,8 +328,8 @@ namespace pw {
     }
 
     template <typename Base>
-    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers) {
-        HTTPRequest req("GET", std::move(target), std::move(query_parameters), std::move(headers));
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, Response& resp, QueryParameters query_parameters, Headers headers) {
+        Request req("GET", std::move(target), std::move(query_parameters), std::move(headers));
 
         if (!req.headers.count("User-Agent")) {
             req.headers["User-Agent"] = PW_AGENT_NAME;
@@ -370,13 +370,13 @@ namespace pw {
     }
 
     template <typename Base>
-    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters, HTTPHeaders headers) {
-        HTTPResponse resp;
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters, Headers headers) {
+        Response resp;
         return ws_connect(hostname, port, std::move(target), resp, std::move(query_parameters), std::move(headers));
     }
 
     template <typename Base>
-    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView url, HTTPResponse& resp, HTTPHeaders headers) {
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView url, Response& resp, Headers headers) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -390,12 +390,12 @@ namespace pw {
     }
 
     template <typename Base>
-    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView url, HTTPHeaders headers) {
-        HTTPResponse resp;
+    pn::Status BasicWSClient<Base>::ws_connect(pn::StringView url, Headers headers) {
+        Response resp;
         return ws_connect(url, resp, std::move(headers));
     }
 
-    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, Response& resp, QueryParameters query_parameters, Headers headers, const ClientConfig& config) {
         client.http_config = config.http;
         client.ws_config = config.ws;
         pn::Error config_error;
@@ -433,12 +433,12 @@ namespace pw {
         return {};
     }
 
-    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
-        HTTPResponse resp;
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters, Headers headers, const ClientConfig& config) {
+        Response resp;
         return make_ws_client(client, hostname, port, secure, std::move(target), resp, std::move(query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, Response& resp, Headers headers, const ClientConfig& config) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -451,12 +451,12 @@ namespace pw {
         return make_ws_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", std::move(url_info.path), resp, std::move(url_info.query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, HTTPHeaders headers, const ClientConfig& config) {
-        HTTPResponse resp;
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, Headers headers, const ClientConfig& config) {
+        Response resp;
         return make_ws_client(client, url, resp, std::move(headers), config);
     }
 
-    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, HTTPResponse& resp, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, Response& resp, QueryParameters query_parameters, Headers headers, const ClientConfig& config) {
         client.http_config = config.http;
         client.ws_config = config.ws;
         URLInfo proxy_url_info;
@@ -467,7 +467,7 @@ namespace pw {
             return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "use non-HTTP proxy"));
         }
 
-        HTTPRequest connect_req("CONNECT",
+        Request connect_req("CONNECT",
             std::string(hostname) + ':' + std::to_string(port),
             {
                 {"Host", std::string(hostname) + ':' + std::to_string(port)},
@@ -497,7 +497,7 @@ namespace pw {
             return result;
         }
 
-        HTTPResponse connect_resp;
+        Response connect_resp;
         if (pn::Status result = client.recv(connect_resp); !result) {
             return result;
         } else if (connect_resp.status_code_category() != 200) {
@@ -525,12 +525,12 @@ namespace pw {
         return {};
     }
 
-    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters, HTTPHeaders headers, const ClientConfig& config) {
-        HTTPResponse resp;
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters, Headers headers, const ClientConfig& config) {
+        Response resp;
         return make_proxied_ws_client(client, hostname, port, secure, std::move(target), proxy_url, resp, std::move(query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPResponse& resp, HTTPHeaders headers, const ClientConfig& config) {
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, Response& resp, Headers headers, const ClientConfig& config) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -543,8 +543,8 @@ namespace pw {
         return make_proxied_ws_client(client, url_info.hostname(), url_info.port(), url_info.scheme == "wss", std::move(url_info.path), proxy_url, resp, std::move(url_info.query_parameters), std::move(headers), config);
     }
 
-    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, HTTPHeaders headers, const ClientConfig& config) {
-        HTTPResponse resp;
+    pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView url, pn::StringView proxy_url, Headers headers, const ClientConfig& config) {
+        Response resp;
         return make_proxied_ws_client(client, url, proxy_url, resp, std::move(headers), config);
     }
 

@@ -13,16 +13,16 @@
 namespace pw {
     tp::ThreadPool thread_pool(std::max<unsigned int>(std::thread::hardware_concurrency(), 16));
 
-    namespace detail {
-        static constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    namespace {
+        constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-        void reverse_memcpy(char* __restrict dest, const char* __restrict src, size_t size) {
+        void reverse_memcpy_(char* __restrict dest, const char* __restrict src, size_t size) {
             for (size_t i = 0; i < size; ++i) {
                 dest[i] = src[size - 1 - i];
             }
         }
 
-        void reverse_memmove(char* dest, const char* src, size_t size) {
+        void reverse_memmove_(char* dest, const char* src, size_t size) {
             if (dest >= src && dest < src + size) {
                 char* buf = new char[size];
                 for (size_t i = 0; i < size; ++i) {
@@ -31,17 +31,17 @@ namespace pw {
                 memcpy(dest, buf, size);
                 delete[] buf;
             } else {
-                reverse_memcpy(dest, src, size);
+                reverse_memcpy_(dest, src, size);
             }
         }
-    } // namespace detail
+    } // namespace
 
     void reverse_memcpy(void* __restrict dest, const void* __restrict src, size_t size) {
-        detail::reverse_memcpy((char*) dest, (const char*) src, size);
+        reverse_memcpy_((char*) dest, (const char*) src, size);
     }
 
     void reverse_memmove(void* dest, const void* src, size_t size) {
-        detail::reverse_memmove((char*) dest, (const char*) src, size);
+        reverse_memmove_((char*) dest, (const char*) src, size);
     }
 
     std::string build_date(time_t rawtime) {
@@ -58,7 +58,7 @@ namespace pw {
     }
 
     time_t parse_date(const std::string& date) {
-        struct tm timeinfo = {0};
+        struct tm timeinfo = {};
         std::istringstream ss(date);
         ss.imbue(std::locale("C"));
         ss >> std::get_time(&timeinfo, "%a, %d %b %Y %H:%M:%S GMT");
@@ -78,10 +78,10 @@ namespace pw {
             std::bitset<24> bits((((uint32_t) data[i]) << 16) | (((uint32_t) data[i + 1]) << 8) | data[i + 2]);
             ret.insert(ret.end(),
                 {
-                    detail::base64_alphabet[(bits >> 18).to_ulong()],
-                    detail::base64_alphabet[((bits >> 12) & std::bitset<24>(0x3F)).to_ulong()],
-                    detail::base64_alphabet[((bits >> 6) & std::bitset<24>(0x3F)).to_ulong()],
-                    detail::base64_alphabet[(bits & std::bitset<24>(0x3F)).to_ulong()],
+                    base64_alphabet[(bits >> 18).to_ulong()],
+                    base64_alphabet[((bits >> 12) & std::bitset<24>(0x3F)).to_ulong()],
+                    base64_alphabet[((bits >> 6) & std::bitset<24>(0x3F)).to_ulong()],
+                    base64_alphabet[(bits & std::bitset<24>(0x3F)).to_ulong()],
                 });
         }
         if (size_t leftover = size - i) {
@@ -90,8 +90,8 @@ namespace pw {
                 std::bitset<12> bits(((uint32_t) data[i]) << 4);
                 ret.insert(ret.end(),
                     {
-                        detail::base64_alphabet[(bits >> 6).to_ulong()],
-                        detail::base64_alphabet[(bits & std::bitset<12>(0x3F)).to_ulong()],
+                        base64_alphabet[(bits >> 6).to_ulong()],
+                        base64_alphabet[(bits & std::bitset<12>(0x3F)).to_ulong()],
                         '=',
                         '=',
                     });
@@ -102,9 +102,9 @@ namespace pw {
                 std::bitset<18> bits((((uint32_t) data[i]) << 10) | (((uint32_t) data[i + 1]) << 2));
                 ret.insert(ret.end(),
                     {
-                        detail::base64_alphabet[(bits >> 12).to_ulong()],
-                        detail::base64_alphabet[((bits >> 6) & std::bitset<18>(0x3F)).to_ulong()],
-                        detail::base64_alphabet[(bits & std::bitset<18>(0x3F)).to_ulong()],
+                        base64_alphabet[(bits >> 12).to_ulong()],
+                        base64_alphabet[((bits >> 6) & std::bitset<18>(0x3F)).to_ulong()],
+                        base64_alphabet[(bits & std::bitset<18>(0x3F)).to_ulong()],
                         '=',
                     });
                 break;
@@ -124,8 +124,8 @@ namespace pw {
         indices.reserve(str.size());
 
         for (char c : str) {
-            if (const char* ptr = strchr(detail::base64_alphabet, c)) {
-                indices.push_back(ptr - detail::base64_alphabet);
+            if (const char* ptr = strchr(base64_alphabet, c)) {
+                indices.push_back(ptr - base64_alphabet);
             } else {
                 break;
             }
@@ -404,7 +404,7 @@ namespace pw {
         }
     }
 
-    std::vector<char> HTTPRequest::build(int parts) {
+    std::vector<char> Request::build(int parts) {
         std::vector<char> ret;
 
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
@@ -468,7 +468,7 @@ namespace pw {
         return ret;
     }
 
-    pn::Status HTTPRequest::build(pn::tcp::Connection& conn, int parts) {
+    pn::Status Request::build(pn::tcp::Connection& conn, int parts) {
         auto data = build(send_cb ? parts & ~PW_HTTP_MESSAGE_PART_BODY : parts);
         if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
             return std::unexpected(result.error());
@@ -505,7 +505,7 @@ namespace pw {
         return {};
     }
 
-    pn::Status HTTPRequest::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const HTTPMessageConfig& config) {
+    pn::Status Request::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const MessageConfig& config) {
         const auto& [header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit] = config;
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
             method.clear();
@@ -690,7 +690,7 @@ namespace pw {
         return {};
     }
 
-    std::vector<char> HTTPResponse::build(int parts) {
+    std::vector<char> Response::build(int parts) {
         std::vector<char> ret;
 
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
@@ -752,7 +752,7 @@ namespace pw {
         return ret;
     }
 
-    pn::Status HTTPResponse::build(pn::tcp::Connection& conn, int parts) {
+    pn::Status Response::build(pn::tcp::Connection& conn, int parts) {
         auto data = build(send_cb ? parts & ~PW_HTTP_MESSAGE_PART_BODY : parts);
         if (pn::Result<size_t> result = conn.sendall(data.data(), data.size()); !result) {
             return std::unexpected(result.error());
@@ -789,7 +789,7 @@ namespace pw {
         return {};
     }
 
-    pn::Status HTTPResponse::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const HTTPMessageConfig& config) {
+    pn::Status Response::parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const MessageConfig& config) {
         const auto& [header_climit, header_name_rlimit, header_value_rlimit, body_chunk_rlimit, body_rlimit, misc_rlimit] = config;
         if (parts & PW_HTTP_MESSAGE_PART_START_LINE) {
             http_version.clear();
