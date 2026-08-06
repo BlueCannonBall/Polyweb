@@ -6,6 +6,7 @@
     #include <netinet/tcp.h>
 #endif
 #include <openssl/ssl.h>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -397,4 +398,119 @@ TEST(a_server_imposes_no_timeout_of_its_own) {
     pw::ClientConfig client_config;
     CHECK(client_config.tcp.recv_timeout == std::chrono::seconds(30));
     CHECK(client_config.tcp.send_timeout == std::chrono::seconds(30));
+}
+
+TEST(base64_round_trips_including_every_padding_length) {
+    // The three residues are where a base64 implementation goes wrong, so all of them
+    for (pn::StringView plain : {"", "f", "fo", "foo", "foob", "fooba", "foobar"}) {
+        std::string encoded = pw::base64_encode(plain.data(), plain.size());
+        std::vector<char> decoded = pw::base64_decode(encoded);
+        CHECK(std::string(decoded.begin(), decoded.end()) == std::string(plain));
+    }
+
+    // The vectors from RFC 4648, so this checks the alphabet and not just self consistency
+    CHECK(pw::base64_encode("f", 1) == "Zg==");
+    CHECK(pw::base64_encode("fo", 2) == "Zm8=");
+    CHECK(pw::base64_encode("foo", 3) == "Zm9v");
+    CHECK(pw::base64_encode("foobar", 6) == "Zm9vYmFy");
+
+    // Bytes that are not text, since a header value may carry anything
+    std::vector<char> binary;
+    for (int i = 0; i < 256; ++i) {
+        binary.push_back((char) i);
+    }
+    std::vector<char> round_tripped = pw::base64_decode(pw::base64_encode(binary.data(), binary.size()));
+    CHECK(round_tripped == binary);
+}
+
+TEST(percent_encoding_round_trips_and_honours_its_flags) {
+    CHECK(pw::percent_decode(pw::percent_encode("hello world")) == "hello world");
+    CHECK(pw::percent_decode(pw::percent_encode("a/b?c=d&e#f")) == "a/b?c=d&e#f");
+
+    // A path keeps its separators unless told otherwise, or a URL would stop being one
+    CHECK(pw::percent_encode("a/b") == "a/b");
+    CHECK(pw::percent_encode("a/b", false, false) == "a%2Fb");
+
+    // Only in a query string does a plus mean a space
+    CHECK(pw::percent_decode("a+b") == "a+b");
+    CHECK(pw::percent_decode("a+b", true) == "a b");
+    CHECK(pw::percent_encode("a b", true) == "a+b");
+
+    CHECK(pw::percent_decode("%41%42%43") == "ABC");
+    CHECK(pw::percent_decode("%2f") == "/"); // Lower case hex is just as valid
+
+    // Every byte survives the trip, including the ones that have to be escaped
+    std::string all;
+    for (int i = 1; i < 256; ++i) {
+        all.push_back((char) i);
+    }
+    CHECK(pw::percent_decode(pw::percent_encode(all, false, false)) == all);
+}
+
+TEST(http_dates_round_trip) {
+    // A fixed instant, so this does not quietly depend on when it runs
+    time_t stamp = 784'111'777; // Sun, 06 Nov 1994 08:49:37 GMT
+    std::string formatted = pw::build_date(stamp);
+    CHECK(formatted == "Sun, 06 Nov 1994 08:49:37 GMT");
+    CHECK(pw::parse_date(formatted) == stamp);
+
+    // The epoch, and a date past the point a signed 32 bit time_t would turn over
+    CHECK(pw::parse_date(pw::build_date(0)) == 0);
+    CHECK(pw::parse_date(pw::build_date(2'150'000'000)) == 2'150'000'000);
+}
+
+TEST(headers_are_looked_up_without_regard_to_case) {
+    pw::Headers headers;
+    headers["Content-Type"] = "text/plain";
+
+    for (const char* spelling : {"content-type", "CONTENT-TYPE", "cOnTeNt-TyPe", "Content-Type"}) {
+        CHECK(headers.count(spelling));
+        CHECK(headers.at(spelling) == "text/plain");
+    }
+
+    // Assigning through another spelling has to reach the same entry, not add a second
+    headers["CONTENT-TYPE"] = "text/html";
+    CHECK(headers.size() == 1);
+    CHECK(headers.at("Content-Type") == "text/html");
+
+    CHECK(!headers.count("Content-Length"));
+}
+
+TEST(xml_escape_covers_the_characters_that_break_markup) {
+    CHECK(pw::xml_escape(std::string("<a href=\"x\">tom & jerry</a>")).find('<') == std::string::npos);
+    CHECK(pw::xml_escape(std::string("&")).find('&') != std::string::npos); // As an entity
+    CHECK(pw::xml_escape(std::string("plain text 123")) == "plain text 123");
+    CHECK(pw::xml_escape(std::string("")).empty());
+}
+
+TEST(status_codes_carry_their_reason_phrases) {
+    CHECK(pw::status_code_to_reason_phrase(200) == "OK");
+    CHECK(pw::status_code_to_reason_phrase(404) == "Not Found");
+    CHECK(pw::status_code_to_reason_phrase(101) == "Switching Protocols");
+    CHECK(pw::status_code_to_reason_phrase(500) == "Internal Server Error");
+
+    // An unknown code falls back to the phrase for its category rather than failing
+    CHECK(pw::status_code_to_reason_phrase(299) == "OK");
+    CHECK(pw::status_code_to_reason_phrase(499) == "Bad Request");
+    CHECK(pw::status_code_to_reason_phrase(599) == "Internal Server Error");
+    for (uint16_t status_code = 100; status_code < 600; ++status_code) {
+        CHECK(!pw::status_code_to_reason_phrase(status_code).empty());
+    }
+
+    // Outside the range there is no category to fall back to, so it throws
+    bool threw = false;
+    try {
+        (void) pw::status_code_to_reason_phrase(99);
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    CHECK(threw);
+
+    threw = false;
+    try {
+        (void) pw::status_code_to_reason_phrase(600);
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    CHECK(threw);
 }
