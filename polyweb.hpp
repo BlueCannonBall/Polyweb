@@ -659,6 +659,15 @@ namespace pw {
 
         // Returning false from config_cb allows you to reject a connection very early
         pn::Status listen(const pn::TLSContext& context, std::function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
+
+        // Listening without a context serves the same routes over plaintext, for a server
+        // sitting behind something that terminates TLS for it
+        pn::Status listen(std::function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
+
+    protected:
+        // Runs on the accepting thread, so no connection is accepted while it is running.
+        // handle_conn is what runs on the thread it hands the connection to
+        bool dispatch_conn(pn::tcp::TLSConnection conn, const std::function<bool(pn::tcp::TLSConnection&)>& config_cb);
     };
 
     class ClientConfig {

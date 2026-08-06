@@ -1,6 +1,7 @@
 #include "polyweb.hpp"
 #include "support.hpp"
 #include "test.hpp"
+#include <atomic>
 #include <chrono>
 #ifndef _WIN32
     #include <netinet/tcp.h>
@@ -513,4 +514,49 @@ TEST(status_codes_carry_their_reason_phrases) {
         threw = true;
     }
     CHECK(threw);
+}
+
+TEST(a_tls_server_can_listen_without_tls) {
+    std::atomic<bool> served_securely {true};
+
+    pw::TLSServer server;
+    server.route("/plain",
+        pw::TLSRoute {
+            [&served_securely](const pw::TLSConnection& conn, const pw::Request&) {
+                served_securely = conn.is_secure();
+                return pw::Response(200, "no tls here", {{"Content-Type", "text/plain"}});
+            },
+        });
+
+    CHECK(server.bind("127.0.0.1", (unsigned short) 0));
+    uint16_t port = listening_port(server);
+    // Listening here rather than leaving it to the server thread, so a connection cannot
+    // be refused just because the thread has not got that far yet
+    CHECK(::listen(server.fd, 16) == PN_OK);
+
+    std::thread server_thread([&server] {
+        (void) server.listen(); // Returns once the socket below it is closed
+    });
+
+    pw::Response resp;
+    pn::Status result = pw::fetch("http://127.0.0.1:" + std::to_string(port) + "/plain", resp);
+
+    // A shutdown wakes the thread blocked in accept without touching the descriptor, so
+    // the close can wait until that thread is gone. Closing first would write the
+    // descriptor while accept is still reading it, which is the caller's problem to avoid.
+    // Winsock ignores shutdown on a listener and wakes accept on the close instead
+#ifdef _WIN32
+    (void) server.close();
+    server_thread.join();
+#else
+    (void) ::shutdown(server.fd, SHUT_RDWR);
+    server_thread.join();
+    (void) server.close();
+#endif
+
+    CHECK(result);
+    CHECK(resp.status_code == 200);
+    CHECK(resp.body_string() == "no tls here");
+    // A connection that was never given a context must not claim to be secure
+    CHECK(!served_securely);
 }
