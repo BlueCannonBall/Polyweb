@@ -297,6 +297,15 @@ namespace pw {
     }
 
     template <typename Base>
+    pn::Status BasicWSConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
+        if (pn::Status result = send(WSMessage::make_close(status_code, reason), masking_key); !result) {
+            return result;
+        }
+        ws_closed = true;
+        return {};
+    }
+
+    template <typename Base>
     pn::Status BasicWSConnection<Base>::recv(WSMessage& message, bool handle_close, bool handle_pings) {
         if (pn::Status result = message.parse(*this, this->buf_receiver, ws_config); !result) {
             return result;
@@ -315,15 +324,6 @@ namespace pw {
             }
         }
 
-        return {};
-    }
-
-    template <typename Base>
-    pn::Status BasicWSConnection<Base>::ws_close(uint16_t status_code, pn::StringView reason, const char* masking_key) {
-        if (pn::Status result = send(WSMessage::make_close(status_code, reason), masking_key); !result) {
-            return result;
-        }
-        ws_closed = true;
         return {};
     }
 

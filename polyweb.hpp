@@ -715,8 +715,8 @@ namespace pw {
 
         pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, Response& resp, QueryParameters query_parameters = {}, Headers headers = {});
         pn::Status ws_connect(pn::StringView hostname, unsigned short port, std::string target, QueryParameters query_parameters = {}, Headers headers = {});
-        pn::Status ws_connect(pn::StringView url, Headers headers = {});
         pn::Status ws_connect(pn::StringView url, Response& resp, Headers headers = {});
+        pn::Status ws_connect(pn::StringView url, Headers headers = {});
 
         using BasicWSConnection<Base>::send;
 
@@ -734,8 +734,8 @@ namespace pw {
 
     pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, Response& resp, QueryParameters query_parameters = {}, Headers headers = {}, const ClientConfig& config = {});
     pn::Status make_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, QueryParameters query_parameters = {}, Headers headers = {}, const ClientConfig& config = {});
-    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, Headers headers = {}, const ClientConfig& config = {});
     pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, Response& resp, Headers headers = {}, const ClientConfig& config = {});
+    pn::Status make_ws_client(TLSWSClient& client, pn::StringView url, Headers headers = {}, const ClientConfig& config = {});
 
     pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, Response& resp, QueryParameters query_parameters = {}, Headers headers = {}, const ClientConfig& config = {});
     pn::Status make_proxied_ws_client(TLSWSClient& client, pn::StringView hostname, unsigned short port, bool secure, std::string target, pn::StringView proxy_url, QueryParameters query_parameters = {}, Headers headers = {}, const ClientConfig& config = {});

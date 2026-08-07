@@ -24,20 +24,6 @@ namespace pw {
             backlog);
     }
 
-    bool TLSServer::dispatch_conn(pn::tcp::TLSConnection conn, const std::function<bool(pn::tcp::TLSConnection&)>& config_cb) {
-        if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
-            task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
-                // Plaintext when no context was given, and then there is no handshake
-                if (conn.is_secure() && !conn.tls_accept()) {
-                    return;
-                }
-                (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
-            },
-                true));
-        }
-        return true;
-    }
-
     pn::Status TLSServer::listen(const pn::TLSContext& context, std::function<bool(pn::tcp::TLSConnection&)> config_cb, int backlog) {
         return pn::tcp::TLSServer::listen(context, [this, config_cb = std::move(config_cb)](pn::tcp::TLSConnection conn) {
             return dispatch_conn(std::move(conn), config_cb);
@@ -50,6 +36,20 @@ namespace pw {
             return dispatch_conn(std::move(conn), config_cb);
         },
             backlog);
+    }
+
+    bool TLSServer::dispatch_conn(pn::tcp::TLSConnection conn, const std::function<bool(pn::tcp::TLSConnection&)>& config_cb) {
+        if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
+            task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
+                // Plaintext when no context was given, and then there is no handshake
+                if (conn.is_secure() && !conn.tls_accept()) {
+                    return;
+                }
+                (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
+            },
+                true));
+        }
+        return true;
     }
 
     template <typename Base>
