@@ -610,6 +610,10 @@ namespace pw {
         std::move_only_function<Response(uint16_t, pn::StringView) const> error_cb;
         ServerConfig config;
 
+        ~BasicServer() {
+            task_manager.wait();
+        }
+
         typedef BasicConnection<typename Base::connection_type> connection_type;
         typedef BasicWSConnection<typename Base::connection_type> ws_connection_type;
 

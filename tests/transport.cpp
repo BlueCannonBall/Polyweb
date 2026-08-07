@@ -1,6 +1,43 @@
 #include "support.hpp"
 #include "test.hpp"
+#include "thread_pool.hpp"
 #include <array>
+#include <chrono>
+#include <future>
+#include <thread>
+
+TEST(task_manager_waits_for_the_tasks_it_tracks) {
+    std::promise<void> task_started;
+    std::promise<void> allow_task_to_finish;
+    std::future<void> finish_permission = allow_task_to_finish.get_future();
+    std::promise<void> waiter_started;
+    bool task_finished = false;
+
+    tp::TaskManager manager;
+    auto task = std::make_shared<tp::Task>([&] {
+        task_started.set_value();
+        finish_permission.wait();
+        task_finished = true;
+    });
+    manager.insert(task);
+
+    std::thread worker([task] {
+        task->execute();
+    });
+    task_started.get_future().wait();
+
+    std::future<void> waiter = std::async(std::launch::async, [&] {
+        waiter_started.set_value();
+        manager.wait();
+    });
+    waiter_started.get_future().wait();
+    CHECK(waiter.wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout);
+
+    allow_task_to_finish.set_value();
+    waiter.get();
+    worker.join();
+    CHECK(task_finished);
+}
 
 TEST(sendall_handles_partial_writes) {
     ScriptedConnection conn({}, 2);

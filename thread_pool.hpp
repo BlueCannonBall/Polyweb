@@ -120,6 +120,26 @@ namespace tp {
             }
         }
 
+        void wait() {
+            for (;;) {
+                std::shared_ptr<Task> active_task;
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    for (const auto& weak_task : tasks) {
+                        if (auto task = weak_task.lock(); task && task->get_status() == TASK_STATUS_RUNNING) {
+                            active_task = std::move(task);
+                            break;
+                        }
+                    }
+                }
+
+                if (!active_task) {
+                    return;
+                }
+                active_task->wait();
+            }
+        }
+
         void insert(std::weak_ptr<Task> task) {
             std::lock_guard<std::mutex> lock(mutex);
             tasks.push_back(std::move(task));
