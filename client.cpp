@@ -2,11 +2,6 @@
 
 namespace pw {
     namespace {
-        // Parsing the system trust store costs milliseconds, so requests that do not
-        // bring their own context share one built on first use. An SSL_CTX is refcounted
-        // and meant to be handed to many connections at once, which is what makes this
-        // safe. The mutex is held rather than leaving it to a magic static so that a
-        // context that failed to build is retried instead of poisoning every later request
         pn::Result<const pn::TLSContext*> default_tls_context() {
             static std::mutex mutex;
             static pn::TLSContext context;
