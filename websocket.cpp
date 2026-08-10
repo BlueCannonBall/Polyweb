@@ -3,15 +3,23 @@
 #include <span>
 #include <string.h>
 #ifdef POLYWEB_SIMD
-    #ifdef _MSC_VER
-        #include <intrin.h>
-    #else
-        #include <x86intrin.h>
-    #endif
+    #include <immintrin.h>
 #endif
 
 namespace pw {
     namespace {
+        template <typename Vector>
+        Vector load_unaligned(const void* from) {
+            Vector value;
+            memcpy(&value, from, sizeof value);
+            return value;
+        }
+
+        template <typename Vector>
+        void store_unaligned(void* to, Vector value) {
+            memcpy(to, &value, sizeof value);
+        }
+
         void apply_mask(char* dest, const char* src, size_t len, const char* key) {
             size_t i = 0;
 #ifdef POLYWEB_SIMD
@@ -19,13 +27,13 @@ namespace pw {
             memcpy(&masking_key_int, key, 4);
             __m256i mask_vec256 = _mm256_set1_epi32(masking_key_int);
             for (; i + 32 <= len; i += 32) {
-                __m256i src_v = _mm256_loadu_si256((const __m256i_u*) &src[i]);
-                _mm256_storeu_si256((__m256i_u*) &dest[i], _mm256_xor_si256(src_v, mask_vec256));
+                __m256i src_v = load_unaligned<__m256i>(&src[i]);
+                store_unaligned<__m256i>(&dest[i], _mm256_xor_si256(src_v, mask_vec256));
             }
             __m128i mask_vec128 = _mm_set1_epi32(masking_key_int);
             for (; i + 16 <= len; i += 16) {
-                __m128i src_v = _mm_loadu_si128((const __m128i_u*) &src[i]);
-                _mm_storeu_si128((__m128i_u*) &dest[i], _mm_xor_si128(src_v, mask_vec128));
+                __m128i src_v = load_unaligned<__m128i>(&src[i]);
+                store_unaligned<__m128i>(&dest[i], _mm_xor_si128(src_v, mask_vec128));
             }
 #endif
             for (; i < len; ++i) {
