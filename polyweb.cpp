@@ -132,7 +132,8 @@ namespace pw {
         indices.reserve(str.size());
 
         for (char c : str) {
-            if (const char* ptr = strchr(base64_alphabet, c)) {
+            // A null byte is not a symbol, though strchr would answer with the alphabet's own terminator
+            if (const char* ptr = c ? strchr(base64_alphabet, c) : nullptr) {
                 indices.push_back(ptr - base64_alphabet);
             } else {
                 break;
@@ -311,8 +312,8 @@ namespace pw {
         std::string ret;
         for (auto it = map.begin(); it != map.end(); ++it) {
             if (it != map.begin()) ret.push_back('&');
-            std::string encoded_key = percent_encode(it->first, false, false);
-            std::string encoded_value = percent_encode(it->second, false, false);
+            std::string encoded_key = percent_encode(it->first, plus_as_space, false);
+            std::string encoded_value = percent_encode(it->second, plus_as_space, false);
             ret.insert(ret.end(), encoded_key.begin(), encoded_key.end());
             ret.push_back('=');
             ret.insert(ret.end(), encoded_value.begin(), encoded_value.end());
@@ -324,11 +325,11 @@ namespace pw {
         std::vector<std::string> split_query_string = string::split(query_string, '&');
         map.clear();
         for (const auto& parameter : split_query_string) {
-            std::vector<std::string> split_parameter = string::split(parameter, '=');
-            if (split_parameter.size() >= 2) {
-                map[percent_decode(split_parameter[0], true)] = percent_decode(split_parameter[1], true);
-            } else if (!split_parameter.empty()) {
-                map[percent_decode(split_parameter[0], true)]; // Create key with empty value
+            // Only the first equals sign is a delimiter - the rest belong to the value
+            if (size_t delimiter_pos = parameter.find('='); delimiter_pos != std::string::npos) {
+                map[percent_decode(parameter.substr(0, delimiter_pos), true)] = percent_decode(parameter.substr(delimiter_pos + 1), true);
+            } else {
+                map[percent_decode(parameter, true)]; // Create key with empty value
             }
         }
     }
@@ -340,7 +341,7 @@ namespace pw {
         }
         ret += host;
         if (path != "/" || !query_parameters->empty()) {
-            ret += path;
+            ret += percent_encode(path);
             if (!query_parameters->empty()) {
                 ret += '?' + query_parameters.build();
             }
@@ -358,10 +359,16 @@ namespace pw {
         scheme = url.substr(offset, scheme_host_delimiter_pos - offset);
         offset = scheme_host_delimiter_pos + 3;
 
+        // A fragment belongs to none of the components that follow, and neither does anything
+        // inside of it that merely looks like a delimiter
+        size_t fragment_pos = url.find('#', offset);
+        size_t end = fragment_pos == std::string::npos ? url.size() : fragment_pos;
+        size_t host_end = std::min(url.find_first_of("/?", offset), end);
+
         credentials.clear();
         size_t credentials_host_delimiter_pos;
         if ((credentials_host_delimiter_pos = url.find('@', offset)) != std::string::npos &&
-            url.find('/', offset) > credentials_host_delimiter_pos) {
+            credentials_host_delimiter_pos < host_end) {
             if (credentials_host_delimiter_pos == offset) {
                 return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_URL, "parse URL credentials"));
             }
@@ -369,33 +376,29 @@ namespace pw {
             offset = credentials_host_delimiter_pos + 1;
         }
 
-        size_t path_pos;
-        if ((path_pos = url.find('/', offset)) != std::string::npos) {
-            if (path_pos == offset) {
-                return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_URL, "parse URL host"));
-            }
-            host = url.substr(offset, path_pos - offset);
-            offset = path_pos + 1;
-        } else {
-            host = url.substr(offset);
+        if (host_end == offset) {
+            return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_URL, "parse URL host"));
+        }
+        host = url.substr(offset, host_end - offset);
+        offset = host_end;
+
+        // The path is kept decoded, as pw::Request keeps its target, so that handing one to the
+        // other does not encode it a second time
+        query_parameters->clear();
+        size_t path_query_string_delimiter_pos = url.find('?', offset);
+        if (path_query_string_delimiter_pos >= end) { // Also covers the absence of a query string entirely
+            path = offset == end ? "/" : percent_decode(url.substr(offset, end - offset));
+            return {};
+        }
+
+        if (path_query_string_delimiter_pos == offset) {
             path = '/';
-            return {};
-        }
-
-        size_t path_query_string_delimiter_pos;
-        if ((path_query_string_delimiter_pos = url.find('?', offset)) != std::string::npos) {
-            if (path_query_string_delimiter_pos == offset) {
-                path = '/';
-            } else {
-                path = '/' + url.substr(offset, path_query_string_delimiter_pos - offset);
-            }
-            offset = path_query_string_delimiter_pos + 1;
         } else {
-            path = '/' + url.substr(offset, url.find('#', offset));
-            return {};
+            path = percent_decode(url.substr(offset, path_query_string_delimiter_pos - offset));
         }
+        offset = path_query_string_delimiter_pos + 1;
 
-        query_parameters.parse(url.substr(offset, url.find('#', offset)));
+        query_parameters.parse(url.substr(offset, end - offset));
         return {};
     }
 

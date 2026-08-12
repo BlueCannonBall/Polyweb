@@ -132,6 +132,11 @@ namespace pw {
     public:
         typedef decltype(map) map_type;
 
+        // Build spaces as pluses rather than as "%20", the way browsers and most clients send
+        // them. Clear this for consumers that read a query string strictly by RFC 3986, where a
+        // plus is a plus
+        bool plus_as_space = true;
+
         QueryParameters() = default;
         QueryParameters(pn::StringView query_string) {
             parse(query_string);
@@ -199,9 +204,9 @@ namespace pw {
 
         std::string path_with_query_parameters() const {
             if (query_parameters->empty()) {
-                return path;
+                return percent_encode(path);
             }
-            return path + '?' + query_parameters.build();
+            return percent_encode(path) + '?' + query_parameters.build();
         }
 
         std::string username() const {

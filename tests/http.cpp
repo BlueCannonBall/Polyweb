@@ -55,6 +55,78 @@ TEST(query_parameters_round_trip) {
     CHECK(rebuilt->at("encoded") == "/path?");
 }
 
+TEST(query_parameters_keep_everything_after_the_first_equals) {
+    pw::QueryParameters parameters("token=YWJjZA==&next=/a?b=c&=novalue");
+
+    CHECK(parameters->at("token") == "YWJjZA==");
+    CHECK(parameters->at("next") == "/a?b=c");
+    CHECK(parameters->at("") == "novalue");
+
+    pw::QueryParameters rebuilt(parameters.build());
+    CHECK(rebuilt->at("token") == "YWJjZA==");
+    CHECK(rebuilt->at("next") == "/a?b=c");
+    CHECK(rebuilt->at("") == "novalue");
+}
+
+TEST(query_parameters_build_spaces_as_pluses) {
+    pw::QueryParameters parameters;
+    (*parameters)["q"] = "hello world";
+    CHECK(parameters.build() == "q=hello+world");
+
+    parameters.plus_as_space = false;
+    CHECK(parameters.build() == "q=hello%20world");
+
+    // A plus of its own is escaped either way, or it would come back as a space
+    (*parameters)["q"] = "a+b";
+    CHECK(parameters.build() == "q=a%2Bb");
+    parameters.plus_as_space = true;
+    CHECK(parameters.build() == "q=a%2Bb");
+    CHECK(pw::QueryParameters(parameters.build())->at("q") == "a+b");
+}
+
+TEST(request_build_carries_plus_as_space_to_the_wire) {
+    pw::Request request;
+    request.method = "GET";
+    request.target = "/search";
+    (*request.query_parameters)["q"] = "hello world";
+
+    CHECK(request.build_string(PW_HTTP_MESSAGE_PART_START_LINE) == "GET /search?q=hello+world HTTP/1.1\r\n");
+
+    request.query_parameters.plus_as_space = false;
+    CHECK(request.build_string(PW_HTTP_MESSAGE_PART_START_LINE) == "GET /search?q=hello%20world HTTP/1.1\r\n");
+}
+
+TEST(url_parse_excludes_fragments) {
+    pw::URLInfo url;
+    CHECK(url.parse("https://example.com/path?x=1#frag"));
+    CHECK(url.path == "/path");
+    CHECK(url.query_parameters->at("x") == "1");
+
+    CHECK(url.parse("https://example.com/path#frag"));
+    CHECK(url.path == "/path");
+    CHECK(url.query_parameters->empty()); // Parsing again must not leave the last URL's parameters behind
+
+    CHECK(url.parse("https://example.com/p#a?b=c")); // The question mark belongs to the fragment
+    CHECK(url.path == "/p");
+    CHECK(url.query_parameters->empty());
+}
+
+TEST(url_parse_handles_missing_path) {
+    pw::URLInfo url;
+    CHECK(url.parse("https://example.com?x=1"));
+    CHECK(url.host == "example.com");
+    CHECK(url.path == "/");
+    CHECK(url.query_parameters->at("x") == "1");
+
+    CHECK(url.parse("https://example.com#frag"));
+    CHECK(url.host == "example.com");
+    CHECK(url.path == "/");
+    CHECK(url.query_parameters->empty());
+
+    CHECK(!url.parse("https://")); // A URL without a host is not a URL
+    CHECK(!url.parse("https:///path"));
+}
+
 TEST(url_parse_and_build) {
     pw::URLInfo url;
     CHECK(url.parse("https://user:pass@example.com:8443/a/b?x=one+two&y=%2F"));
@@ -83,6 +155,36 @@ TEST(http_request_parse_handles_fragmented_input) {
     CHECK(request.query_parameters->at("name") == "codex");
     CHECK(request.headers.at("host") == "example.test");
     CHECK(request.body_to_string() == "hello");
+}
+
+TEST(url_path_is_decoded_and_survives_a_request) {
+    pw::URLInfo url;
+    CHECK(url.parse("https://example.com/files/my%20report.pdf"));
+    CHECK(url.path == "/files/my report.pdf"); // Decoded, exactly as pw::Request keeps its target
+    CHECK(url.build() == "https://example.com/files/my%20report.pdf");
+    CHECK(url.path_with_query_parameters() == "/files/my%20report.pdf");
+
+    // Handing the path to a request must not encode it a second time
+    pw::Request request;
+    request.method = "GET";
+    request.target = url.path;
+    CHECK(request.build_string(PW_HTTP_MESSAGE_PART_START_LINE) == "GET /files/my%20report.pdf HTTP/1.1\r\n");
+
+    // A plus in a path is a plus, not a space, on the way in and on the way out
+    CHECK(url.parse("https://example.com/a+b"));
+    CHECK(url.path == "/a+b");
+    CHECK(url.build() == "https://example.com/a%2Bb");
+}
+
+TEST(http_request_parse_keeps_equals_signs_in_query_values) {
+    ScriptedConnection conn(to_bytes("GET /search?token=YWJjZA==&next=/a?b=c HTTP/1.1\r\nHost: example.test\r\n\r\n"));
+    pn::tcp::BufReceiver receiver(64);
+    pw::Request request;
+
+    CHECK(request.parse(conn, receiver));
+    CHECK(request.target == "/search");
+    CHECK(request.query_parameters->at("token") == "YWJjZA==");
+    CHECK(request.query_parameters->at("next") == "/a?b=c");
 }
 
 TEST(http_request_parse_handles_empty_headers_and_pipelining) {
@@ -422,6 +524,10 @@ TEST(base64_round_trips_including_every_padding_length) {
     }
     std::vector<char> round_tripped = pw::base64_decode(pw::base64_encode(binary.data(), binary.size()));
     CHECK(round_tripped == binary);
+
+    // Decoding stops at the first byte that is not a symbol, a null byte included
+    CHECK(pw::base64_decode("Zm9vYmFy!!!").size() == 6);
+    CHECK(pw::base64_decode(std::string("Zm9v\0YmFy", 9)).size() == 3);
 }
 
 TEST(percent_encoding_round_trips_and_honours_its_flags) {
