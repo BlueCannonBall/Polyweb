@@ -218,7 +218,7 @@ namespace pw {
                 }
 
                 uint16_t len16;
-                binary::read(buf, buf + 2, len16, BIG_ENDIAN);
+                (void) binary::read(buf, buf + sizeof buf, len16, BIG_ENDIAN);
                 payload_len = len16;
             } else if (len7 == 127) {
                 char buf[8];
@@ -229,7 +229,7 @@ namespace pw {
                 }
 
                 uint64_t len64;
-                binary::read(buf, buf + 8, len64, BIG_ENDIAN);
+                (void) binary::read(buf, buf + sizeof buf, len64, BIG_ENDIAN);
                 if (len64 & (1ULL << 63)) {
                     return std::unexpected(make_polyweb_error(PW_ERROR_INVALID_WS, "parse WebSocket payload length"));
                 }
@@ -290,9 +290,8 @@ namespace pw {
 
     uint16_t WSMessage::close_status_code() const noexcept {
         uint16_t ret = 0;
-        if (data.size() >= 2) {
-            binary::read(data.begin(), data.begin() + 2, ret);
-        }
+        auto first = data.begin();
+        (void) binary::try_read(first, data.end(), ret);
         return ret;
     }
 
