@@ -14,7 +14,7 @@
 #include <wchar.h>
 
 namespace pw {
-    tp::ThreadPool thread_pool(std::max<unsigned int>(std::thread::hardware_concurrency(), 16));
+    tp::ThreadPool threadpool(std::max<unsigned int>(std::thread::hardware_concurrency(), 16));
 
     namespace {
         constexpr char base64_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

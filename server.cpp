@@ -14,7 +14,7 @@ namespace pw {
     pn::Status Server::listen(std::function<bool(pn::tcp::Connection&)> config_cb, int backlog) {
         return pn::tcp::Server::listen([this, config_cb = std::move(config_cb)](pn::tcp::Connection conn) {
             if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
-                task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
+                task_manager.insert(threadpool.schedule([this, conn = std::move(conn)]() mutable {
                     (void) handle_conn(connection_type(std::move(conn), pn::tcp::BufReceiver(config.buf_capacity), config.http));
                 },
                     true));
@@ -40,7 +40,7 @@ namespace pw {
 
     bool TLSServer::dispatch_conn(pn::tcp::TLSConnection conn, const std::function<bool(pn::tcp::TLSConnection&)>& config_cb) {
         if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
-            task_manager.insert(thread_pool.schedule([this, conn = std::move(conn)]() mutable {
+            task_manager.insert(threadpool.schedule([this, conn = std::move(conn)]() mutable {
                 // Plaintext when no context was given, and then there is no handshake
                 if (conn.is_secure() && !conn.tls_accept()) {
                     return;

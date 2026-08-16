@@ -5,7 +5,7 @@
 #include "Polynet/tls.hpp"
 #include "error.hpp"
 #include "string.hpp"
-#include "thread_pool.hpp"
+#include "threadpool.hpp"
 #include <algorithm>
 #include <chrono>
 #include <functional>
@@ -38,7 +38,7 @@
 #define PW_WS_KEY     "cG9seXdlYiBpcyBncmVhdA==" // polyweb is great
 
 namespace pw {
-    extern tp::ThreadPool thread_pool;
+    extern tp::ThreadPool threadpool;
 
     namespace detail {
         template <typename OutputIt>
