@@ -64,7 +64,7 @@ namespace pw {
 
             int resp_parts = req.method == "HEAD" ? PW_HTTP_MESSAGE_PART_HEAD : PW_HTTP_MESSAGE_PART_ALL;
 
-            bool ws = false;
+            bool websocket = false;
             if (auto connection_it = req.headers.find("Connection"); connection_it != req.headers.end()) {
                 std::vector<std::string> split_connection = string::split_and_trim(string::to_lower_copy(connection_it->second), ',');
                 if (req.http_version == "HTTP/1.1") {
@@ -74,7 +74,7 @@ namespace pw {
                     if (std::find(split_connection.begin(), split_connection.end(), "upgrade") != split_connection.end() && (upgrade_it = req.headers.find("Upgrade")) != req.headers.end()) {
                         std::vector<std::string> split_upgrade = string::split_and_trim(string::to_lower_copy(upgrade_it->second), ',');
                         if (req.method == "GET" && std::find(split_upgrade.begin(), split_upgrade.end(), "websocket") != split_upgrade.end()) {
-                            ws = true;
+                            websocket = true;
                         } else {
                             if (pn::Status result = handle_error(conn, 501, "Unsupported upgrade", keep_alive, resp_parts, req.http_version); !result) {
                                 return result;
@@ -112,7 +112,7 @@ namespace pw {
                 }
             }
 
-            if (ws) {
+            if (websocket) {
                 if (!ws_route_target.empty()) {
                     const auto& route = ws_routes.at(ws_route_target);
 
