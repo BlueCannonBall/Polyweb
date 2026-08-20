@@ -249,6 +249,8 @@ namespace pw {
         std::vector<char> body;
         std::move_only_function<std::vector<char>()> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
+        unsigned long long body_received = 0;
+        bool body_started = false;
         QueryParameters query_parameters;
         std::string http_version = "HTTP/1.1";
 
@@ -303,6 +305,9 @@ namespace pw {
             }
             return target + '?' + query_parameters.build();
         }
+
+    protected:
+        pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts, const MessageConfig& config, bool discard);
     };
 
     class RequestReceiver : public Request {
@@ -310,6 +315,11 @@ namespace pw {
         int parts_parsed = 0;
 
         pn::Status parse(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, int parts = PW_HTTP_MESSAGE_PART_ALL, const MessageConfig& config = {});
+
+        // Reads and throws away however much of the body has not been received yet, so
+        // that the connection can carry another message. Fails when how much is left
+        // cannot be known, leaving the connection only closable
+        pn::Status discard_body(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, const MessageConfig& config = {});
     };
 
     class Response {
@@ -319,6 +329,8 @@ namespace pw {
         std::vector<char> body;
         std::move_only_function<std::vector<char>()> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
+        unsigned long long body_received = 0;
+        bool body_started = false;
         Headers headers;
         std::string http_version = "HTTP/1.1";
 

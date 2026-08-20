@@ -300,6 +300,69 @@ TEST(http_receiver_stops_when_its_callback_rejects_a_chunk) {
     CHECK(!request.parse(conn, receiver));
 }
 
+TEST(http_receiver_discards_only_what_is_left_of_a_body) {
+    ScriptedConnection conn(to_bytes("POST / HTTP/1.1\r\nContent-Length: 6\r\n\r\nabcdefGET /next HTTP/1.1\r\n\r\n"), 4);
+    pn::tcp::BufReceiver receiver(4);
+    pw::MessageConfig config;
+    config.body_chunk_rlimit = 3;
+
+    pw::RequestReceiver request;
+    CHECK(request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_HEAD, config));
+
+    // A callback which throws takes its chunk off the wire with it, so a drain which began
+    // again from byte zero would eat the message behind this one and wait forever for what
+    // it had already been given
+    request.recv_cb = [](std::vector<char>) -> bool {
+        throw std::runtime_error("route gave up");
+    };
+    bool threw = false;
+    try {
+        (void) request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_BODY, config);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
+    CHECK(!(request.parts_parsed & PW_HTTP_MESSAGE_PART_BODY));
+
+    CHECK(request.discard_body(conn, receiver, config));
+    CHECK(request.parts_parsed & PW_HTTP_MESSAGE_PART_BODY);
+    CHECK(request.recv_cb); // Left as its owner set it, and never called, or this would throw
+
+    pw::RequestReceiver next;
+    CHECK(next.parse(conn, receiver, PW_HTTP_MESSAGE_PART_HEAD, config));
+    CHECK(next.target == "/next");
+}
+
+TEST(http_receiver_discards_a_chunked_body_only_before_it_is_started) {
+    {
+        ScriptedConnection conn(to_bytes("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n0\r\n\r\nGET /next HTTP/1.1\r\n\r\n"), 2);
+        pn::tcp::BufReceiver receiver(4);
+
+        pw::RequestReceiver request;
+        CHECK(request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_HEAD));
+        CHECK(request.discard_body(conn, receiver));
+
+        pw::RequestReceiver next;
+        CHECK(next.parse(conn, receiver, PW_HTTP_MESSAGE_PART_HEAD));
+        CHECK(next.target == "/next");
+    }
+    {
+        ScriptedConnection conn(to_bytes("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n"), 2);
+        pn::tcp::BufReceiver receiver(4);
+
+        pw::RequestReceiver request;
+        CHECK(request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_HEAD));
+        request.recv_cb = [](std::vector<char>) {
+            return false;
+        };
+        CHECK(!request.parse(conn, receiver, PW_HTTP_MESSAGE_PART_BODY));
+
+        // How far into its framing a chunked body got is not tracked, so there is no
+        // resuming it and the connection can only be closed
+        CHECK(!request.discard_body(conn, receiver));
+    }
+}
+
 TEST(http_chunked_sender_streams_chunks) {
     unsigned int call_count = 0;
     pw::Request request("POST", "/", [&call_count]() -> std::vector<char> {
