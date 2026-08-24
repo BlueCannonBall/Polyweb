@@ -11,6 +11,22 @@ namespace pw {
         return {};
     }
 
+    pn::Status RequestReceiver::discard_body(pn::tcp::Connection& conn, pn::tcp::BufReceiver& buf_receiver, const MessageConfig& config) {
+        if (parts_parsed & PW_HTTP_MESSAGE_PART_BODY) {
+            return {};
+        }
+
+        if (body_started && headers.count("Transfer-Encoding")) {
+            return std::unexpected(make_polyweb_error(PW_ERROR_UNSUPPORTED, "discard partially read chunked HTTP body"));
+        }
+
+        if (pn::Status result = Request::parse(conn, buf_receiver, PW_HTTP_MESSAGE_PART_BODY, config, true); !result) {
+            return result;
+        }
+        parts_parsed |= PW_HTTP_MESSAGE_PART_BODY;
+        return {};
+    }
+
     pn::Status Server::listen(std::function<bool(pn::tcp::Connection&)> config_cb, int backlog) {
         return pn::tcp::Server::listen([this, config_cb = std::move(config_cb)](pn::tcp::Connection conn) {
             if (config.tcp.apply(conn) && (!config_cb || config_cb(conn))) {
@@ -219,21 +235,11 @@ namespace pw {
                         }
                     }
 
-                    auto discard_body = [&]() -> pn::Status {
-                        if (!(req.parts_parsed & PW_HTTP_MESSAGE_PART_BODY)) {
-                            req.recv_cb = [](std::vector<char>) {
-                                return true;
-                            };
-                            return conn.recv(req, PW_HTTP_MESSAGE_PART_BODY);
-                        }
-                        return {};
-                    };
-
                     Response resp;
                     try {
                         resp = route.cb(conn, req);
                     } catch (const std::exception& e) {
-                        pn::Status discard_result = discard_body();
+                        pn::Status discard_result = req.discard_body(conn, conn.buf_receiver, conn.http_config);
                         if (!discard_result) {
                             keep_alive = false;
                         }
@@ -245,7 +251,7 @@ namespace pw {
                         }
                         continue;
                     } catch (...) {
-                        pn::Status discard_result = discard_body();
+                        pn::Status discard_result = req.discard_body(conn, conn.buf_receiver, conn.http_config);
                         if (!discard_result) {
                             keep_alive = false;
                         }
@@ -258,7 +264,7 @@ namespace pw {
                         continue;
                     }
 
-                    if (pn::Status result = discard_body(); !result) {
+                    if (pn::Status result = req.discard_body(conn, conn.buf_receiver, conn.http_config); !result) {
                         keep_alive = false;
                     }
 
