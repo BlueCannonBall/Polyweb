@@ -30,12 +30,16 @@ namespace pw {
         std::vector<std::string> split_and_trim(pn::StringView str, char delimiter);
 
         struct CaseInsensitiveComparer {
+            using is_transparent = void;
+
             bool operator()(pn::StringView a, pn::StringView b) const noexcept {
                 return string::iequals(a, b);
             }
         };
 
         struct CaseInsensitiveHasher {
+            using is_transparent = void;
+
             size_t operator()(pn::StringView str) const {
                 return std::hash<std::string>()(string::to_lower_copy(str));
             }
