@@ -6,33 +6,6 @@
 
 namespace pw {
     namespace string {
-        bool starts_with(pn::StringView str, pn::StringView beginning) noexcept {
-            if (str.size() < beginning.size() || beginning.empty()) {
-                return false;
-            }
-
-            for (size_t i = 0; i < beginning.size(); ++i) {
-                if (str[i] != beginning[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        bool ends_with(pn::StringView str, pn::StringView ending) noexcept {
-            if (str.size() < ending.size() || ending.empty()) {
-                return false;
-            }
-
-            size_t difference = str.size() - ending.size();
-            for (size_t i = 0; i < ending.size(); ++i) {
-                if (str[difference + i] != ending[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         void trim_right(std::string& str) {
             str.erase(
                 std::find_if_not(str.rbegin(), str.rend(), [](char c) -> bool {

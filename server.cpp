@@ -113,7 +113,7 @@ namespace pw {
                 if (route.first == req.target) {
                     ws_route_target = route.first;
                     break;
-                } else if (route.second.wildcard && string::starts_with(req.target, route.first) && route.first.size() > ws_route_target.size()) {
+                } else if (route.second.wildcard && req.target.starts_with(route.first) && route.first.size() > ws_route_target.size()) {
                     ws_route_target = route.first;
                 }
             }
@@ -123,7 +123,7 @@ namespace pw {
                 if (route.first == req.target) {
                     http_route_target = route.first;
                     break;
-                } else if (route.second.wildcard && string::starts_with(req.target, route.first) && route.first.size() > http_route_target.size()) {
+                } else if (route.second.wildcard && req.target.starts_with(route.first) && route.first.size() > http_route_target.size()) {
                     http_route_target = route.first;
                 }
             }

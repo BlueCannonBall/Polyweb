@@ -7,9 +7,6 @@
 
 namespace pw {
     namespace string {
-        bool starts_with(pn::StringView str, pn::StringView beginning) noexcept;
-        bool ends_with(pn::StringView str, pn::StringView ending) noexcept;
-
         void trim_right(std::string& str);
         void trim_left(std::string& str);
         void trim(std::string& str);
