@@ -84,6 +84,15 @@ TEST(query_parameters_build_spaces_as_pluses) {
     CHECK(pw::QueryParameters(parameters.build())->at("q") == "a+b");
 }
 
+TEST(query_parameters_parse_honours_plus_as_space) {
+    CHECK(pw::QueryParameters("a+b=c+d")->at("a b") == "c d");
+
+    pw::QueryParameters strict;
+    strict.plus_as_space = false;
+    strict.parse("a+b=c+d");
+    CHECK(strict->at("a+b") == "c+d");
+}
+
 TEST(request_build_carries_plus_as_space_to_the_wire) {
     pw::Request request;
     request.method = "GET";

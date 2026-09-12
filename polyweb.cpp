@@ -327,9 +327,9 @@ namespace pw {
         for (const auto& parameter : split_query_string) {
             // Only the first equals sign is a delimiter - the rest belong to the value
             if (size_t delimiter_pos = parameter.find('='); delimiter_pos != std::string::npos) {
-                map[percent_decode(parameter.substr(0, delimiter_pos), true)] = percent_decode(parameter.substr(delimiter_pos + 1), true);
+                map[percent_decode(parameter.substr(0, delimiter_pos), plus_as_space)] = percent_decode(parameter.substr(delimiter_pos + 1), plus_as_space);
             } else {
-                map[percent_decode(parameter, true)]; // Create key with empty value
+                map[percent_decode(parameter, plus_as_space)]; // Create key with empty value
             }
         }
     }
