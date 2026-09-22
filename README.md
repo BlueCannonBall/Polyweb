@@ -1,7 +1,5 @@
 # Polyweb
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/BlueCannonBall/Polyweb)
-
 A web framework utilizing Polynet.
 
 ## Tests
