@@ -87,11 +87,13 @@ namespace pw {
         };
 
         if (send_cb) {
-            for (bool first = true;; first = false) {
-                auto chunk = send_cb();
-                write_frame(chunk, first, chunk.empty());
-                if (chunk.empty()) break;
+            bool first_frame = true;
+            for (const auto& chunk : send_cb()) {
+                if (chunk.empty()) continue;
+                write_frame(chunk, first_frame, false);
+                first_frame = false;
             }
+            write_frame({}, first_frame, true);
         } else {
             write_frame(data, true, true);
         }
@@ -101,10 +103,12 @@ namespace pw {
 
     pn::Status WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) {
         if (send_cb) {
-            for (bool first_frame = true;; first_frame = false) {
-                std::vector<char> chunk = send_cb();
+            bool first_frame = true;
+            for (auto chunk : send_cb()) {
+                if (chunk.empty()) continue;
 
-                std::vector<char> header = {(char) ((chunk.empty() ? 0x80 : 0x00) | (first_frame ? (uint8_t) opcode : (uint8_t) WS_OPCODE_CONTINUATION))};
+                std::vector<char> header = {(char) (first_frame ? (uint8_t) opcode : (uint8_t) WS_OPCODE_CONTINUATION)};
+                first_frame = false;
 
                 uint8_t mask_bit = masking_key ? 0x80 : 0x00;
                 if (chunk.size() < 126) {
@@ -119,26 +123,25 @@ namespace pw {
 
                 if (masking_key) {
                     header.insert(header.end(), masking_key, masking_key + 4);
-                    if (!chunk.empty()) {
-                        apply_mask(chunk.data(), chunk.size(), masking_key);
-                    }
+                    apply_mask(chunk.data(), chunk.size(), masking_key);
                 }
 
-                if (pn::Result<size_t> result = conn.sendall(header.data(), header.size()); !result) {
+                chunk.insert(chunk.begin(), header.begin(), header.end());
+                if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
                     return std::unexpected(result.error());
-                } else if (*result != header.size()) {
-                    return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket header"});
+                } else if (*result != chunk.size()) {
+                    return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket frame"});
                 }
+            }
 
-                if (!chunk.empty()) {
-                    if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
-                        return std::unexpected(result.error());
-                    } else if (*result != chunk.size()) {
-                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket payload"});
-                    }
-                }
-
-                if (chunk.empty()) break;
+            std::vector<char> final_header = {(char) (0x80 | (first_frame ? (uint8_t) opcode : (uint8_t) WS_OPCODE_CONTINUATION)), (char) (masking_key ? 0x80 : 0x00)};
+            if (masking_key) {
+                final_header.insert(final_header.end(), masking_key, masking_key + 4);
+            }
+            if (pn::Result<size_t> result = conn.sendall(final_header.data(), final_header.size()); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != final_header.size()) {
+                return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write WebSocket header"});
             }
         } else {
             std::vector<char> header = {(char) (0x80 | (uint8_t) opcode)};

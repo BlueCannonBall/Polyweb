@@ -155,13 +155,13 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config);
     }
 
-    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::vector<char>()> body_cb, Headers headers, const ClientConfig& config, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
         }
 
-        Request req(std::move(method), std::move(url_info.path), std::move(body_cb), std::move(headers), std::move(http_version));
+        Request req(std::move(method), std::move(url_info.path), std::move(send_cb), std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());
@@ -309,13 +309,13 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config);
     }
 
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::vector<char>()> body_cb, Headers headers, const ClientConfig& config, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
         }
 
-        Request req(std::move(method), std::move(url_info.path), std::move(body_cb), std::move(headers), std::move(http_version));
+        Request req(std::move(method), std::move(url_info.path), std::move(send_cb), std::move(headers), std::move(http_version));
         req.query_parameters = url_info.query_parameters;
         if (!url_info.credentials.empty() && !req.headers.count("Authorization")) {
             req.headers["Authorization"] = "basic " + base64_encode(url_info.credentials.data(), url_info.credentials.size());

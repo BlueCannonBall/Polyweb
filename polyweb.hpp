@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <generator>
 #include <iostream>
 #include <mutex>
 #include <stddef.h>
@@ -247,7 +248,7 @@ namespace pw {
         std::string target;
         Headers headers;
         std::vector<char> body;
-        std::move_only_function<std::vector<char>()> send_cb;
+        std::move_only_function<std::generator<std::vector<char>>()> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
         unsigned long long body_received = 0;
         bool body_started = false;
@@ -272,11 +273,11 @@ namespace pw {
             headers(std::move(headers)),
             body(body.begin(), body.end()),
             http_version(std::move(http_version)) {}
-        Request(std::string method, std::string target, decltype(send_cb) body_cb, Headers headers = {}, std::string http_version = "HTTP/1.1"):
+        Request(std::string method, std::string target, decltype(send_cb) send_cb, Headers headers = {}, std::string http_version = "HTTP/1.1"):
             method(std::move(method)),
             target(std::move(target)),
             headers(std::move(headers)),
-            send_cb(std::move(body_cb)),
+            send_cb(std::move(send_cb)),
             http_version(std::move(http_version)) {}
         Request(std::string method, std::string target, QueryParameters query_parameters = {}, Headers headers = {}, std::string http_version = "HTTP/1.1"):
             method(std::move(method)),
@@ -327,7 +328,7 @@ namespace pw {
         uint16_t status_code;
         std::string reason_phrase;
         std::vector<char> body;
-        std::move_only_function<std::vector<char>()> send_cb;
+        std::move_only_function<std::generator<std::vector<char>>()> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
         unsigned long long body_received = 0;
         bool body_started = false;
@@ -404,7 +405,7 @@ namespace pw {
     public:
         WSOpcode opcode = WS_OPCODE_BINARY;
         std::vector<char> data;
-        std::move_only_function<std::vector<char>()> send_cb;
+        std::move_only_function<std::generator<std::vector<char>>()> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
 
         WSMessage() = default;
@@ -716,14 +717,14 @@ namespace pw {
     pn::Status fetch(std::string method, pn::StringView url, Response& resp, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::vector<char> body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status fetch(std::string method, pn::StringView url, Response& resp, pn::StringView body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
-    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::vector<char>()> body_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
 
     pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, Request req, Response& resp, const ClientConfig& = {});
     pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, Response& resp, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::vector<char> body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, pn::StringView body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::vector<char>()> body_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWSClient : public BasicWSConnection<Base> {

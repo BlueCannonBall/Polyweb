@@ -41,15 +41,12 @@ TEST(websocket_masked_frame_round_trip) {
 }
 
 TEST(websocket_streamed_message_is_fragmented_and_reassembled) {
-    unsigned int call_count = 0;
-    pw::WSMessage sent([&call_count]() -> std::vector<char> {
-        switch (call_count++) {
-        case 0: return {'a', 'b'};
-        case 1: return {'c', 'd'};
-        default: return {};
-        }
-    },
-        pw::WS_OPCODE_BINARY);
+    auto chunks = []() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char> {'a', 'b'};
+        co_yield std::vector<char> {};
+        co_yield std::vector<char> {'c', 'd'};
+    };
+    pw::WSMessage sent(chunks, pw::WS_OPCODE_BINARY);
     ScriptedConnection conn(sent.build(), 1);
     pn::tcp::BufReceiver receiver(2);
     pw::WSMessage received;
@@ -57,6 +54,31 @@ TEST(websocket_streamed_message_is_fragmented_and_reassembled) {
     CHECK(received.parse(conn, receiver));
     CHECK(received.opcode == pw::WS_OPCODE_BINARY);
     CHECK(received.to_string() == "abcd");
+
+    static constexpr char masking_key[] = {1, 2, 3, 4};
+    pw::WSMessage buffered(chunks, pw::WS_OPCODE_BINARY);
+    auto expected = buffered.build(masking_key);
+    pw::WSMessage streamed(chunks, pw::WS_OPCODE_BINARY);
+    ScriptedConnection output_conn({}, 100);
+    CHECK(streamed.build(output_conn, masking_key));
+    CHECK(output_conn.output == expected);
+    ScriptedConnection input_conn(std::move(expected), 2);
+    pn::tcp::BufReceiver masked_receiver(2);
+    pw::WSMessage masked_received;
+    CHECK(masked_received.parse(input_conn, masked_receiver));
+    CHECK(masked_received.to_string() == "abcd");
+}
+
+TEST(websocket_empty_generator_sends_final_frame) {
+    auto no_chunks = []() -> std::generator<std::vector<char>> {
+        co_return;
+    };
+    pw::WSMessage buffered(no_chunks, pw::WS_OPCODE_TEXT);
+    CHECK(buffered.build() == (std::vector<char> {(char) 0x81, 0}));
+    pw::WSMessage streamed(no_chunks, pw::WS_OPCODE_TEXT);
+    ScriptedConnection conn({}, 100);
+    CHECK(streamed.build(conn));
+    CHECK(conn.output == buffered.build());
 }
 
 TEST(websocket_message_limit_is_enforced) {

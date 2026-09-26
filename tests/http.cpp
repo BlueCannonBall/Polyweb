@@ -373,16 +373,35 @@ TEST(http_receiver_discards_a_chunked_body_only_before_it_is_started) {
 }
 
 TEST(http_chunked_sender_streams_chunks) {
-    unsigned int call_count = 0;
-    pw::Request request("POST", "/", [&call_count]() -> std::vector<char> {
-        switch (call_count++) {
-        case 0: return {'o', 'n', 'e'};
-        case 1: return {'t', 'w', 'o'};
-        default: return {};
-        }
-    });
+    auto chunks = []() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char> {'o', 'n', 'e'};
+        co_yield std::vector<char> {};
+        co_yield std::vector<char> {'t', 'w', 'o'};
+    };
+    pw::Request request("POST", "/", chunks);
 
     CHECK(request.build_string() == "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
+
+    ScriptedConnection conn({}, 100);
+    CHECK(request.build(conn));
+    CHECK(to_string(conn.output) == "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
+
+    pw::Response response(200, chunks);
+    CHECK(response.build_string(PW_HTTP_MESSAGE_PART_BODY) == "3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
+    ScriptedConnection response_conn({}, 100);
+    CHECK(response.build(response_conn, PW_HTTP_MESSAGE_PART_BODY));
+    CHECK(to_string(response_conn.output) == "3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
+}
+
+TEST(http_empty_generator_writes_chunk_terminator) {
+    auto no_chunks = []() -> std::generator<std::vector<char>> {
+        co_return;
+    };
+    pw::Request request("POST", "/", no_chunks);
+    CHECK(request.build_string(PW_HTTP_MESSAGE_PART_BODY) == "0\r\n\r\n");
+    ScriptedConnection conn({}, 100);
+    CHECK(request.build(conn, PW_HTTP_MESSAGE_PART_BODY));
+    CHECK(to_string(conn.output) == "0\r\n\r\n");
 }
 
 TEST(http_response_status_category) {

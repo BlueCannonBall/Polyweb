@@ -47,12 +47,11 @@ server.route("/multiply",
 server.route("/send_stream",
     pw::Route {
         [](const pw::Connection& conn, const pw::Request& req) {
-            return pw::Response(200, [i = 0]() mutable -> std::vector<char> {
-                if (i < 10) {
-                    std::string str = std::to_string(i++);
-                    return std::vector<char>(str.begin(), str.end());
+            return pw::Response(200, []() -> std::generator<std::vector<char>> {
+                for (int i = 0; i < 10; ++i) {
+                    std::string str = std::to_string(i);
+                    co_yield std::vector<char>(str.begin(), str.end());
                 }
-                return {};
             },
                 {{"Content-Type", "text/plain"}});
         },

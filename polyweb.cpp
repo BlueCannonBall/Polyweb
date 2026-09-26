@@ -457,20 +457,19 @@ namespace pw {
 
         if (parts & PW_HTTP_MESSAGE_PART_BODY) {
             if (send_cb) {
-                for (;;) {
-                    if (auto chunk = send_cb(); !chunk.empty()) {
-                        std::ostringstream ss;
-                        ss << std::hex << chunk.size() << "\r\n";
-                        std::string str = ss.str();
-                        ret.insert(ret.end(), str.begin(), str.end());
-                        ret.insert(ret.end(), chunk.begin(), chunk.end());
-                        ret.insert(ret.end(), {'\r', '\n'});
-                    } else {
-                        static constexpr char last_chunk[] = "0\r\n\r\n";
-                        ret.insert(ret.end(), last_chunk, last_chunk + 5);
-                        break;
-                    }
+                for (const auto& chunk : send_cb()) {
+                    if (chunk.empty()) continue;
+
+                    std::ostringstream ss;
+                    ss << std::hex << chunk.size() << "\r\n";
+                    std::string str = ss.str();
+                    ret.insert(ret.end(), str.begin(), str.end());
+                    ret.insert(ret.end(), chunk.begin(), chunk.end());
+                    ret.insert(ret.end(), {'\r', '\n'});
                 }
+
+                static constexpr char last_chunk[] = "0\r\n\r\n";
+                ret.insert(ret.end(), last_chunk, last_chunk + 5);
             } else {
                 ret.insert(ret.end(), body.begin(), body.end());
             }
@@ -488,28 +487,26 @@ namespace pw {
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
-            for (;;) {
-                auto chunk = send_cb();
-                if (!chunk.empty()) {
-                    std::ostringstream ss;
-                    ss << std::hex << chunk.size() << "\r\n";
-                    std::string str = ss.str();
-                    chunk.insert(chunk.begin(), str.begin(), str.end());
-                    chunk.insert(chunk.end(), {'\r', '\n'});
-                    if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
-                        return std::unexpected(result.error());
-                    } else if (*result != chunk.size()) {
-                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk"});
-                    }
-                } else {
-                    static constexpr char last_chunk[] = "0\r\n\r\n";
-                    if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
-                        return std::unexpected(result.error());
-                    } else if (*result != 5) {
-                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk terminator"});
-                    }
-                    break;
+            for (auto chunk : send_cb()) {
+                if (chunk.empty()) continue;
+
+                std::ostringstream ss;
+                ss << std::hex << chunk.size() << "\r\n";
+                std::string str = ss.str();
+                chunk.insert(chunk.begin(), str.begin(), str.end());
+                chunk.insert(chunk.end(), {'\r', '\n'});
+                if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != chunk.size()) {
+                    return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk"});
                 }
+            }
+
+            static constexpr char last_chunk[] = "0\r\n\r\n";
+            if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != 5) {
+                return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk terminator"});
             }
         }
 
@@ -756,20 +753,19 @@ namespace pw {
 
         if (parts & PW_HTTP_MESSAGE_PART_BODY) {
             if (send_cb) {
-                for (;;) {
-                    if (auto chunk = send_cb(); !chunk.empty()) {
-                        std::ostringstream ss;
-                        ss << std::hex << chunk.size() << "\r\n";
-                        std::string str = ss.str();
-                        ret.insert(ret.end(), str.begin(), str.end());
-                        ret.insert(ret.end(), chunk.begin(), chunk.end());
-                        ret.insert(ret.end(), {'\r', '\n'});
-                    } else {
-                        static constexpr char last_chunk[] = "0\r\n\r\n";
-                        ret.insert(ret.end(), last_chunk, last_chunk + 5);
-                        break;
-                    }
+                for (const auto& chunk : send_cb()) {
+                    if (chunk.empty()) continue;
+
+                    std::ostringstream ss;
+                    ss << std::hex << chunk.size() << "\r\n";
+                    std::string str = ss.str();
+                    ret.insert(ret.end(), str.begin(), str.end());
+                    ret.insert(ret.end(), chunk.begin(), chunk.end());
+                    ret.insert(ret.end(), {'\r', '\n'});
                 }
+
+                static constexpr char last_chunk[] = "0\r\n\r\n";
+                ret.insert(ret.end(), last_chunk, last_chunk + 5);
             } else {
                 ret.insert(ret.end(), body.begin(), body.end());
             }
@@ -787,28 +783,26 @@ namespace pw {
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
-            for (;;) {
-                auto chunk = send_cb();
-                if (!chunk.empty()) {
-                    std::ostringstream ss;
-                    ss << std::hex << chunk.size() << "\r\n";
-                    std::string str = ss.str();
-                    chunk.insert(chunk.begin(), str.begin(), str.end());
-                    chunk.insert(chunk.end(), {'\r', '\n'});
-                    if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
-                        return std::unexpected(result.error());
-                    } else if (*result != chunk.size()) {
-                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk"});
-                    }
-                } else {
-                    static constexpr char last_chunk[] = "0\r\n\r\n";
-                    if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
-                        return std::unexpected(result.error());
-                    } else if (*result != 5) {
-                        return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk terminator"});
-                    }
-                    break;
+            for (auto chunk : send_cb()) {
+                if (chunk.empty()) continue;
+
+                std::ostringstream ss;
+                ss << std::hex << chunk.size() << "\r\n";
+                std::string str = ss.str();
+                chunk.insert(chunk.begin(), str.begin(), str.end());
+                chunk.insert(chunk.end(), {'\r', '\n'});
+                if (pn::Result<size_t> result = conn.sendall(chunk.data(), chunk.size()); !result) {
+                    return std::unexpected(result.error());
+                } else if (*result != chunk.size()) {
+                    return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk"});
                 }
+            }
+
+            static constexpr char last_chunk[] = "0\r\n\r\n";
+            if (pn::Result<size_t> result = conn.sendall(last_chunk, 5); !result) {
+                return std::unexpected(result.error());
+            } else if (*result != 5) {
+                return std::unexpected(pn::Error {std::make_error_code(std::errc::io_error), "write HTTP chunk terminator"});
             }
         }
 
