@@ -26,13 +26,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install OpenSSL development files
-        run: sudo apt-get update && sudo apt-get install --yes libssl-dev
+      - name: Install OpenSSL development files and GCC 14
+        run: sudo apt-get update && sudo apt-get install --yes libssl-dev g++-14
 
       - name: Build and run tests
         working-directory: tests
         env:
           CCACHE_DISABLE: "1"
+          CXX: g++-14
           ASAN: ${{ matrix.sanitizer == 'ASAN' && '1' || '' }}
           TSAN: ${{ matrix.sanitizer == 'TSAN' && '1' || '' }}
           ASAN_OPTIONS: detect_leaks=1
