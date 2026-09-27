@@ -133,25 +133,14 @@ namespace pw {
         requires requires(F& func) {
             { func() } -> std::same_as<std::generator<SSEEvent>>;
         }
-    class SSEBuilder {
-    protected:
-        F func;
-
-        static std::generator<std::vector<char>> generate(F func) {
+    std::move_only_function<std::generator<std::vector<char>>()> sse_builder(F func) {
+        return [func = std::move(func)]() mutable -> std::generator<std::vector<char>> {
             for (const SSEEvent& event : func()) {
                 std::string data = event.build();
                 co_yield std::vector<char>(data.begin(), data.end());
             }
-        }
-
-    public:
-        SSEBuilder(F func):
-            func(std::move(func)) {}
-
-        std::generator<std::vector<char>> operator()() {
-            return generate(std::move(func));
-        }
-    };
+        };
+    }
 } // namespace pw
 
 #endif
