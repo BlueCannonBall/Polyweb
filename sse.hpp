@@ -1,7 +1,6 @@
 #ifndef POLYWEB_SSE_HPP_
 #define POLYWEB_SSE_HPP_
 
-#include <concepts>
 #include <functional>
 #include <generator>
 #include <stdint.h>
@@ -130,9 +129,6 @@ namespace pw {
     };
 
     template <typename F>
-        requires requires(F& func) {
-            { func() } -> std::same_as<std::generator<SSEEvent>>;
-        }
     std::move_only_function<std::generator<std::vector<char>>()> sse_builder(F func) {
         return [func = std::move(func)]() mutable -> std::generator<std::vector<char>> {
             for (const SSEEvent& event : func()) {
