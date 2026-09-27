@@ -2,9 +2,11 @@
 #define POLYWEB_SSE_HPP_
 
 #include <functional>
+#include <generator>
 #include <stdint.h>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace pw {
     class SSEEvent {
@@ -123,6 +125,29 @@ namespace pw {
         bool operator()(const T& data) {
             buf.insert(buf.end(), data.begin(), data.end());
             return handle_data();
+        }
+    };
+
+    template <typename F>
+    class SSEBuilder {
+    protected:
+        F func;
+
+        template <typename... Args>
+        static std::generator<std::vector<char>> generate(F func, Args... args) {
+            for (const SSEEvent& event : func(std::move(args)...)) {
+                std::string data = event.build();
+                co_yield std::vector<char>(data.begin(), data.end());
+            }
+        }
+
+    public:
+        SSEBuilder(F func):
+            func(std::move(func)) {}
+
+        template <typename... Args>
+        std::generator<std::vector<char>> operator()(Args... args) {
+            return generate(std::move(func), std::move(args)...);
         }
     };
 } // namespace pw

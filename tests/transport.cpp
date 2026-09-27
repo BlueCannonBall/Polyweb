@@ -3,8 +3,35 @@
 #include "threadpool.hpp"
 #include <array>
 #include <chrono>
+#include <functional>
 #include <future>
+#include <memory>
 #include <thread>
+
+TEST(task_executes_a_move_only_callable) {
+    int result = 0;
+    tp::Task task([value = std::make_unique<int>(42), &result] {
+        result = *value;
+    });
+
+    task.execute();
+    CHECK(task.wait() == tp::TASK_STATUS_SUCCESS);
+    CHECK(result == 42);
+    CHECK(!task.get_exception_ptr());
+}
+
+TEST(task_reports_an_empty_callable_as_a_failure) {
+    tp::Task task(std::function<void()> {});
+
+    task.execute();
+    CHECK(task.wait() == tp::TASK_STATUS_FAILURE);
+    CHECK(task.get_exception_ptr());
+    try {
+        std::rethrow_exception(task.get_exception_ptr());
+        CHECK(false);
+    } catch (const std::bad_function_call&) {
+    }
+}
 
 TEST(task_manager_waits_for_the_tasks_it_tracks) {
     std::promise<void> task_started;

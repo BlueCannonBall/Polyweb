@@ -5,11 +5,11 @@
 #include <chrono>
 #include <condition_variable>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -22,41 +22,22 @@ namespace tp {
 
     class Task {
     protected:
-        class BasicFunction {
-        public:
-            virtual ~BasicFunction() = default;
-
-            virtual void call() = 0;
-        };
-
-        template <typename F>
-        class Function : public BasicFunction {
-        protected:
-            F func;
-
-        public:
-            Function(F&& func):
-                func(std::move(func)) {}
-
-            void call() override {
-                func();
-            }
-        };
-
         mutable std::mutex mutex;
         mutable std::condition_variable cv;
-        std::unique_ptr<BasicFunction> func;
+        std::move_only_function<void()> func;
         TaskStatus status = TASK_STATUS_RUNNING;
         std::exception_ptr exception_ptr;
 
     public:
-        template <typename F>
-        Task(F&& func):
-            func(std::make_unique<Function<std::decay_t<F>>>(std::forward<F>(func))) {}
+        Task(std::move_only_function<void()> func):
+            func(std::move(func)) {}
 
         void execute() {
             try {
-                func->call();
+                if (!func) {
+                    throw std::bad_function_call();
+                }
+                func();
 
                 std::lock_guard<std::mutex> lock(mutex);
                 status = TASK_STATUS_SUCCESS;

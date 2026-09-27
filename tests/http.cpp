@@ -1,8 +1,10 @@
 #include "polyweb.hpp"
+#include "sse.hpp"
 #include "support.hpp"
 #include "test.hpp"
 #include <atomic>
 #include <chrono>
+#include <memory>
 #ifndef _WIN32
     #include <netinet/tcp.h>
 #endif
@@ -41,6 +43,118 @@ namespace {
         return socket.setsockopt(SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
     }
 } // namespace
+
+TEST(sse_event_build_formats_data_lines) {
+    CHECK(pw::SSEEvent("hello").build() == "event: message\r\ndata: hello\r\n\r\n");
+    CHECK(pw::SSEEvent("update", "one\ntwo\rthree\r\nfour").build() ==
+          "event: update\r\ndata: one\r\ndata: two\r\ndata: three\r\ndata: four\r\n\r\n");
+    CHECK(pw::SSEEvent("update", "line\n").build() ==
+          "event: update\r\ndata: line\r\ndata: \r\n\r\n");
+    CHECK(pw::SSEEvent().build() == "event: message\r\ndata: \r\n\r\n");
+}
+
+TEST(sse_parser_waits_for_complete_events_and_resets_fields) {
+    std::vector<pw::SSEEvent> events;
+    pw::SSEParser parser([&](pw::SSEEvent event) {
+        events.push_back(std::move(event));
+        return true;
+    });
+
+    CHECK(parser(std::string("event: update\ndata: first\n")));
+    CHECK(events.empty());
+    CHECK(parser(std::string("data: second\n\n")));
+    CHECK(events.size() == 1);
+    CHECK(events[0].type == "update");
+    CHECK(events[0].data == "first\nsecond");
+
+    CHECK(parser(std::string("data: next\n\n")));
+    CHECK(events.size() == 2);
+    CHECK(events[1].type == "message");
+    CHECK(events[1].data == "next");
+}
+
+TEST(sse_parser_handles_each_line_ending_across_single_byte_chunks) {
+    std::vector<pw::SSEEvent> events;
+    pw::SSEParser parser([&](pw::SSEEvent event) {
+        events.push_back(std::move(event));
+        return true;
+    });
+    const std::string input = "event: mixed\r\ndata: one\rdata: two\ndata: three\r\n\r\n"
+                              "data: after\r\n\r\n";
+
+    for (char byte : input) {
+        CHECK(parser(std::string(1, byte)));
+    }
+    CHECK(events.size() == 2);
+    CHECK(events[0].type == "mixed");
+    CHECK(events[0].data == "one\ntwo\nthree");
+    CHECK(events[1].type == "message");
+    CHECK(events[1].data == "after");
+}
+
+TEST(sse_parser_ignores_comments_unknown_fields_and_empty_blocks) {
+    std::vector<pw::SSEEvent> events;
+    pw::SSEParser parser([&](pw::SSEEvent event) {
+        events.push_back(std::move(event));
+        return true;
+    });
+
+    CHECK(parser(std::string(": heartbeat\nretry: 1000\n\n"
+                             "event: ignored\n\n"
+                             "event: update\ndata:first\ndata:  spaced\ndata\n\n"
+                             "event:\ndata: \n\n")));
+    CHECK(events.size() == 2);
+    CHECK(events[0].type == "update");
+    CHECK(events[0].data == "first\n spaced\n");
+    CHECK(events[1].type == "message");
+    CHECK(events[1].data.empty());
+}
+
+TEST(sse_parser_stops_when_callback_returns_false) {
+    std::vector<std::string> data;
+    pw::SSEParser parser([&](pw::SSEEvent event) {
+        data.push_back(std::move(event.data));
+        return false;
+    });
+
+    CHECK(!parser(std::string("data: first\n\ndata: second\n\n")));
+    CHECK(data.size() == 1);
+    CHECK(data[0] == "first");
+    CHECK(!parser(std::string {}));
+    CHECK(data.size() == 2);
+    CHECK(data[1] == "second");
+}
+
+TEST(sse_event_build_round_trips_through_parser) {
+    const pw::SSEEvent original("update", "first\nsecond\n");
+    std::vector<pw::SSEEvent> events;
+    pw::SSEParser parser([&](pw::SSEEvent event) {
+        events.push_back(std::move(event));
+        return true;
+    });
+
+    const std::string wire = original.build();
+    CHECK(parser(std::vector<char>(wire.begin(), wire.end())));
+    CHECK(events.size() == 1);
+    CHECK(events[0].type == original.type);
+    CHECK(events[0].data == original.data);
+}
+
+TEST(sse_builder_owns_its_callable_until_iteration_finishes) {
+    auto chunks = pw::SSEBuilder([prefix = std::make_unique<std::string>("owned")](std::string suffix)
+                                     -> std::generator<pw::SSEEvent> {
+        co_yield pw::SSEEvent("update", *prefix + suffix);
+        co_yield pw::SSEEvent("done");
+    })(" value");
+
+    std::vector<std::string> output;
+    for (const auto& chunk : chunks) {
+        output.emplace_back(chunk.begin(), chunk.end());
+    }
+    CHECK(output.size() == 2);
+    CHECK(output[0] == "event: update\r\ndata: owned value\r\n\r\n");
+    CHECK(output[1] == "event: message\r\ndata: done\r\n\r\n");
+}
 
 TEST(query_parameters_round_trip) {
     pw::QueryParameters parameters("one=hello+world&empty&encoded=%2Fpath%3F");
