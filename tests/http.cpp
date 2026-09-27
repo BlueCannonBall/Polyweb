@@ -141,11 +141,10 @@ TEST(sse_event_build_round_trips_through_parser) {
 }
 
 TEST(sse_builder_owns_its_callable_until_iteration_finishes) {
-    auto chunks = pw::SSEBuilder([prefix = std::make_unique<std::string>("owned")](std::string suffix)
-                                     -> std::generator<pw::SSEEvent> {
-        co_yield pw::SSEEvent("update", *prefix + suffix);
+    auto chunks = pw::SSEBuilder([prefix = std::make_unique<std::string>("owned value")]() -> std::generator<pw::SSEEvent> {
+        co_yield pw::SSEEvent("update", *prefix);
         co_yield pw::SSEEvent("done");
-    })(" value");
+    })();
 
     std::vector<std::string> output;
     for (const auto& chunk : chunks) {

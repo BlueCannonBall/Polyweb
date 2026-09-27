@@ -1,6 +1,7 @@
 #ifndef POLYWEB_SSE_HPP_
 #define POLYWEB_SSE_HPP_
 
+#include <concepts>
 #include <functional>
 #include <generator>
 #include <stdint.h>
@@ -129,13 +130,15 @@ namespace pw {
     };
 
     template <typename F>
+        requires requires(F& func) {
+            { func() } -> std::same_as<std::generator<SSEEvent>>;
+        }
     class SSEBuilder {
     protected:
         F func;
 
-        template <typename... Args>
-        static std::generator<std::vector<char>> generate(F func, Args... args) {
-            for (const SSEEvent& event : func(std::move(args)...)) {
+        static std::generator<std::vector<char>> generate(F func) {
+            for (const SSEEvent& event : func()) {
                 std::string data = event.build();
                 co_yield std::vector<char>(data.begin(), data.end());
             }
@@ -145,9 +148,8 @@ namespace pw {
         SSEBuilder(F func):
             func(std::move(func)) {}
 
-        template <typename... Args>
-        std::generator<std::vector<char>> operator()(Args... args) {
-            return generate(std::move(func), std::move(args)...);
+        std::generator<std::vector<char>> operator()() {
+            return generate(std::move(func));
         }
     };
 } // namespace pw
