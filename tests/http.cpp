@@ -4,7 +4,8 @@
 #include "test.hpp"
 #include <atomic>
 #include <chrono>
-#include <memory>
+#include <generator>
+#include <initializer_list>
 #ifndef _WIN32
     #include <netinet/tcp.h>
 #endif
@@ -12,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -138,21 +140,6 @@ TEST(sse_event_build_round_trips_through_parser) {
     CHECK(events.size() == 1);
     CHECK(events[0].type == original.type);
     CHECK(events[0].data == original.data);
-}
-
-TEST(sse_builder_owns_its_callable_until_iteration_finishes) {
-    auto chunks = pw::sse_builder([prefix = std::make_unique<std::string>("owned value")]() -> std::generator<pw::SSEEvent> {
-        co_yield pw::SSEEvent("update", *prefix);
-        co_yield pw::SSEEvent("done");
-    })();
-
-    std::vector<std::string> output;
-    for (const auto& chunk : chunks) {
-        output.emplace_back(chunk.begin(), chunk.end());
-    }
-    CHECK(output.size() == 2);
-    CHECK(output[0] == "event: update\r\ndata: owned value\r\n\r\n");
-    CHECK(output[1] == "event: message\r\ndata: done\r\n\r\n");
 }
 
 TEST(query_parameters_round_trip) {
@@ -799,6 +786,24 @@ TEST(status_codes_carry_their_reason_phrases) {
     CHECK(pw::status_code_to_reason_phrase(404) == "Not Found");
     CHECK(pw::status_code_to_reason_phrase(101) == "Switching Protocols");
     CHECK(pw::status_code_to_reason_phrase(500) == "Internal Server Error");
+
+    // Registered codes must not fall back to their category's generic phrase.
+    for (const auto& [code, phrase] : std::initializer_list<std::pair<uint16_t, const char*>> {
+             {102, "Processing"}, {103, "Early Hints"}, {104, "Upload Resumption Supported"},
+             {207, "Multi-Status"}, {208, "Already Reported"}, {226, "IM Used"},
+             {308, "Permanent Redirect"}, {408, "Request Timeout"},
+             {413, "Content Too Large"}, {414, "URI Too Long"}, {416, "Range Not Satisfiable"},
+             {421, "Misdirected Request"}, {422, "Unprocessable Content"},
+             {423, "Locked"}, {424, "Failed Dependency"}, {425, "Too Early"},
+             {428, "Precondition Required"}, {429, "Too Many Requests"},
+             {431, "Request Header Fields Too Large"}, {451, "Unavailable For Legal Reasons"},
+             {504, "Gateway Timeout"}, {505, "HTTP Version Not Supported"},
+             {506, "Variant Also Negotiates"}, {507, "Insufficient Storage"},
+             {508, "Loop Detected"}, {510, "Not Extended"},
+             {511, "Network Authentication Required"},
+         }) {
+        CHECK(pw::status_code_to_reason_phrase(code) == phrase);
+    }
 
     // An unknown code falls back to the phrase for its category rather than failing
     CHECK(pw::status_code_to_reason_phrase(299) == "OK");
