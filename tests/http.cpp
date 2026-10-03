@@ -6,6 +6,7 @@
 #include <chrono>
 #include <generator>
 #include <initializer_list>
+#include <memory>
 #ifndef _WIN32
     #include <netinet/tcp.h>
 #endif
@@ -481,15 +482,20 @@ TEST(http_chunked_sender_streams_chunks) {
     pw::Request request("POST", "/", chunks);
 
     CHECK(request.build_string() == "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
+    // Building spends the stream, so each build below gets its own
+    CHECK(!request.send_cb);
 
     ScriptedConnection conn({}, 100);
-    CHECK(request.build(conn));
+    pw::Request conn_request("POST", "/", chunks);
+    CHECK(conn_request.build(conn));
     CHECK(to_string(conn.output) == "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
 
     pw::Response response(200, chunks);
     CHECK(response.build_string(PW_HTTP_MESSAGE_PART_BODY) == "3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
+
     ScriptedConnection response_conn({}, 100);
-    CHECK(response.build(response_conn, PW_HTTP_MESSAGE_PART_BODY));
+    pw::Response conn_response(200, chunks);
+    CHECK(conn_response.build(response_conn, PW_HTTP_MESSAGE_PART_BODY));
     CHECK(to_string(response_conn.output) == "3\r\none\r\n3\r\ntwo\r\n0\r\n\r\n");
 }
 
@@ -499,9 +505,32 @@ TEST(http_empty_generator_writes_chunk_terminator) {
     };
     pw::Request request("POST", "/", no_chunks);
     CHECK(request.build_string(PW_HTTP_MESSAGE_PART_BODY) == "0\r\n\r\n");
+
     ScriptedConnection conn({}, 100);
-    CHECK(request.build(conn, PW_HTTP_MESSAGE_PART_BODY));
+    pw::Request conn_request("POST", "/", no_chunks);
+    CHECK(conn_request.build(conn, PW_HTTP_MESSAGE_PART_BODY));
     CHECK(to_string(conn.output) == "0\r\n\r\n");
+}
+
+TEST(http_streaming_callback_owns_move_only_captures) {
+    // Steps a move-only handle from inside the coroutine, which the frame owns
+    pw::Response response(200, [chunk = std::make_unique<std::string>("data")](this auto self) -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(chunk->begin(), chunk->end());
+    });
+
+    CHECK(response.build_string(PW_HTTP_MESSAGE_PART_BODY) == "4\r\ndata\r\n0\r\n\r\n");
+    CHECK(!response.send_cb);
+}
+
+TEST(http_streaming_callback_borrows_its_captures) {
+    // A plain lambda's frame references the closure rather than owning it, so the
+    // callback the loop iterates from has to outlive the loop
+    pw::Response response(200, [rows = std::string("rows")]() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(rows.begin(), rows.end());
+    });
+
+    CHECK(response.build_string(PW_HTTP_MESSAGE_PART_BODY) == "4\r\nrows\r\n0\r\n\r\n");
+    CHECK(!response.send_cb);
 }
 
 TEST(http_response_status_category) {

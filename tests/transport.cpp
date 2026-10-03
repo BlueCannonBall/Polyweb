@@ -21,7 +21,7 @@ TEST(task_executes_a_move_only_callable) {
 }
 
 TEST(task_reports_an_empty_callable_as_a_failure) {
-    tp::Task task(std::function<void()> {});
+    tp::Task task(std::move_only_function<void() &&> {});
 
     task.execute();
     CHECK(task.wait() == tp::TASK_STATUS_FAILURE);

@@ -248,7 +248,7 @@ namespace pw {
         std::string target;
         Headers headers;
         std::vector<char> body;
-        std::move_only_function<std::generator<std::vector<char>>()> send_cb;
+        std::move_only_function<std::generator<std::vector<char>>() &&> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
         unsigned long long body_received = 0;
         bool body_started = false;
@@ -328,7 +328,7 @@ namespace pw {
         uint16_t status_code;
         std::string reason_phrase;
         std::vector<char> body;
-        std::move_only_function<std::generator<std::vector<char>>()> send_cb;
+        std::move_only_function<std::generator<std::vector<char>>() &&> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
         unsigned long long body_received = 0;
         bool body_started = false;
@@ -405,7 +405,7 @@ namespace pw {
     public:
         WSOpcode opcode = WS_OPCODE_BINARY;
         std::vector<char> data;
-        std::move_only_function<std::generator<std::vector<char>>()> send_cb;
+        std::move_only_function<std::generator<std::vector<char>>() &&> send_cb;
         std::move_only_function<bool(std::vector<char>)> recv_cb;
 
         WSMessage() = default;
@@ -672,7 +672,7 @@ namespace pw {
         using BasicServer<pn::tcp::Server>::BasicServer;
 
         // Returning false from config_cb allows you to reject a connection very early
-        pn::Status listen(std::function<bool(pn::tcp::Connection&)> config_cb = {}, int backlog = 128);
+        pn::Status listen(std::move_only_function<bool(pn::tcp::Connection&)> config_cb = {}, int backlog = 128);
     };
 
     class TLSServer : public BasicServer<pn::tcp::TLSServer> {
@@ -680,16 +680,17 @@ namespace pw {
         using BasicServer<pn::tcp::TLSServer>::BasicServer;
 
         // Returning false from config_cb allows you to reject a connection very early
-        pn::Status listen(const pn::TLSContext& context, std::function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
+        pn::Status listen(const pn::TLSContext& context, std::move_only_function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
 
         // Listening without a context serves the same routes over plaintext, for a server
         // sitting behind something that terminates TLS for it
-        pn::Status listen(std::function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
+        pn::Status listen(std::move_only_function<bool(pn::tcp::TLSConnection&)> config_cb = {}, int backlog = 128);
 
     protected:
-        // Runs on the accepting thread, so no connection is accepted while it is running.
-        // handle_conn is what runs on the thread it hands the connection to
-        bool dispatch_conn(pn::tcp::TLSConnection conn, const std::function<bool(pn::tcp::TLSConnection&)>& config_cb);
+        // Moves config_cb into the callback the accept loop calls for each connection.
+        // That callback runs on the accepting thread, so no connection is accepted while it
+        // is running; handle_conn is what runs on the thread it hands the connection to
+        std::move_only_function<bool(pn::tcp::TLSConnection)> make_accept_cb(std::move_only_function<bool(pn::tcp::TLSConnection&)> config_cb);
     };
 
     class ClientConfig {
@@ -717,14 +718,14 @@ namespace pw {
     pn::Status fetch(std::string method, pn::StringView url, Response& resp, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::vector<char> body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status fetch(std::string method, pn::StringView url, Response& resp, pn::StringView body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
-    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::generator<std::vector<char>>() &&> send_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
 
     pn::Status proxied_fetch(pn::StringView hostname, unsigned short port, bool secure, pn::StringView proxy_url, Request req, Response& resp, const ClientConfig& = {});
     pn::Status proxied_fetch(pn::StringView url, pn::StringView proxy_url, Response& resp, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::vector<char> body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
     pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, pn::StringView body, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::generator<std::vector<char>>() &&> send_cb, Headers headers = {}, const ClientConfig& = {}, std::string http_version = "HTTP/1.1");
 
     template <typename Base>
     class BasicWSClient : public BasicWSConnection<Base> {

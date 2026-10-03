@@ -24,12 +24,12 @@ namespace tp {
     protected:
         mutable std::mutex mutex;
         mutable std::condition_variable cv;
-        std::move_only_function<void()> func;
+        std::move_only_function<void() &&> func;
         TaskStatus status = TASK_STATUS_RUNNING;
         std::exception_ptr exception_ptr;
 
     public:
-        Task(std::move_only_function<void()> func):
+        Task(std::move_only_function<void() &&> func):
             func(std::move(func)) {}
 
         void execute() {
@@ -37,7 +37,7 @@ namespace tp {
                 if (!func) {
                     throw std::bad_function_call();
                 }
-                func();
+                std::exchange(func, {})();
 
                 std::lock_guard<std::mutex> lock(mutex);
                 status = TASK_STATUS_SUCCESS;

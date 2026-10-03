@@ -88,7 +88,7 @@ namespace pw {
 
         if (send_cb) {
             bool first_frame = true;
-            for (const auto& chunk : send_cb()) {
+            for (const auto& chunk : std::exchange(send_cb, {})()) {
                 if (chunk.empty()) continue;
                 write_frame(chunk, first_frame, false);
                 first_frame = false;
@@ -104,7 +104,7 @@ namespace pw {
     pn::Status WSMessage::build(pn::tcp::Connection& conn, const char* masking_key) {
         if (send_cb) {
             bool first_frame = true;
-            for (auto chunk : send_cb()) {
+            for (auto chunk : std::exchange(send_cb, {})()) {
                 if (chunk.empty()) continue;
 
                 std::vector<char> header = {(char) (first_frame ? (uint8_t) opcode : (uint8_t) WS_OPCODE_CONTINUATION)};

@@ -155,7 +155,7 @@ namespace pw {
         return fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), std::move(req), resp, config);
     }
 
-    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers, const ClientConfig& config, std::string http_version) {
+    pn::Status fetch(std::string method, pn::StringView url, Response& resp, std::move_only_function<std::generator<std::vector<char>>() &&> send_cb, Headers headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
@@ -309,7 +309,7 @@ namespace pw {
         return proxied_fetch(url_info.hostname(), url_info.port(), string::iequals(url_info.scheme, "https"), proxy_url, std::move(req), resp, config);
     }
 
-    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::generator<std::vector<char>>()> send_cb, Headers headers, const ClientConfig& config, std::string http_version) {
+    pn::Status proxied_fetch(std::string method, pn::StringView url, pn::StringView proxy_url, Response& resp, std::move_only_function<std::generator<std::vector<char>>() &&> send_cb, Headers headers, const ClientConfig& config, std::string http_version) {
         URLInfo url_info;
         if (pn::Status result = url_info.parse(url); !result) {
             return result;
