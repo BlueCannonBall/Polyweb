@@ -20,6 +20,8 @@ See [current limitations](#current-limitations) before relying on protocol compl
 
 Use a compiler **and standard library** supporting C++23, including `std::expected`, `std::move_only_function`, and `std::generator`. CI uses GCC 14 on Linux and MSVC's `/std:c++latest` mode on Windows. OpenSSL headers and libraries are required, including when your application only serves plaintext HTTP.
 
+On Windows, **default verified TLS clients require an OpenSSL build with Windows certificate-store (`winstore`) support**. Polynet loads system trust through `SSL_CTX_load_verify_store` using `org.openssl.winstore://`; if that store cannot be loaded, client context initialization fails with a `load TLS trust store` error. To use an OpenSSL build without winstore support, supply an explicit CA file or directory to `pn::TLSContext::init_client` and pass that context through `ClientConfig::tls_context`. This requirement concerns default client trust loading, not plaintext HTTP or TLS server certificate loading; do not disable certificate verification as a workaround.
+
 Obtain Polyweb together with its Polynet submodule:
 
 ```sh
@@ -336,6 +338,98 @@ Despite its name, `WSConfig::frame_rlimit` limits receive-callback chunk size, n
 - HTTP handler connection/request references are borrowed for that invocation. WebSocket `open_cb` receives a moved, owning connection. Synchronize shared application state accessed by concurrent handlers.
 - Server destruction waits for its tracked connection tasks. Closing the listener is not cancellation of accepted connections. Stop accepting and arrange for active handlers/connections to finish before destroying the server or calling `pn::quit()`; zero timeouts and idle peers can make that wait unbounded.
 - Do not close or move a connection while another thread is performing I/O on it. Connection ownership does not make every operation concurrently safe.
+
+## Standalone threadpool and tasks
+
+[`threadpool.hpp`](threadpool.hpp) is a header-only C++23 component in namespace `tp`. It can be used without Polyweb, Polynet, OpenSSL, or networking initialization. It requires `std::move_only_function` and thread support.
+
+### Scheduling and tracking work
+
+Save this as `pool_main.cpp` in the repository root:
+
+```cpp
+#include "threadpool.hpp"
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+
+int main() {
+    tp::ThreadPool pool(2);
+    tp::TaskManager tasks;
+    int value = 0;
+
+    auto success = pool.schedule([&value, input = std::make_unique<int>(42)] {
+        value = *input;
+    });
+    tasks.insert(success);
+
+    auto failure = pool.schedule([] {
+        throw std::runtime_error("demo failure");
+    });
+    tasks.insert(failure);
+
+    tasks.wait();
+    if (success->wait() != tp::TASK_STATUS_SUCCESS ||
+        failure->wait() != tp::TASK_STATUS_FAILURE) {
+        return 1;
+    }
+    std::cout << "value=" << value << '\n';
+    if (auto error = failure->get_exception_ptr()) {
+        try {
+            std::rethrow_exception(error);
+        } catch (const std::exception& e) {
+            std::cout << "failure=" << e.what() << '\n';
+        }
+    }
+}
+```
+
+```sh
+c++ -std=c++23 -pthread -I. pool_main.cpp -o pool-example
+./pool-example
+```
+
+The output is `value=42` followed by `failure=demo failure`. The write to `value` is read only after task completion; shared data used while tasks are running still needs synchronization. Move-only captures are supported, and `schedule` returns a `std::shared_ptr<tp::Task>` rather than a future holding a return value.
+
+### Task API
+
+| Operation | Behavior |
+| --- | --- |
+| `pool.schedule(callable)` | Queues work for pool workers; returns a task handle. |
+| `pool.schedule(callable, true)` | May launch a detached overflow thread when the pool is busy. |
+| `task->get_status()` | Reads the current status without waiting. |
+| `task->wait()` | Waits for completion and returns the final status. |
+| `task->wait_for(duration)` / `wait_until(time_point)` | Returns the status at completion or timeout; a timeout does not cancel the task. |
+| `task->get_exception_ptr()` | Retrieves a captured exception; use after completion to inspect a failure. |
+| `tasks.insert(task)` | Adds a weak reference to a task for group waiting. |
+| `tasks.wait()` | Waits until no tracked, live task is still running. |
+| `pool.size()` / `resize(count)` | Reads or changes the target pool worker count. |
+
+`TASK_STATUS_RUNNING` covers both queued and executing work. Successful completion sets `TASK_STATUS_SUCCESS`; a thrown exception sets `TASK_STATUS_FAILURE`. Waiting does not rethrow exceptions. An empty callable fails with `std::bad_function_call`.
+
+`tp::Task` can also be constructed directly and executed with `execute()` when no pool is needed. Treat execution as single-use: do not call `execute()` on a task already scheduled with a pool, or execute the same task concurrently. A directly constructed task remains in the running state until someone executes it.
+
+`TaskManager` does not schedule work, own tasks, or collect/rethrow their failures. Its destructor waits for the live tasks it still tracks. Retain task handles when you need results or failure details after completion; expired weak references cannot provide that information. Stop inserting tasks before group waiting or destruction: `wait()` is not a barrier against future submissions, and destruction must not race with insertion.
+
+### Capacity and lifetime
+
+- Supply a positive worker count for ordinary queued work. The default constructor uses `std::thread::hardware_concurrency()`, which may return zero; a zero-worker pool cannot execute queued work until workers are added.
+- With the default `launch_if_busy = false`, work uses the pool workers, but the pending queue is unbounded. Limit submissions at the application level when a backlog would consume too much memory.
+- With `launch_if_busy = true`, overflow threads are outside the target worker count and have no configured ceiling. If an overflow thread cannot be created, the task is queued instead. `size()` does not count these extra threads.
+- `resize()` changes a target, not an instantaneous worker count. Shrinking does not interrupt an executing task.
+- There is no task cancellation or automatic recovery from a blocked callable. Avoid having all workers wait for additional queued tasks that require the same pool to run.
+- Pool destruction waits for its pool workers to exit; it does not guarantee that pending queued tasks are drained or detached overflow tasks have finished. Wait explicitly for submitted tasks while the pool is still alive, and keep captured references alive until those tasks complete.
+- Do not destroy a pool while callers are still using it. A task wait can be unbounded if the callable never finishes.
+
+### Using Polyweb's shared pool
+
+Polyweb's `pw::threadpool` is the same `tp::ThreadPool` type and is shared across its servers. Configure it before starting listeners:
+
+```cpp
+pw::threadpool.resize(8);
+```
+
+A server task handles a connection, not just one request: keep-alive requests, WebSockets, and long polls can retain that task. Polyweb servers schedule with overflow enabled, so eight target workers do **not** mean eight maximum active connections. Standalone application work can use a separate `tp::ThreadPool` to avoid sharing those workers.
 
 ## Current limitations
 
