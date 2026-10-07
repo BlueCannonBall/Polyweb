@@ -478,7 +478,7 @@ namespace pw {
 
         if (parts & PW_HTTP_MESSAGE_PART_BODY) {
             if (send_cb) {
-                for (const auto& chunk : std::exchange(send_cb, {})()) {
+                for (auto cb = std::exchange(send_cb, {}); const auto& chunk : std::move(cb)()) {
                     if (chunk.empty()) continue;
 
                     std::ostringstream ss;
@@ -508,7 +508,7 @@ namespace pw {
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
-            for (auto chunk : std::exchange(send_cb, {})()) {
+            for (auto cb = std::exchange(send_cb, {}); auto chunk : std::move(cb)()) {
                 if (chunk.empty()) continue;
 
                 std::ostringstream ss;
@@ -774,7 +774,7 @@ namespace pw {
 
         if (parts & PW_HTTP_MESSAGE_PART_BODY) {
             if (send_cb) {
-                for (const auto& chunk : std::exchange(send_cb, {})()) {
+                for (auto cb = std::exchange(send_cb, {}); const auto& chunk : std::move(cb)()) {
                     if (chunk.empty()) continue;
 
                     std::ostringstream ss;
@@ -804,7 +804,7 @@ namespace pw {
         }
 
         if ((parts & PW_HTTP_MESSAGE_PART_BODY) && send_cb) {
-            for (auto chunk : std::exchange(send_cb, {})()) {
+            for (auto cb = std::exchange(send_cb, {}); auto chunk : std::move(cb)()) {
                 if (chunk.empty()) continue;
 
                 std::ostringstream ss;

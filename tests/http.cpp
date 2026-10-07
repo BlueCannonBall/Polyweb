@@ -533,6 +533,37 @@ TEST(http_streaming_callback_borrows_its_captures) {
     CHECK(!response.send_cb);
 }
 
+TEST(http_request_streaming_callback_borrows_its_captures) {
+    pw::Request request("POST", "/", [rows = std::string("rows")]() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(rows.begin(), rows.end());
+    });
+
+    CHECK(request.build_string(PW_HTTP_MESSAGE_PART_BODY) == "4\r\nrows\r\n0\r\n\r\n");
+    CHECK(!request.send_cb);
+}
+
+TEST(http_request_connection_streaming_callback_borrows_its_captures) {
+    pw::Request request("POST", "/", [rows = std::string("rows")]() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(rows.begin(), rows.end());
+    });
+    ScriptedConnection conn({}, 100);
+
+    CHECK(request.build(conn, PW_HTTP_MESSAGE_PART_BODY));
+    CHECK(to_string(conn.output) == "4\r\nrows\r\n0\r\n\r\n");
+    CHECK(!request.send_cb);
+}
+
+TEST(http_response_connection_streaming_callback_borrows_its_captures) {
+    pw::Response response(200, [rows = std::string("rows")]() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(rows.begin(), rows.end());
+    });
+    ScriptedConnection conn({}, 100);
+
+    CHECK(response.build(conn, PW_HTTP_MESSAGE_PART_BODY));
+    CHECK(to_string(conn.output) == "4\r\nrows\r\n0\r\n\r\n");
+    CHECK(!response.send_cb);
+}
+
 TEST(http_response_status_category) {
     pw::Response response(204);
     CHECK(response.status_code_category() == 200);

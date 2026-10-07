@@ -69,6 +69,26 @@ TEST(websocket_streamed_message_is_fragmented_and_reassembled) {
     CHECK(masked_received.to_string() == "abcd");
 }
 
+TEST(websocket_streaming_callback_borrows_its_captures) {
+    pw::WSMessage message([rows = std::string("rows")]() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(rows.begin(), rows.end());
+    }, pw::WS_OPCODE_TEXT);
+
+    CHECK(message.build() == (std::vector<char> {1, 4, 'r', 'o', 'w', 's', (char) 0x80, 0}));
+    CHECK(!message.send_cb);
+}
+
+TEST(websocket_connection_streaming_callback_borrows_its_captures) {
+    pw::WSMessage message([rows = std::string("rows")]() -> std::generator<std::vector<char>> {
+        co_yield std::vector<char>(rows.begin(), rows.end());
+    }, pw::WS_OPCODE_TEXT);
+    ScriptedConnection conn({}, 100);
+
+    CHECK(message.build(conn));
+    CHECK(conn.output == (std::vector<char> {1, 4, 'r', 'o', 'w', 's', (char) 0x80, 0}));
+    CHECK(!message.send_cb);
+}
+
 TEST(websocket_empty_generator_sends_final_frame) {
     auto no_chunks = []() -> std::generator<std::vector<char>> {
         co_return;
